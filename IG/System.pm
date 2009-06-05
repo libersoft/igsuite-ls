@@ -30,7 +30,7 @@ use Config;
 use POSIX qw(WIFEXITED WEXITSTATUS WIFSIGNALED WTERMSIG);
 
 use vars qw ($VERSION);
-$VERSION = '4.0.0';
+$VERSION = '4.0.0-libersoft';
 
 ## give a name to exit signals
 my @Signal_from_number = split(' ', $Config{sig_name});
