@@ -63,39 +63,39 @@ sub MkMenu
     $html .= "<div id=\"menu_content\">";
 
     $html .= _mk_menu(	'services', 1,
-      [ 'IGFile',
+      [ 'File Utente',
 	$IG::screen_size eq 'large'
 	? 'filemanager?action=mkframes'
 	: 'filemanager',
 	"mainf" ],
-      [ 'IGMsg',
+      [ 'Messaggi',
 	'isms?action=isms_arrived&amp;recheck=1',
 	'mainf' ],
-      [ 'IGWebMail',
+      [ 'EMail',
 	'webmail?recheck=1&amp;action=displayheaders',
 	'mainf' ],
 
       ( IG::ConfigParam('igchats.window_target') eq 'same'
-        ? [ 'IGChats',
+        ? [ 'Chat',
             'igchats',
             'mainf' ]
         : [ 'IGChats',
             "javascript:winPopUp('igchats?a=1',650,400,'igchatspanel')",
             'new' ] ),
 
-      [ 'IGCalendar',
+      [ 'Agenda',
 	'calendar',
 	'mainf' ],
-      [ 'IGToDo',
+      [ 'Progetti',
 	'todo',
 	'mainf' ],
-      [ 'IGFax',
+      [ 'Fax',
 	'igfax',
 	'mainf' ],
-      [ 'IGPostIt',
+      [ 'Links',
 	'postit',
 	'mainf' ],
-      [ 'IGWiki',
+      [ 'Wiki',
 	'igwiki?action=summary&amp;ig=1',
 	'mainf' ],
 
