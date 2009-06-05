@@ -28,7 +28,7 @@ BEGIN                                                       #
     return ( 'action:s'        => \$IG::on{action},         #
              'mode:s'          => \$IG::on{mode},           #
              'dbname:s'        => \$IG::on{dbname},         #
- 	 );                                                 #
+ 	 );                                                 			#
    }                                                        #
  }                                                          #
 ############################################################

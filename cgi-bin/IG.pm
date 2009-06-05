@@ -5093,7 +5093,7 @@ sub Input
     my %item;
     $data{value} = $cgi_name;
 
-    my %findable = ( CercaCer     => '',
+    my %findable = ( 
                      system_log   => 'sys_log_view',
                      archive      => 'archive_view',
                      binders      => 'binders_view',
@@ -5118,6 +5118,7 @@ sub Input
                      webmail      => 'webmail_view',
                      wikipedia    => '',
                      google       => '',
+		     						 documentation    => 'documentation_view',
                    );
     foreach (keys %findable)
      { $item{$_} = $lang{$_} ||= ucfirst($_)  if CheckPrivilege($findable{$_}); }

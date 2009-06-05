@@ -1849,6 +1849,7 @@ documentation=>[
 	{ name=>'issue',	type=>'date',},        #data
 	{ name=>'publishstatus',type=>'varchar(5)',},  #pubblica
 	{ name=>'approvalstatus',type=>'varchar(5)',}, #stato
+	{ name=>'quality_system',type=>'varchar(25)',}, #sistema qualità
 	]
   );
 
