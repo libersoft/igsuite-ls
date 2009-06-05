@@ -104,8 +104,9 @@ require Exporter;
 BEGIN
  {
   ## Defines IG Version
-  use vars qw ($VERSION); 
-  $VERSION = '4.0.0';
+  use vars qw ($VERSION);
+  ## Current IGSuite version
+  $VERSION = '4.0.0-libersoft000';
 
   $SIG{__DIE__} =
    sub {
