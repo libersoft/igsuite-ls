@@ -56,7 +56,7 @@ require Exporter;
 	postit			=> [ 9,	''],
 	prices			=> [ 16,''],
 	articles		=> [ 1,	''],
-	documentation		=> [ 8,	''],
+	documentation		=> [ 9,	''],
 	services		=> [ 18,'id;opendate,enddate'],
 	services_stats		=> [ 4,	''],
 	services_notes		=> [ 7,	''],
