@@ -1,0 +1,552 @@
+#! /usr/bin/perl
+# Procedure: documentation
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	proto		=> sub { CheckPrivilege('documentation_new') },
+		protoagg	=> sub { CheckPrivilege('documentation_edit') },
+		protomodi	=> sub { CheckPrivilege('documentation_edit') },
+		publish		=> sub { CheckPrivilege('documentation_editor') },
+		draftsmng	=> sub { CheckPrivilege('documentation_view') },
+		approve		=> sub { CheckPrivilege('documentation_edit') },
+		approveagg	=> sub { CheckPrivilege('documentation_edit') },
+		delshow		=> sub { CheckPrivilege('documentation_edit') },
+		delexec		=> sub { CheckPrivilege('documentation_edit') },
+		publishmng	=> sub { CheckPrivilege('documentation_editor') },
+		default_action	=> sub { CheckPrivilege('documentation_view') });
+
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  ## Find functions
+  my %functions;
+
+  if (CheckPrivilege('documentation_editor'))
+   {
+    DbQuery("select hierarchycode, function from users ".
+	    "where hierarchycode<>''");
+    while (my ($code, $function) = FetchRow() )
+     {
+      $code =~ s/\d//g;
+      $functions{$code} = "$code $function"; 
+     }
+   }
+  else
+   {
+    DbQuery("select hierarchycode from users where login='$auth_user'");
+    my $code = FetchRow();
+       $code =~ s/\d//;
+    $functions{$code} = $code;
+   }
+
+  HtmlHead();
+  TaskHead(	title=>$lang{documentation},
+		width=>500);
+
+  FormHead(	cgiaction=>'protoagg',
+		enctype=>"multipart/form-data");
+
+  Input (	show=>$lang{protocol_number},
+		type=>'combo',
+		name=>'id',
+		data=>'select id, id from documentation '.
+		      'group by id order by id',
+		size=>10,
+		maxlen=>10);
+
+  Input (	show=>$lang{function},
+		type=>'select',
+		style=>'width: 250px',
+		name=>'function',
+		data=>\%functions );
+
+  Input (	show=>$lang{description},
+		type=>'text',
+		name=>'description',
+		size=>50,
+		maxlen=>60);
+
+  Input (	show=>$lang{date},
+		type=>'date',
+		value=>$tv{today},
+		name=>'issue');
+
+  Input (	show=>$lang{issue},
+		type=>'text',
+		name=>'issueid',
+		value=>0,
+		size=>1,
+		maxlen=>1);
+
+  Input (	show=>$lang{revision},
+		type=>'text',
+		name=>'revisionid',
+		value=>0,
+		size=>1,
+		maxlen=>1);
+
+  Input (	show=>$lang{pages},
+		type=>'text',
+		name=>'pages',
+		size=>2);
+
+  Input (	type=>'file',
+		name=>'documentfile',
+		show=>'File');
+
+  Input (	type=>'submit',
+		value=>$lang{save});
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  if (!$on{description})
+   { push @IG::errmsg, $lang{Err_description}; }
+
+  if (!$on{id})
+   { push @IG::errmsg, $lang{Err_number}; }
+
+  if (!($on{issue} = CkDate($on{issue})))
+   { push @IG::errmsg, $lang{Err_issue}; }
+
+  proto() && return if @IG::errmsg;
+  $on{pages} ||= '0';
+
+  QuoteParams();
+  DbQuery(query =>[( "DELETE FROM documentation ".
+		     "where id='$in{id}'".
+		     " and revisionid=$in{revisionid}".
+		     " and issueid=$in{issueid}",
+
+		     "INSERT INTO documentation ".
+		     "VALUES ('$in{id}', '$in{description}',".
+		     " '$in{function}', $in{pages}, $in{issueid},".
+		     " $in{revisionid}, '$in{issue}', 'N', 'B')"
+		   )] );
+
+  LogD('', 'documentation', 'insert', "$on{id}_$on{revisionid}_$on{issueid}");
+
+  my ($ext)   = $on{documentfile} =~ /([^\.]+)$/;
+  my $docname = $on{id}."_".$on{issueid}."_".$on{revisionid}.".$ext";
+
+  push @IG::errmsg,
+       IG::FileUpload( param_name    => 'documentfile',
+		       target_dir    => $IG::htdocs_dir.$IG::S.
+		                        $IG::default_lang{documentation}.$IG::S,
+		       target_file   => $docname,
+		       can_overwrite =>0 );
+
+  default_action();
+ }
+ 
+#############################################################################
+#############################################################################
+sub protomodi
+ {
+  QuoteParams();
+  DbQuery("select * from documentation ".
+	  "where id='$in{id}'".
+	  " and issueid=$in{issueid}".
+	  " and revisionid=$in{revisionid}");
+
+  (	$on{id},
+	$on{description},
+	$on{function},
+	$on{pages},
+	$on{issueid},
+	$on{revisionid},
+	$on{issue},
+	$on{publishstatus},
+	$on{approvalstatus}  )	= FetchRow();
+
+  proto();
+ }
+
+#############################################################################
+#############################################################################
+sub approve
+ {
+  draftsmng() && return if !$on{id};
+
+  QuoteParams();
+  DbQuery("select function from documentation ".
+	  "where id='$in{id}'".
+	  " and issueid='$in{issueid}'".
+	  " and revisionid='$in{revisionid}'");
+  my $function = FetchRow(); 
+
+  DbQuery("select hierarchyref from users ".
+	  "where hierarchycode='${function}0'");
+  my $owner = FetchRow();
+
+  DbQuery("select login from users ".
+	  "where hierarchycode='$owner'");
+  my $editor = FetchRow();
+
+  HtmlHead();
+  TaskHead(title=>$lang{documentation});
+
+  FormHead(cgiaction=>'approveagg', float=>'left');
+
+  Input ( type=>'hiddens',
+	  data=>{ id		=>'',
+		  revisionid	=>'',
+		  editor	=>$editor,
+		  issueid	=>'' }
+        );
+
+  ##XXX2TRANSLATE
+  TaskMsg("Inserire login e password di " . IG::UsrInf('name',$editor).
+          "per approvare il documento $on{id} emissione $on{issueid} revisione
+	   $on{revisionid}<br><br>".
+
+           Input (type=>'text',
+		  show=>'Login',
+		  name=>'login').
+
+           Input (type=>'password',
+		  show=>'Password',
+		  name=>'pwd').
+
+	   Input (type=>'submit',
+		  value=>"$lang{confirm_document}"),6 );
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+###########################################################################
+###########################################################################
+sub approveagg
+ {
+  if (    $on{editor} eq $on{login}
+       && IG::UsrInf('passwd',$on{editor}) eq $on{pwd}
+     )
+   {
+    $on{revisionid} ||= '0';
+    $on{issueid}    ||= '0';
+
+    QuoteParams();
+    DbQuery("update documentation set approvalstatus='A', publishstatus='N' ".
+	    "where id='$in{id}'".
+	    " and revisionid=$in{revisionid}".
+	    " and issueid=$in{issueid}");
+
+    LogD("Approved documentation document $on{id}_$on{issueid}_$on{revisionid}");
+    IG::Redirect("documentation");
+   }
+  else
+   {
+    push @IG::errmsg, $lang{Err_password};
+    approve();
+   }
+ } 
+
+############################################################################
+############################################################################
+sub default_action
+ {
+  my ($prece, $linea, $counter);
+  DbQuery("select hierarchycode from users where login='$auth_user'");
+  my $auth_user_group = FetchRow();
+     $auth_user_group =~ s/\d//;
+
+
+  DbQuery("SELECT * FROM documentation ".
+	  "where publishstatus='S' and approvalstatus ='A' ".
+	  "ORDER BY id, issueid, revisionid");
+
+  Header();
+
+  TaskListMenu (
+	[$lang{code}],
+	[$lang{issue}],
+	[$lang{revision}],
+	[$lang{description}],
+	[$lang{function}],
+	[$lang{pages}],
+	[$lang{date}]
+		 );
+
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+    my $row = $row[0];
+       $row =~ s/\d//g;
+    $linea  = $prece ne $row && $counter ne 0 ? '<hr>' : '';
+    $prece  = $row;
+
+    TaskListItem (
+	[$linea. _idToLink("$row[0]_$row[4]_$row[5]")],
+	["$linea $row[4]","","align=center"],
+	["$linea $row[5]","","align=center"],
+	["$linea $row[1]",
+	 ($row[2] eq $auth_user_group || CheckPrivilege('documentation_editor')
+	  ? "documentation?action=protomodi&amp;id=$row[0]&amp;issueid=$row[4]&amp;revisionid=$row[5]"
+	  : '')],
+	["$linea $row[2]"],
+	["$linea $row[3]"],
+	["$linea $row[6]","","nowrap"]
+		 );
+   }
+
+  TaskListFoot();
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub publishmng
+ {
+  my ($prece, $linea, $ima, $counter);
+
+  DbQuery("SELECT * FROM documentation where approvalstatus='A' ".
+	  "ORDER BY id, issueid, revisionid");
+
+  Header();
+
+  TaskListMenu (
+	[$lang{code}],
+	[$lang{issue}],
+	[$lang{revision}],
+	[$lang{description}],
+	[$lang{function}],
+	[$lang{pages}],
+	[$lang{date}],
+	["Pubb."]
+		 );
+
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+    $linea = $prece ne substr($row[0],0,2) && $counter ne 0 ? '<hr>' : '';
+    $prece = substr($row[0],0,2);
+
+    $ima = $row[7] eq 'S'
+         ? "$linea <img src=\"$IG::img_url/green.gif\" alt=\"Pubblicato\">"
+	 : "$linea <img src=\"$IG::img_url/red.gif\" alt=\"Non Pubblicato\">";
+
+    TaskListItem (
+	[$linea. _idToLink("$row[0]_$row[4]_$row[5]")],
+	["$linea $row[4]"],
+	["$linea $row[5]"],
+	["$linea $row[1]","documentation?action=protomodi&amp;id=$row[0]&amp;issueid=$row[4]&amp;revisionid=$row[5]"],
+	["$linea $row[2]"],
+	["$linea $row[3]"],
+	["$linea $row[6]","","nowrap"],
+	[$ima,"documentation?action=publish&amp;id=$row[0]&amp;issueid=$row[4]&amp;revisionid=$row[5]&amp;approvalstatus=$row[7]"]
+		 );
+   }
+
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub draftsmng
+ {
+  my ($prece, $linea, $counter);
+  DbQuery("SELECT * FROM documentation ".
+	  "where approvalstatus ='B' ORDER BY id, issueid, revisionid");
+
+  Header();
+
+  TaskListMenu (
+	[$lang{code}],
+	[$lang{issue}],
+	[$lang{revision}],
+	[$lang{description}],
+	[$lang{function}],
+	[$lang{pages}],
+	[$lang{date}],
+	[$lang{status}]
+		);
+
+  while (my @row = FetchRow())
+   {
+    $linea = $prece ne substr($row[0],0,2) && $counter ne 0 ? '<hr>' : '';
+    $prece = substr($row[0],0,2);
+    ++$counter;
+
+    TaskListItem (
+	[$linea. _idToLink("$row[0]_$row[4]_$row[5]")],
+	["$linea $row[4]","","align=center"],
+	["$linea $row[5]","","align=center"],
+	["$linea $row[1]"],
+	["$linea $row[2]"],
+	["$linea $row[3]"],
+	["$linea $row[6]"],
+	["$linea $lang{draft}",
+	 "documentation?action=approve".
+	 "&amp;id=$row[0]".
+	 "&amp;issueid=$row[4]".
+	 "&amp;revisionid=$row[5]"]
+		 );
+   }
+
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub publish
+ {
+  $on{approvalstatus} = $on{approvalstatus} eq 'N' ? 'S' : 'N';
+
+  QuoteParams();
+  DbQuery("update documentation set publishstatus = '$in{approvalstatus}' ".
+	  "where id='$in{id}'".
+	  " and revisionid=$in{revisionid}".
+	  " and issueid=$in{issueid}");
+
+  LogD("documentation document $on{id}_$on{issueid}_$on{revisionid} updated status set to $on{approvalstatus}");
+  IG::Redirect("documentation?action=publishmng");  
+ }
+
+#############################################################################
+#############################################################################
+sub delshow
+ {
+  my %docs;
+
+  DbQuery("select id, issueid, revisionid, description from documentation");
+  while ( my @row = FetchRow())
+   {
+    $docs{$row[0]."_".$row[1]."_".$row[2]} 
+    = "$row[0]_$row[1]_$row[2] $row[3]";
+   }
+
+  Header();
+
+  TaskMsg($lang{warn_before_delete}.Br(2).
+
+	  FormHead( cgiaction => 'delexec',
+		    float     => 'left',
+		    onsubmit  => IG::JsConfirm( $lang{are_you_sure} ) ).
+
+	  Input(    type      => 'select',
+		    name      => 'id',
+		    style     => 'width: 350px',
+		    zerovalue => 'true',
+		    data      => \%docs,
+		    show      => $lang{protocol_number} ).
+
+	  Input(    type      => 'submit',
+	            show      => $lang{delete} ).
+
+	  FormFoot(),
+	  2);
+  Footer();
+ }
+
+
+############################################################################
+############################################################################
+sub delexec
+ {
+  my @row = split /\_/, DbQuote($on{id});
+  chdir("$IG::htdocs_dir/$IG::default_lang{documentation}/");
+  my ($file_name) = (<$on{id}.*>);
+
+  IG::FileCopy(	"$IG::htdocs_dir/$IG::default_lang{documentation}/$file_name",
+		"$IG::htdocs_dir/$IG::default_lang{basket}/$file_name",
+		1) if $file_name;
+
+  DbQuery("delete from documentation ".
+	  "where id='$row[0]'".
+	  " and issueid=$row[1]".
+	  " and revisionid=$row[2]");
+
+  LogD('','delete','documentation',$on{id});
+  IG::Redirect("documentation");
+ }
+
+###########################################################################
+###########################################################################
+sub _idToLink
+ {
+  my $protocol = shift;
+  my $file_name;
+
+  chdir ("$IG::htdocs_dir/$IG::default_lang{documentation}/");
+  my ($id) = (<$protocol.*>);
+
+  $protocol =~ s/^([^_]+).+/$1/;
+
+  if ( $id && CheckPrivilege('documentation_view') )
+   {
+    my $href = IG::GetHref('documentation', $id);
+
+    return "<a href=\"$href\" target=\"".
+	   ( $href =~ /\.html*$/i
+		   ? "_blank"
+		   : "mainf" ).
+	   "\">$protocol<\/a>";
+   }
+  else
+   { return $protocol }
+ }
+
+#############################################################################
+#############################################################################
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }
+
+
+sub Header 
+ {
+  HtmlHead();
+  TaskHead( title => $lang{documentation} );
+  HLayer(
+	  MkButton( text => $lang{new_document},
+	            link => "documentation?action=proto" ),
+	            
+	  MkButton( text => $lang{drafts},
+	            link => "documentation?action=draftsmng" ),
+	            
+	  MkButton( text => $lang{publish_mng},
+	            link => "documentation?action=publishmng",
+                    privilege => CheckPrivilege("documentation_edit") ),
+                    
+	  MkButton( text => $lang{delete},
+	            link => "documentation?action=delshow",
+                    privilege => CheckPrivilege("documentation_edit") ),
+	);
+ }
