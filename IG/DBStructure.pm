@@ -411,7 +411,7 @@ archive=>[
 	{ name=>'docref',
 	  label=>'document_reference',
 	  itype=>'text',
-	  type=>'varchar(30)',},	#numrif
+	  type=>'varchar(250)',},	#numrif
 
 	{ name=>'issue',
 	  label=>'issue',
