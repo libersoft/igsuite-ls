@@ -1,0 +1,4977 @@
+#!/usr/bin/perl
+# Procedure: calendar
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+## Check if the user can access to other users calendar
+if (    $auth_user ne $on{user} && $on{user}
+     && CheckPrivilege('sys_limit_calendar') )
+ {
+  ## he can't
+  print STDOUT IG::Warn($lang{Err_privileges});
+ }
+else
+ {  
+  ## he can
+  IG::DTable (	minicalendar         => 1,
+		calendar             => sub { CheckPrivilege() },
+		daily                => sub { CheckPrivilege() },
+		weekly               => sub { CheckPrivilege() },
+		monthly              => sub { CheckPrivilege() },
+		monthly2             => sub { CheckPrivilege() },
+		yearly               => sub { CheckPrivilege() },
+		proto                => sub { CheckPrivilege() },
+		protoagg             => sub { CheckPrivilege() },
+		protomodi            => sub { CheckPrivilege() },
+		protocopy            => sub { CheckPrivilege() },
+		delexec              => sub { CheckPrivilege() },
+		findshow             => sub { CheckPrivilege() },
+		findexec             => sub { CheckPrivilege() },
+		equipment_frames     => sub { CheckPrivilege() },
+		bookingtoapprove     => sub { CheckPrivilege() },
+		approvebooking       => sub { CheckPrivilege() },
+		deletebooking        => sub { CheckPrivilege() },
+		claimedbookings      => sub { CheckPrivilege() },
+		receiveclaim         => sub { CheckPrivilege() },
+		invitationtoconfirm  => sub { CheckPrivilege() },
+		invitationinquestion => sub { CheckPrivilege() },
+		default_action       => sub { CheckPrivilege() } );
+ }
+
+# Following hashes are set by _buttons_views() and are useful to keep
+# information about events to be confirmed (by self or by others).
+# In some situation such information can only be obtained with more 
+# than a self join. By keeping this hashes we don't need to use such
+# joins in queries used to show daily/weekly/month views.
+my %toconfirm_events;
+my %onquestion_events;
+
+##############################################################################
+##############################################################################
+sub default_action
+ {
+  equipment_frames() && return if $on{equipmentid};
+  ## Draw a base layout
+  _check_date();
+  IG::DocHead( type    => 'text/html',
+               expires => 'now' );
+
+  if ($on{eventid})
+   {
+    DbQuery("select startdate, fromuser, touser from calendar".
+	    " where eventid='".DbQuote($on{eventid})."'");
+    my @row  = FetchRow();
+    my $date = $row[0];
+    
+    ( $on{calendarday},
+      $on{calendarmonth},
+      $on{calendaryear} ) = IG::GetValuesByDate($date);
+
+    $on{eventid} = '' if $auth_user ne $row[1] && $auth_user ne $row[2];
+    $on{user}    = $row[2]; ## to fix $on{user} = fromuser instead of touser 
+   }
+
+  my $left_frame_link = "calendar?".
+			"action=calendar&amp;".
+			"category=$on{category}&amp;".
+			"calendarday=$on{calendarday}&amp;".
+			"calendarmonth=$on{calendarmonth}&amp;".
+			"calendaryear=$on{calendaryear}&amp;".
+			"user=$on{user}";
+
+  my $right_frame_link = $on{eventid}
+
+                       ? "calendar?".
+                         "action=protomodi&amp;".
+                         "default_pane=$on{default_pane}&amp;".
+                         "eventid=$on{eventid}&amp;".
+                         "user=$on{user}"
+
+                       : "calendar?".
+			 "action=".
+                         ( $on{right_pane} || IG::ConfigParam('calendar.default_view') || 'daily').
+			 "&amp;calendarday=$on{calendarday}".
+			 "&amp;calendarmonth=$on{calendarmonth}".
+			 "&amp;calendaryear=$on{calendaryear}".
+                         "&amp;default_pane=$on{default_pane}".
+			 "&amp;user=$on{user}";
+
+  if ( $IG::screen_size !~ /^noframe/ )
+   {
+    PrOut <<END;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN"
+     "http://www.w3.org/TR/html4/frameset.dtd">
+<html><head><title>$lang{calendar}</title>
+	    <META HTTP-EQUIV=Pragma CONTENT=no-cache>
+            <LINK REL="icon" HREF="$IG::img_url/favicon.ico" TYPE="image/x-icon">
+      </head>
+      <FRAMESET COLS="240,*"
+		FRAMEBORDER=0
+		BORDER=0
+		MARGINHEIGHT=0
+		MARGINWIDTH=0 >
+
+	<FRAME  NAME="leftframe"
+		marginwidth=5
+		marginheight=0
+		frameborder=0
+		border=0
+		Framespacing=0
+		resize="yes"
+		SRC="$left_frame_link"
+		SCROLLING="auto" >
+
+	<FRAME  NAME="rightframe"
+		marginwidth=0
+		marginheight=0
+		frameborder=0
+		border=0
+		Framespacing=0
+		resize="yes"
+		SRC="$right_frame_link"
+		SCROLLING="auto">
+      </FRAMESET>
+<BODY BGCOLOR="Black" topmargin=0 leftmargin=0>
+IG
+</BODY>
+</html>
+END
+   }
+  else
+   {
+    PrOut <<END;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN"
+     "http://www.w3.org/TR/html4/frameset.dtd">
+<html><head><title>$lang{calendar}</title>
+      <META HTTP-EQUIV="Pragma" CONTENT="no-cache">
+      <LINK REL="icon" HREF="$IG::img_url/favicon.ico" TYPE="image/x-icon">
+      </head>
+	<FRAMESET COLS="*" FRAMEBORDER=0 BORDER=0 MARGINHEIGHT=0 MARGINWIDTH=0>
+		<FRAME  NAME="rightframe" marginwidth=8 marginheight=0 frameborder=0 border=0 Framespacing=0 resize="yes" SRC="calendar?action=calendar&calendarday=$on{calendarday}&calendarmonth=$on{calendarmonth}&calendaryear=$on{calendaryear}&user=$on{user}" SCROLLING="auto">
+	</FRAMESET>
+<BODY BGCOLOR="Black" topmargin=0 leftmargin=0>
+IG
+</BODY>
+</html>
+END
+   }
+ }
+
+##############################################################################
+##############################################################################
+sub equipment_frames
+ {
+  default_action() && return unless $on{equipmentid};
+  ## Draw a base layout
+  _check_date();
+  IG::DocHead( type    => 'text/html',
+               expires => 'now' );
+
+  if ($on{eventid})
+   {
+    DbQuery("select startdate, fromuser, touser from calendar".
+	    " where eventid='".DbQuote($on{eventid})."'");
+    my @row  = FetchRow();
+    my $date = $row[0];
+    
+    ( $on{calendarday},
+      $on{calendarmonth},
+      $on{calendaryear} ) = IG::GetValuesByDate($date);
+
+    $on{eventid} = '' if $auth_user ne $row[1] && $auth_user ne $row[2];
+    $on{user}    = $row[2]; ## to fix $on{user} = fromuser instead of touser 
+   }
+
+  my $left_frame_link = "calendar?".
+			"action=calendar&amp;".
+			"calendarday=$on{calendarday}&amp;".
+			"calendarmonth=$on{calendarmonth}&amp;".
+			"calendaryear=$on{calendaryear}&amp;".
+			"equipmentid=$on{equipmentid}&amp;".
+			"user=$on{user}";
+
+  my $right_frame_link = $on{eventid}
+
+                       ? "calendar?".
+                         "action=protomodi&amp;".
+                         "eventid=$on{eventid}&amp;".
+			 "equipmentid=$on{equipmentid}&amp;".
+                         "user=$on{user}"
+
+                       : "calendar?".
+			 "action=weekly".
+			 ##( IG::ConfigParam('calendar.default_view') || 'daily').
+			 "&amp;calendarday=$on{calendarday}".
+			 "&amp;calendarmonth=$on{calendarmonth}".
+			 "&amp;calendaryear=$on{calendaryear}".
+			 "&amp;equipmentid=$on{equipmentid}".
+			 "&amp;user=$on{user}";
+
+  if ($IG::screen_size !~ /^noframe/)
+   {
+    PrOut <<END;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN"
+     "http://www.w3.org/TR/html4/frameset.dtd">
+<html><head><title>$lang{calendar}</title>
+	    <META HTTP-EQUIV=Pragma CONTENT=no-cache>
+            <LINK REL="icon" HREF="$IG::img_url/favicon.ico" TYPE="image/x-icon">
+      </head>
+      <FRAMESET COLS="240,*"
+		FRAMEBORDER=0
+		BORDER=0
+		MARGINHEIGHT=0
+		MARGINWIDTH=0 >
+
+	<FRAME  NAME="leftframe"
+		marginwidth=5
+		marginheight=0
+		frameborder=0
+		border=0
+		Framespacing=0
+		resize="yes"
+		SRC="$left_frame_link"
+		SCROLLING="auto" >
+
+	<FRAME  NAME="rightframe"
+		marginwidth=0
+		marginheight=0
+		frameborder=0
+		border=0
+		Framespacing=0
+		resize="yes"
+		SRC="$right_frame_link"
+		SCROLLING="auto">
+      </FRAMESET>
+<BODY BGCOLOR="Black" topmargin=0 leftmargin=0>
+IG
+</BODY>
+</html>
+END
+   }
+  else
+   {
+    PrOut <<END;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN"
+     "http://www.w3.org/TR/html4/frameset.dtd">
+<html><head><title>$lang{calendar}</title>
+      <META HTTP-EQUIV="Pragma" CONTENT="no-cache">
+      <LINK REL="icon" HREF="$IG::img_url/favicon.ico" TYPE="image/x-icon">
+      </head>
+	<FRAMESET COLS="*" FRAMEBORDER=0 BORDER=0 MARGINHEIGHT=0 MARGINWIDTH=0>
+		<FRAME  NAME="rightframe" marginwidth=8 marginheight=0 frameborder=0 border=0 Framespacing=0 resize="yes" SRC="calendar?action=calendar&calendarday=$on{calendarday}&calendarmonth=$on{calendarmonth}&calendaryear=$on{calendaryear}&user=$on{user}" SCROLLING="auto">
+	</FRAMESET>
+<BODY BGCOLOR="Black" topmargin=0 leftmargin=0>
+IG
+</BODY>
+</html>
+END
+   }
+ }
+
+##############################################################################
+##############################################################################
+sub monthly
+ {
+  ## Monthly global view
+  require IG::Utils;
+
+  _check_date();
+  my (%event, $plan_bg_clr);
+
+  HtmlHead();
+  TaskHead( title   => $lang{calendar},
+            padding => 8,
+	    icon    => 1 );
+
+  ## build views selector
+  my $selector
+     = HLayer
+        ( bottom_space => 15,
+          left_layers
+          => [( Input( type       => 'basictable',
+                       labelstyle => 'width:auto; font-size:10px;',
+                       table      => 'event_categories',
+                       zerovalue  => 'true',
+                       allvalue   => 'true',
+                       style      => 'width:130px; font-size:10px;',
+                       show       => $lang{category},
+                       onchange   => "location.href = 'calendar?".
+	                             "action=monthly&amp;".
+	                             "user=$on{user}&amp;".
+	                             "groupid=$on{groupid}&amp;".
+                                     "calendarday=$on{calendarday}&amp;".
+                                     "calendarmonth=$on{calendarmonth}&amp;".
+                                     "calendaryear=$on{calendaryear}&amp;".
+	                             "category=' + this.options[this.selectedIndex].value;",
+                       name       => 'category'),
+                       
+                Input( type       => 'select',
+                       zerovalue  => 'true',
+                       allvalue   => 'true',
+                       name       => 'groupid',
+                       float      => 'float',
+                       labelstyle => 'width:auto; font-size:10px;',
+                       style      => 'font-size:10px',
+                       data       => 'select groupid, name from users_groups',
+                       show       => $lang{user_groups},
+                       onchange   => "location.href = 'calendar?".
+	                             "action=monthly&amp;".
+	                             "user=$on{user}&amp;".
+	                             "category=$on{category}&amp;".
+                                     "calendarday=$on{calendarday}&amp;".
+                                     "calendarmonth=$on{calendarmonth}&amp;".
+                                     "calendaryear=$on{calendaryear}&amp;".
+	                             "groupid=' + this.options[this.selectedIndex].value;" )
+               
+             )],
+
+          right_layers
+          => [( "<table border=1 cellspacing=0 cellpadding=0>
+                 <td bgcolor=\"orange\">&nbsp;&nbsp;</td>
+                 <td class=\"list\" nowrap>$lang{out_of_office}</td>
+                 <td bgcolor=\"green\">&nbsp;&nbsp;</td>
+                 <td class=\"list\" nowrap>$lang{in_office}</td>
+                 </tr></table>"
+              )]
+        );
+
+
+  ## Layout
+  PrOut $selector.
+        "<table style=\"border:0; background-color:#999999;\" cellspacing=1 cellpadding=0>
+	 <td>
+         <table style=\"width:100%; height:100%; background:$IG::clr{bg_task};\" cellspacing=0 cellpadding=0>
+          <td valign=\"center\">
+           <a href=\"calendar?action=monthly&amp;prevmonth=1&amp;calendarmonth=$on{calendarmonth}&amp;calendaryear=$on{calendaryear}\">
+            <img src=\"$IG::img_url/$IG::tema"."left.gif\" width=20 border=0>
+           </a></td>
+          <td valign=\"center\" align=\"center\">
+           <strong>$IG::months{$on{calendarmonth}}[0]<br>
+                   $on{calendaryear}</strong></td>
+          <td valign=\"center\">
+           <a href=\"calendar?action=monthly&amp;nextmonth=1&amp;calendarmonth=$on{calendarmonth}&amp;calendaryear=$on{calendaryear}\">
+            <img src=\"$IG::img_url/$IG::tema"."right.gif\" width=20 border=0>
+           </a></td></tr>
+	 </table>
+	 </td>\n";
+
+
+  ## Print calendar
+  for my $i ('01' .. IG::GetDaysInMonth($on{calendarmonth}, $on{calendaryear}))
+   {
+    PrOut '<td style="white-space:nowrap; text-align:center; background:'.
+	  ( IG::GetDayByDate( $i,
+	                      $on{calendarmonth},
+	                      $on{calendaryear}   ) == 0
+	    ? '#FF0000'
+	    : '#FFFFFF' ).
+	  "\" class=\"minilist\">$i<br>m p</td>";
+   }
+  PrOut "</tr>\n";
+
+  my $monthStartDate = IG::GetDateByFormat( 1,
+                                            $on{calendarmonth},
+                                            $on{calendaryear} );
+
+  my $monthEndDate   = IG::GetDateByFormat( IG::GetDaysInMonth($on{calendarmonth}, $on{calendaryear}),
+                                            $on{calendarmonth},
+                                            $on{calendaryear} );
+
+  ## Load events and search for in or out site
+  QuoteParams();
+  DbQuery("SELECT starttime, endtime, day, weekday, touser, eventtype, ".
+          " startdate, repeatend, location ".
+	  "FROM calendar ".
+	  "WHERE".
+          " startdate <= '$monthEndDate' and".
+          " (repeatend >= '$monthStartDate' or repeatend is null) and".
+	  " eventtype<>5 and". ## no memorandum
+	  ( $on{category} && $on{category} ne 'all'
+	    ? " category=$in{category} and"
+	    : ''). 
+	  " (month=$in{calendarmonth} or month=0) and".
+	  " (year=$in{calendaryear} or year=0)");
+
+  while (my @row = FetchRow())
+   {
+    my ( $starttime,
+         $endtime,
+         $day,
+         $weekday,
+         $touser,
+         $eventtype,
+         $startdate,
+         $repeatend,
+         $location  ) = @row;
+
+    if ( $day > 0 )
+     {
+      ## it's a per day event
+      $event{$touser}[$day][0] ||= $location + 1
+                                   if $starttime < 1200 && $endtime > 800;
+      $event{$touser}[$day][1] ||= $location + 1
+                                   if $starttime < 1730 && $endtime > 1330;
+    }
+    else
+     {
+      ## it's a recurrent event
+      for my $i ('01' .. IG::GetDaysInMonth($on{calendarmonth}, $on{calendaryear}))
+       {
+        my $data = IG::GetDateByFormat( $i,
+                                        $on{calendarmonth},
+                                        $on{calendaryear} );
+                                        
+        my $wd   = IG::GetDayByDate(    $i,
+                                        $on{calendarmonth},
+                                        $on{calendaryear} );
+
+        if (    IG::CompareDate( $data, $startdate ) >= 0
+             && ( !$repeatend   || IG::CompareDate( $data, $repeatend ) <= 0 )
+             && ( $weekday == 8 || $wd == $weekday )
+           )
+         {
+	  $event{$touser}[$i][0] ||= $location + 1
+	                             if $starttime < 1200 && $endtime > 800;
+	  $event{$touser}[$i][1] ||= $location + 1
+	                             if $starttime < 1730 && $endtime > 1330;
+	 }
+       }
+     }
+   }
+
+  ## for wich users we have to show calendar?
+  if ( $on{groupid} && $on{groupid} ne 'all')
+   {
+    ## only a selected group
+    DbQuery("select users_groups_link.userid, users.name, users.function ".
+            "from users_groups_link ".
+            "left join users ".
+            "on users_groups_link.userid = users.login ".
+            "where users_groups_link.groupid='".DbQuote($on{groupid})."' ".
+            "order by users.function, users.name");
+   }
+  else
+   {
+    ## all users
+    DbQuery("select login, name, function ".
+            "from users ".
+            "where status<>'2' and login<>'' ".
+            "order by function, name");
+   }
+
+  ## print users and days list
+  my $prev_function;
+  while ( my @row = FetchRow() )
+   {
+    PrOut "<td class=\"menu\">".
+	  "<a href=\"calendar?".
+	            "action=yearly&amp;".
+	            "user=$row[0]&amp;".
+	            "calendaryear=$on{calendaryear}&amp;".
+	            "calendarmonth=$on{calendarmonth}\">".
+	  IG::TextElide( string => $row[1], length => 25 ).
+	  "</a></td>\n";
+
+    ## set a different background to distinguish between different functions
+    if ( $prev_function ne $row[2] )
+     { $plan_bg_clr = $plan_bg_clr eq '#DDDDDD' ? '#FFFFFF' : '#DDDDDD'; }
+    else
+     { $plan_bg_clr ||= '#FFFFFF'; }
+
+    for (1 .. IG::GetDaysInMonth($on{calendarmonth}, $on{calendaryear}) )
+     {
+      my $event_link = "<a href=\"calendar?".
+			 "action=daily&amp;".
+		         "user=$row[0]&amp;".
+		         "calendarday=$_&amp;".
+		         "calendarmonth=$on{calendarmonth}&amp;".
+		         "calendaryear=$on{calendaryear}\"".
+		         " target=\"rightframe\">&nbsp;&nbsp;</a>";
+
+      PrOut "<td valign=\"top\">".
+	    "<table style=\"height:100%; width:100%; background-color:#000000;\"".
+	    " cellspacing=0 cellpadding=0>";
+
+      ## morning
+      if ( $event{$row[0]}[$_][0]==1 )
+       { PrOut "<td bgcolor=\"green\">$event_link</td>\n" }
+      elsif ($event{$row[0]}[$_][0]==2)
+       { PrOut "<td bgcolor=\"orange\">$event_link</td>\n" }
+      else
+       { PrOut "<td bgcolor=\"$plan_bg_clr\">$event_link</td>\n" }
+
+      ## afternoon
+      if ( $event{$row[0]}[$_][1]==1 )
+       { PrOut "<td bgcolor=\"green\">$event_link</td>\n" }
+      elsif ( $event{$row[0]}[$_][1]==2 )
+       { PrOut "<td bgcolor=\"orange\">$event_link</td>\n" }
+      else
+       { PrOut "<td bgcolor=\"$plan_bg_clr\">$event_link</td>\n" }
+
+      PrOut "</table></td>";
+     }
+
+    PrOut "</tr>\n";
+    $prev_function = $row[2];
+   }
+
+  PrOut "</table>\n";
+
+
+  TaskFoot();
+  HtmlFoot();
+ } 
+
+##############################################################################
+##############################################################################
+sub yearly
+ {
+  my ($plan_bg_clr, $event_bg, $data, @events, $event_type);
+  my ($cnt, $calendarday, $calendarmonth, $calendaryear);
+
+  my $next_year = $on{calendaryear} + 1;
+  my $prev_year = $on{calendaryear} - 1;
+
+  my $title = "$lang{calendar} - ".
+              "$on{calendaryear} - ".
+              IG::UsrInf( 'name', $on{user} );
+
+  HtmlHead( base_target => 'rightframe',
+            title       => $title );
+  TaskHead( width       => '100%',
+	    title       => $title );
+
+  my $equipment_param = $on{equipmentid} 
+                        ? "&amp;equipmentid=$on{equipmentid}" 
+			: '';
+
+  my $html
+      = HLayer
+         (
+	  intra_space  => 3,
+          bottom_space => 1,
+          left_layers  => _buttons_views(),
+	  right_layers =>
+	   [(
+             MkButton( icon_src   => "$IG::img_url/${IG::tema}left.gif",
+                       quick_help => 'Previous',
+                       link       => "calendar?".
+                                     "action=yearly&amp;".
+                                     "user=$on{user}&amp;".
+                                     "calendaryear=$prev_year".
+				     $equipment_param ),
+
+             "<span style=\"color:gray; font-weight:bold\">".
+             "$lang{year} $on{calendaryear}</span>",
+
+             MkButton( icon_src   => "$IG::img_url/${IG::tema}right.gif",
+                       quick_help => 'Next',
+                       link       => "calendar?".
+                                     "action=yearly&amp;".
+                                     "user=$on{user}&amp;".
+                                     "calendaryear=$next_year".
+				     $equipment_param )
+           )] );
+
+  TaskMsg($html, 7) if !$on{print};
+
+  my $yearStartDate = IG::GetDateByFormat( 1,   1, $on{calendaryear} );
+  my $yearEndDate   = IG::GetDateByFormat( 31, 12, $on{calendaryear} );
+
+  ## Load events
+  QuoteParams();
+  DbQuery("SELECT day, month, weekday, location, startdate, repeatend ".
+          "FROM calendar ".
+	  "WHERE".
+	  " touser='$in{user}' and".
+          " startdate < '$yearEndDate' and".
+          " (repeatend >= '$yearStartDate' or repeatend is null) and".
+	  ( $on{category} and $on{category} ne 'all'
+	    ? " category=$in{category} and"
+	    : ''). 
+	  " eventtype<>5 and". ## no memorandum
+	  " (year=$in{calendaryear} or year=0)");
+
+   while ( my ( $day,
+                $month,
+                $weekday,
+                $location,
+                $startdate,
+                $repeatend ) = FetchRow() )
+    {
+     if ( $day && $month )
+      {
+       ## it's a single event
+       $events[$month][$day] = $location + 1;
+      }
+     else
+      {
+       ## it's a recurrent event
+       $startdate = $yearStartDate if IG::CompareDate( $startdate,
+                                                       $yearStartDate ) < 0;
+       $repeatend = $yearEndDate if    !$repeatend
+                                    || IG::CompareDate( $repeatend,
+                                                        $yearEndDate  ) > 0;
+       my $date = $startdate;
+
+       while ( IG::CompareDate( $date, $repeatend ) <= 0 )
+        {
+         my ($dd, $dm, $dy) = IG::GetValuesByDate( $date );
+         $dd = $day if $day; ## optimization
+         my $wd = IG::GetDayByDate( $dd, $dm, $dy );
+
+         if (   ($dd == $day     || $day     == 0)
+             && ($dm == $month   || $month   == 0)
+             && ($wd == $weekday || $weekday == 8) )
+          {
+           $events[$dm][$dd] = $location + 1;
+           $date = IG::SumDate( $dd,
+                                $dm,
+                                $dy,
+                                    $day     == 0 ? 1   ## dayly recurrence
+                                  : $weekday != 8 ? 7   ## weekly recurrence
+                                  : '1m' );             ## montly recurrence
+          }
+         else
+          {
+           ## should happen only while searching 1st weekly recurrence
+           $date = IG::SumDate( $dd, $dm, $dy, 1 );
+          }
+        }
+      }
+    }
+
+  PrOut "<table style=\"width:100%; margin:10px 0; border:1px solid black\" cellspacing=0 cellpadding=0><td></td>";
+  for my $i (1 .. 37)
+   {
+    $event_bg = $cnt==0 ? 'red' : $IG::clr{bg_menu_task};
+    PrOut "<td style=\"background-color:$event_bg; text-align:center;".
+                      "border-left:1px solid #FFFFFF; border-bottom:2px solid #FFFFFF;\">".
+	  "<span class=\"list\">" . substr($IG::days[$cnt],0,1) . '</span>'.
+	  "</td>\n";
+    $cnt = $cnt==6 ? $cnt=0 : ++$cnt;
+   }
+  PrOut '</tr>';
+
+  for my $i('01' .. '12')
+   {
+    PrOut "<td style=\"background-color:$IG::clr{bg_menu_task};".
+                      "border:1px solid #FFFFFF;\">".
+          "<a href=\"calendar?".
+                    "action=monthly2&amp;".
+                    "user=$on{user}&amp;".
+                    "calendarmonth=$i&amp;".
+                    "calendaryear=$on{calendaryear}\">".
+          "<span class=\"list\" style=\"color:$IG::clr{font_menu};\">&nbsp;" .
+          $IG::months{$i}[0]."</span></a></td>";
+
+    PrOut "<td></td>" x ( IG::GetDayByDate(1, $i, $on{calendaryear}) );
+
+    $plan_bg_clr = $plan_bg_clr eq '#CCCCCC' ? '#EEEEEE' : '#CCCCCC';
+
+    for ('01' .. IG::GetDaysInMonth($i, $on{calendaryear}) )
+     {
+      $event_bg = ( undef,
+                    $IG::clr{bg_low_evidence},
+                    'orange',
+		    'red',
+		    'yellow',
+		    'cyan'  )[$events[$i][$_]];
+
+      $event_bg ||= $plan_bg_clr;
+
+      PrOut "<td style=\"background-color:$event_bg; width:15px;".
+                        "border-left:1px solid #FFFFFF; height:17px;".
+                        "border-bottom:2px solid #FFFFFF;\">".
+	    "<a href=\"calendar?".
+	              "action=daily&amp;".
+	              "user=$on{user}&amp;".
+	              "calendarday=$_&amp;".
+	              "calendarmonth=$i&amp;".
+	              "calendaryear=$on{calendaryear}\"".
+              " target=\"rightframe\"".
+	      " style=\"font-size:10px; color:#999999;\">$_</a>".
+	    "</td>\n";
+     }
+    PrOut "</tr>\n";
+   }
+
+  PrOut "</table></td><tr><td>".
+	"<table width=\"100%\" cellspacing=0 cellpadding=0><td>";
+
+  Input( type     => 'basictable',
+	 table    => 'event_categories',
+	 allvalue => 'true',
+	 style    => 'width:130px',
+	 show     => $lang{categories},
+	 onchange => "location.href = 'calendar?".
+	                            "action=yearly&amp;".
+	                            "user=$on{user}&amp;".
+                                    "calendarday=$on{calendarday}&amp;".
+                                    "calendarmonth=$on{calendarmonth}&amp;".
+                                    "calendaryear=$on{calendaryear}&amp;".
+	                            "category=' + this.options[this.selectedIndex].value;",
+	 name     => 'category');
+	 
+  PrOut "</td><td align=\"right\">
+         <table border=1 cellspacing=0 cellpadding=0>
+	 <td bgcolor=\"orange\">&nbsp;&nbsp;</td>
+	 <td class=\"list\">$lang{out_of_office}</td>
+	 <td bgcolor=\"$IG::clr{bg_low_evidence}\">&nbsp;&nbsp;</td>
+	 <td class=\"list\">$lang{in_office}</td>\n";
+
+  PrOut "</tr></table></td></tr></table>\n";
+  TaskFoot();
+  HtmlFoot();
+ } 
+
+##############################################################################
+##############################################################################
+sub _check_date
+ {
+  ## adjust user
+  $on{user} ||= $auth_user;
+
+  ## adjust month
+  if (!$on{calendarmonth})
+   {
+    $on{calendarmonth} = $tv{month};
+    $on{calendarday}   = $tv{day};
+   }
+
+  ## adjust day
+  if ( $on{calendarmonth} eq $tv{month} &&
+       $on{calendaryear}  eq $tv{year}  &&
+       !$on{calendarday}
+     )
+   { $on{calendarday} = $tv{day} }
+  $on{calendarday} ||= 1;
+
+  ## adjust year
+  if (!$on{calendaryear})
+   { $on{calendaryear} = $tv{year}; }
+  elsif ($on{calendaryear} < 40)
+   { $on{calendaryear} = "20$on{calendaryear}"; }
+  elsif ($on{calendaryear} < 100)
+   { $on{calendaryear} = "19$on{calendaryear}"; }
+  elsif ($on{calendaryear} < 1970)
+   { $on{calendaryear} = $tv{year}; }
+
+  ## Calculate new values
+  my $date_change = $on{prevyear}  ? '-1y'
+                  : $on{nextyear}  ? '+1y'
+                  : $on{prevmonth} ? '-1m'
+                  : $on{nextmonth} ? '+1m'
+                  : $on{nextday}   ? '+1'
+                  : $on{prevday}   ? '-1'
+                  : 0;
+
+  if ( $date_change )
+   {
+    ( $on{calendarday},
+      $on{calendarmonth},
+      $on{calendaryear} ) = IG::GetValuesByDate
+                             ( IG::SumDate( $on{calendarday},
+                                            $on{calendarmonth},
+                                            $on{calendaryear},
+                                            $date_change )
+                             );
+   }
+ }
+
+##############################################################################
+##############################################################################
+sub _event_icons
+ {
+  my %data = @_;
+  my $event             = $data{event};
+  my $event_reservation = $data{reservation};
+  my $event_sharemode   = $data{sharemode};
+  my $eventid           = $data{eventid};
+  my $event_parent      = $data{parent};
+  my $event_confirmation= $data{confirmation};
+
+  if ( $event_reservation == 1 )
+   {
+    ## it's a reserved event
+    $event = Blush($lang{reserved}) if $on{user} ne $auth_user;
+    $event = Img( src   => "$IG::img_url/group_red.gif",
+                  align => 'absmiddle',
+                  width => 16,
+                  style => 'margin-right:2px',
+                  title => $lang{private} ).
+             $event;
+   }
+  elsif( $event_sharemode eq 'all' )
+   {
+    ## it's a public event
+    $event = Img( src   => "$IG::img_url/group_green.gif",
+                  align => 'absmiddle',
+                  width => 16,
+                  style => 'margin-right:2px',
+                  title => $lang{public_event} ).
+             "<span style=\"color:green;\">$event</span>";
+   }
+
+  my $invitation_icon;
+  if( $event_parent ) 
+   {
+    $invitation_icon = 
+             Img( src   => "$IG::img_url/questionmark-blue-blink.gif",
+                  align => 'absmiddle',
+                  width => 16,
+                  style => 'margin-right:2px',
+                  title => $lang{invitation_toconfirm} )
+             if $event_confirmation == 0;
+
+    $invitation_icon = 
+             Img( src   => "$IG::img_url/rejected.png",
+                  align => 'absmiddle',
+                  width => 16,
+                  style => 'margin-right:2px',
+                  title => $lang{invitation_rejected} )
+             if $event_confirmation == 2;
+   }
+
+  ## this assignment may happen only for parent event to be confirmed
+  $invitation_icon = 
+             Img( src   => "$IG::img_url/questionmark-blue-blink.gif",
+                  align => 'absmiddle',
+                  width => 16,
+                  style => 'margin-right:2px',
+                  title => $lang{invitation_toconfirm} )
+             if !$invitation_icon && $toconfirm_events{$eventid};
+
+  $invitation_icon = 
+             Img( src   => "$IG::img_url/questionmark-blue.png",
+                  align => 'absmiddle',
+                  width => 16,
+                  style => 'margin-right:2px',
+                  title => $lang{invitationinquestion} )
+             if !$invitation_icon && $onquestion_events{$eventid};
+  
+  $event = $invitation_icon . $event;
+
+  return $event;
+ }
+
+##############################################################################
+##############################################################################
+sub weekly
+ {
+  use IG::Utils;
+  my ($html, $calendarday, $calendarmonth, $calendaryear, $calcanc, $calmodi,
+      $calcopy, $memo);
+
+  ## Sunday
+  $IG::days[7] = $IG::days[0];
+
+  my $day = IG::GetDayByDate(	$on{calendarday},
+				$on{calendarmonth},
+				$on{calendaryear}) * (-1);
+
+  $day -= 7 if $day == 0;
+  my $data = IG::SumDate(	$on{calendarday},
+				$on{calendarmonth},
+				$on{calendaryear},
+				$day + 1);
+
+  my $next_data = IG::SumDate(	$on{calendarday},
+				$on{calendarmonth},
+				$on{calendaryear},
+				7);
+
+  my (	$next_day,
+	$next_month,
+	$next_year) = IG::GetValuesByDate($next_data);
+
+  my $previous_data = IG::SumDate(	$on{calendarday},
+				        $on{calendarmonth},
+				        $on{calendaryear},
+				        -7);
+
+  my (	$prev_day,
+	$prev_month,
+	$prev_year) = IG::GetValuesByDate($previous_data);
+
+  my $this_week = "$lang{week} $data / ".
+		  IG::SumDate(	$on{calendarday},
+				$on{calendarmonth},
+				$on{calendaryear},
+				( $day + 7 ) );
+
+  my $title;
+  if( $on{equipmentid} ) 
+   {
+    DbQuery( "select description from equipments ".
+             "where id='".DbQuote( $on{equipmentid} )."'" );
+    $title = "$lang{equipment} ".
+             MkEntities("$on{equipmentid} '".
+             ( FetchRow() . "'") );
+   }
+  else
+   { $title = IG::UsrInf('name',$on{user}); }
+
+  HtmlHead( base_target => 'rightframe' );
+  TaskHead( width       => '100%',
+	    title       => "$lang{working_week}: $title ".
+		  	   ($on{print} ? $this_week : '') );
+
+  my $equipment_param = $on{equipmentid} 
+                        ? "&amp;equipmentid=$on{equipmentid}" 
+			: '';
+
+  $html = HLayer(
+	  intra_space  => 3,
+          bottom_space => 1,
+          left_layers  => _buttons_views(),
+	  right_layers =>
+	   [(
+             MkButton( icon_src => "$IG::img_url/${IG::tema}left.gif",
+                       link     => "calendar?".
+                                   "action=weekly&amp;".
+                                   "user=$on{user}&amp;".
+                                   "calendarday=$prev_day&amp;".
+                                   "calendarmonth=$prev_month&amp;".
+                                   "calendaryear=$prev_year".
+				   $equipment_param,
+                       quick_help => $lang{previous_week} ),
+
+             "<span style=\"color:gray; font-weight:bold\">$this_week</span>",
+
+             MkButton( icon_src => "$IG::img_url/${IG::tema}right.gif",
+                       link     => "calendar?".
+                                   "action=weekly&amp;".
+                                   "user=$on{user}&amp;".
+                                   "calendarday=$next_day&amp;".
+                                   "calendarmonth=$next_month&amp;".
+                                   "calendaryear=$next_year".
+				   $equipment_param,
+		       quick_help => $lang{next_week} )
+           )] );
+
+  TaskMsg($html, 7) if !$on{print};
+
+  my $last_day = IG::ConfigParam('calendar.week_view_mode') || 5;
+  
+  my $target_where = $on{equipmentid}
+                     ? "equipmentid='".DbQuote($on{equipmentid})."'"
+		     : "calendar.touser = '".DbQuote($on{user})."' ".
+		       "or calendar.touser = 'all'";
+  for my $cnt (1 .. $last_day)
+   {
+    my $prev_data = $data;
+    ($calendarday,$calendarmonth,$calendaryear) = IG::GetValuesByDate($data);
+    $data = IG::SumDate( $calendarday,
+			 $calendarmonth,
+                         $calendaryear,
+                         1 );
+
+    PrOut "<table border=1 cellspacing=0 cellpadding=2 width=\"100%\">\n";
+    PrOut "<td class=\"link\" width=\"11%\" style=\"".
+          (    $calendarday   == $tv{day}
+            && $calendarmonth == $tv{month}
+            && $calendaryear  == $tv{year}
+            ? "border:3px solid $IG::clr{font_link}; " : '' ).
+          "font-size:22px; font-weigth:bold;\">".
+	  "<a href=\"calendar?".
+	            "action=daily&amp;".
+	            "user=$on{user}&amp;".
+	            "calendarday=$calendarday&amp;".
+	            "calendarmonth=$calendarmonth&amp;".
+	            "calendaryear=$calendaryear".
+		    "$equipment_param\">$calendarday<br>".
+  	            substr($IG::days[$cnt],0,3).
+	  "</a></td>\n";
+    PrOut "<td class=\"list\" width=\"89%\">\n";
+    PrOut "<table width=\"100%\">\n";
+
+    DbQuery("SELECT calendar.reserved, calendar.starttime, calendar.endtime,".
+	    " calendar.eventtext, calendar.eventid, calendar.fromuser,".
+	    " calendar.touser, calendar.contactid, contacts.contactname,".
+	    " calendar.eventtype, equipments.description, bookings.claimed,".
+	    " bookings.approvedby, calendar.parent, calendar.confirmation,".
+	    " calendar.location, contacts.tel1 ".
+	    "FROM calendar left join contacts ".
+	    "ON calendar.contactid = contacts.contactid ".
+	    "left join bookings".
+	    " on (calendar.parent='' and bookings.eventid=calendar.eventid)".
+	    " or (calendar.parent<>'' and bookings.eventid=calendar.parent) ".
+	    "left join equipments on equipments.id = bookings.equipmentid ".
+	    "WHERE".
+	    " calendar.startdate < '$data' and".
+	    " (calendar.repeatend >= '$prev_data' or calendar.repeatend is null) and".
+	    " ($target_where) and".
+	    " (calendar.day = $calendarday or calendar.day = 0) and".
+	    " (calendar.month = $calendarmonth or calendar.month = 0) and".
+	    " (calendar.year = $calendaryear or calendar.year = 0) and".
+	    " (calendar.weekday = $cnt or calendar.weekday = 8) ".
+	    "ORDER BY calendar.starttime");
+
+    while (my @row = IG::FetchGroupedRows( group_by_indexes  => 4, 
+                                           to_concat_indexes => [10,11,12] ))
+     {
+      $row[3] = MkLink($row[3]);
+
+      ## Show contact info
+      if ($row[7])
+       {
+        $row[3] = "<a".
+		  " href=\"contacts?action=showrecord&amp;contactid=$row[7]\"".
+		  " target=\"mainf\">$row[8]</a> ".$row[3];
+       }
+
+      $row[3] .= " - $lang{phone_number} $row[16]" if    $on{print}
+                                                      || $row[9] == 2;
+
+      $row[3] = _event_type_icon( $row[9], $row[15] ) . $row[3];
+
+      ## Check if it's a reserved or public event
+      $row[3] = _event_icons( event        => $row[3],
+                              reservation  => $row[0],
+			      sharemode    => $row[6],
+		     	      eventid      => $row[4],
+			      parent       => $row[13],
+			      confirmation => $row[14] );
+
+      ## Controlla se e' un evento inserito da altri.
+      if ($row[5] ne $on{user} && !$on{equipmentid})
+       {
+        $row[3] = "<strong>".
+                  "$lang{insert_from} ".IG::UsrInf('name',$row[5]).
+                  ":</strong> $row[3]";
+       }
+      $row[3] = IG::BookingNotes( description   => $row[3],
+                                  touser        => $row[6],
+				  equipmentlist => $row[10],
+				  claimed       => $row[11],
+				  approvedby    => $row[12]);
+
+      ## Se l'evento e' modificabile prepara i link
+      if ( $row[6] eq $auth_user || $row[5] eq $auth_user )
+       {
+        $calcanc = Img( href    => "calendar?".
+                                   "action=delexec&amp;".
+                                   "backto=weekly&amp;".
+                                   "eventid=$row[4]&amp;".
+                                   "user=$on{user}&amp;".
+                                   "calendarday=$calendarday&amp;".
+                                   "calendarmonth=$calendarmonth&amp;".
+                                   "calendaryear=$calendaryear",
+			onclick => IG::JsConfirm( $lang{are_you_sure} ),
+			src     => "$IG::img_url/delete.gif",
+			title   => $lang{delete} );
+
+        $calmodi = "calendar?".
+		   "action=protomodi&amp;".
+		   "backto=weekly&amp;".
+		   "eventid=$row[4]&amp;".
+		   "user=$on{user}&amp;".
+		   "calendarday=$calendarday&amp;".
+		   "calendarmonth=$calendarmonth&amp;".
+	      	   "calendaryear=$calendaryear".
+		   $equipment_param;
+		   
+	$calcopy = Img( href    => "calendar?".
+		                   "action=protocopy&amp;".
+				   "backto=weekly&amp;".
+				   "eventid=$row[4]&amp;".
+				   "user=$on{user}&amp;".
+				   "calendarday=$calendarday&amp;".
+				   "calendarmonth=$calendarmonth&amp;".
+				   "calendaryear=$calendaryear".
+				   $equipment_param,
+			src     => "$IG::img_url/wizard.png",
+			title   => $lang{copy} );
+       }
+      else
+       {
+        $calcanc = '&nbsp;';
+        $calmodi = 'javascript:void(0);';
+	$calcopy = '&nbsp;';
+       }
+
+      $row[1] = substr('0'.$row[1], -4, 2) . ':' . substr($row[1], -2, 2);
+      $row[2] = substr('0'.$row[2], -4, 2) . ':' . substr($row[2], -2, 2);
+
+      ## Check event type
+      if ($row[9] == 5 ) 
+       {
+        ## it's a memorandum
+        $memo .= "<tr>".
+                 "<td width=\"100%\">$row[3]</td>".
+                 "<td>$calcopy$calcanc</td>".
+                 "</tr>\n";
+       }
+      else
+       {
+        ## it's an event
+        PrOut "<tr>".
+              "<td class=\"link\"><a href=\"$calmodi\">$row[1]</a></td>".
+              "<td class=\"link\"><a href=\"$calmodi\">$row[2]</a></td>".
+              "<td class=\"list\" width=\"100%\">$row[3]</td>".
+              "<td class=\"list\">$calcopy$calcanc</td>".
+              "</tr>\n";
+       }
+     }
+
+    PrOut "</table>";
+    if ( $memo ) 
+     {
+      PrOut "<table width=\"100%\">\n$memo\n</table>\n";
+      $memo = '';
+   }
+    PrOut "</td></tr></table>\n";
+   }
+  TaskFoot();
+  HtmlFoot();
+ }
+
+##############################################################################
+##############################################################################
+sub _buttons_views
+ {
+  require IG::Utils;
+  my $equipment_param = $on{equipmentid} 
+                        ? "&amp;equipmentid=$on{equipmentid}" 
+			: '';
+ 
+  my $invitationinquestion_button;
+  my $invitationtoconfirm_button;
+  if( !$on{equipmentid} ) 
+   { 
+    IG::CalendarEventsToConfirm( $on{user}, \%onquestion_events, \%toconfirm_events );
+	     
+    $invitationinquestion_button = 
+         MkButton( icon_src   => "$IG::img_url/invitation-inquestion.png",
+                   target     => 'rightframe',
+                   link       => "calendar?".
+                                 "action=invitationinquestion&amp;".
+				 "user=$on{user}",
+                   quick_help => $lang{invitationinquestion} )
+         if %onquestion_events;
+ 
+      $invitationtoconfirm_button =
+         MkButton( icon_src   => "$IG::img_url/invitation-toconfirm.gif",
+                   target     => 'rightframe',
+                   link       => "calendar?".
+                                 "action=invitationtoconfirm",
+                   quick_help => $lang{invitationstoconfirm} )
+         if %toconfirm_events;
+     }
+  
+  return [( MkButton( icon_src => "$IG::img_url/newevent.gif",
+                      link => "calendar?".
+                              "action=proto&amp;".
+                              "user=$on{user}&amp;".
+                              "backto=$on{action}&amp;".
+                              "calendarday=$on{calendarday}&amp;".
+                              "calendarmonth=$on{calendarmonth}&amp;".
+                              "calendaryear=$on{calendaryear}".
+			      $equipment_param,
+                      quick_help => $lang{new_event} ),
+
+            MkButton( icon_src => "$IG::img_url/daily.gif",
+                      link => "calendar?".
+                              "action=daily&amp;".
+                              "user=$on{user}&amp;".
+                              "calendarday=$on{calendarday}&amp;".
+                              "calendarmonth=$on{calendarmonth}&amp;".
+                              "calendaryear=$on{calendaryear}".
+			      $equipment_param,
+                      quick_help => $lang{daily_view} ),
+
+            MkButton( icon_src => "$IG::img_url/weekly.gif",
+                      link => "calendar?".
+                              "action=weekly&amp;".
+                              "user=$on{user}&amp;".
+                              "calendarday=$on{calendarday}&amp;".
+                              "calendarmonth=$on{calendarmonth}&amp;".
+                              "calendaryear=$on{calendaryear}".
+			      $equipment_param,
+                      quick_help => $lang{working_week} ),
+
+            MkButton( icon_src => "$IG::img_url/monthly.gif",
+                      link => "calendar?".
+                              "action=monthly2&amp;".
+                              "user=$on{user}&amp;".
+                              "calendarday=$on{calendarday}&amp;".
+                              "calendarmonth=$on{calendarmonth}&amp;".
+                              "calendaryear=$on{calendaryear}".
+			      $equipment_param,
+                      quick_help => $lang{monthly_view2} ),
+
+            $equipment_param ? '' :
+            MkButton( icon_src => "$IG::img_url/monthlyuser.gif",
+                      link => "javascript:winPopUp('".
+                              "calendar?".
+                              "action=monthly&amp;".
+                              "user=$on{user}&amp;".
+                              "calendarday=$on{calendarday}&amp;".
+                              "calendarmonth=$on{calendarmonth}&amp;".
+                              "calendaryear=$on{calendaryear}".
+                              "',750,400,'monthly2');",
+                      quick_help => $lang{monthly_view} ),
+
+            $equipment_param ? '' :
+            MkButton( icon_src => "$IG::img_url/yearly.gif",
+                      link => "calendar?".
+                              "action=yearly&amp;".
+                              "user=$on{user}&amp;".
+                              "calendarday=$on{calendarday}&amp;".
+                              "calendarmonth=$on{calendarmonth}&amp;".
+                              "calendaryear=$on{calendaryear}",
+                      quick_help => $lang{yearly_view} ),
+	   
+	    $invitationinquestion_button,
+
+	    $invitationtoconfirm_button
+        )];
+ }
+ 
+##############################################################################
+##############################################################################
+sub daily
+ {
+  use IG::Utils;
+  
+  _check_date();
+  my $first_hour = sprintf("%02d", IG::ConfigParam('calendar.first_hour')
+                                   || '08');
+  my $last_hour  = sprintf("%02d", IG::ConfigParam('calendar.last_hour')
+                                   || '19');
+     $last_hour  = ($first_hour + 1) if $first_hour >= $last_hour;
+     
+  my (	$html, $memo, $event_icon, $inimin, $del_icon, $edit_icon, $copy_icon,
+	$edit_link, $finmin, $min1, $min2, $o, $fin, $ini );
+
+  my $day = IG::GetDayByDate(	$on{calendarday},
+				$on{calendarmonth},
+				$on{calendaryear});
+
+  my $data = IG::GetDateByFormat($on{calendarday},
+				$on{calendarmonth},
+				$on{calendaryear});
+
+  my $today_date = "$IG::days[ IG::GetDayByDate
+                                ( $on{calendarday},
+				  $on{calendarmonth},
+				  $on{calendaryear}
+                                )
+                             ] $on{calendarday} $IG::months{$on{calendarmonth}}[0] $on{calendaryear}";
+
+  my $title;
+  if( $on{equipmentid} ) 
+   {
+    DbQuery( "select description from equipments ".
+             "where id='".DbQuote( $on{equipmentid} )."'" );
+    $title = "$lang{equipment} ".
+             MkEntities("$on{equipmentid} '".
+             ( FetchRow() . "'") );
+   }
+  else
+   {
+    $title = IG::UsrInf('name',$on{user});
+   }
+
+  HtmlHead( base_target => 'rightframe' );
+  TaskHead( width       => '100%',
+	    title       => "$lang{daily_view}: $title ".
+		  	   ($on{print} ? $today_date : '') );
+
+  my $equipment_param = $on{equipmentid} 
+                        ? "&amp;equipmentid=$on{equipmentid}" 
+			: '';
+
+  $html =
+   HLayer
+    ( intra_space  => 3,
+      bottom_space => 1,
+      left_layers  => _buttons_views(),
+      right_layers =>
+       [(
+	 MkButton( icon_src   => "$IG::img_url/${IG::tema}left.gif",
+	           link       => "calendar?".
+	                         "action=daily&amp;".
+	                         "user=$on{user}&amp;".
+	                         "prevday=1&amp;".
+	                         "calendarday=$on{calendarday}&amp;".
+	                         "calendarmonth=$on{calendarmonth}&amp;".
+	                         "calendaryear=$on{calendaryear}".
+				 $equipment_param,
+                   quick_help => $lang{previous_day} ),
+
+         "<span style=\"color:gray; font-weight:bold\">$today_date</span>",
+
+	 MkButton( icon_src   => "$IG::img_url/${IG::tema}right.gif",
+	           link       => "calendar?".
+	                         "action=daily&amp;".
+	                         "user=$on{user}&amp;".
+	                         "nextday=1&amp;".
+	                         "calendarday=$on{calendarday}&amp;".
+	                         "calendarmonth=$on{calendarmonth}&amp;".
+	                         "calendaryear=$on{calendaryear}".
+				 $equipment_param,
+                   quick_help => $lang{next_day} )
+      )]
+    );
+ 
+  TaskMsg($html,7) if !$on{print};
+
+  TaskListMenu([], [], [], []);
+
+  QuoteParams();
+
+  my $target_where = $on{equipmentid}
+                     ? "equipmentid='$in{equipmentid}'"
+		     : "calendar.touser = '$in{user}' ".
+		       "or calendar.touser = 'all'";
+
+  DbQuery(my $query = "SELECT calendar.reserved, calendar.starttime, calendar.endtime,".
+	  " calendar.eventtext, calendar.eventid, calendar.fromuser,".
+	  " calendar.touser, calendar.contactid, calendar.eventtype,".
+	  " contacts.contactname, contacts.tel1, calendar.location,".
+	  " equipments.description, bookings.claimed, bookings.approvedby,".
+	  " calendar.parent, calendar.confirmation ".
+	  "FROM calendar ".
+	  "LEFT JOIN contacts".
+	  " ON calendar.contactid = contacts.contactid ".
+	  "LEFT JOIN bookings".
+	  " ON (calendar.parent='' and bookings.eventid=calendar.eventid)".
+	  " or (calendar.parent<>'' and bookings.eventid=calendar.parent) ".
+	  "LEFT JOIN equipments".
+	  " ON equipments.id = bookings.equipmentid ".
+	  "WHERE".
+	  " calendar.startdate<='$data' and".
+	  " (calendar.repeatend>='$data' or calendar.repeatend is null) and".
+	  " ($target_where) and".
+	  " (calendar.day=$in{calendarday} or calendar.day=0) and".
+	  " (calendar.month=$in{calendarmonth} or calendar.month=0) and".
+	  " (calendar.year=$in{calendaryear} or calendar.year=0) and".
+	  " (calendar.weekday=$day or calendar.weekday=8) ".
+	  "ORDER BY calendar.starttime");
+
+  $ini    = $first_hour;
+  $inimin = '00';
+
+  while (my @row = IG::FetchGroupedRows( group_by_indexes  => 4, 
+                                         to_concat_indexes => [12,13,14]) )
+   {
+    $row[3] = MkLink($row[3]);
+
+    ## Show related contact
+    if ($row[7])
+     {
+      $row[3] = "<a href=\"contacts?".
+                          "action=showrecord&amp;".
+                          "contactid=$row[7]\" target=\"mainf\">".
+                "$row[9]</a> $row[3]";
+
+      $row[3] .= " - $lang{phone_number} $row[10]" if    $on{print}
+                                                      || $row[8] == 2;
+     }
+
+    ## Check if the event was inserted from another user
+    if ($row[5] ne $on{user} && !$on{equipmentid})
+     {
+      $row[3] = "<strong>$lang{insert_from} ".
+                IG::UsrInf('name',$row[5]).
+                ":</strong> $row[3]";
+     }
+
+    $row[3] = IG::BookingNotes( description   => $row[3],
+                                touser        => $row[6],
+			        equipmentlist => $row[12],
+			        claimed       => $row[13],
+			        approvedby    => $row[14]);
+ 
+    $row[3] = _event_type_icon( $row[8], $row[11] ) . $row[3];
+ 
+    ## Check if it's a reserved or public event
+    $row[3] = _event_icons( event        => $row[3],
+                            reservation  => $row[0],
+			    sharemode    => $row[6],
+			    eventid      => $row[4],
+			    parent       => $row[15],
+			    confirmation => $row[16] );
+
+    ## if user can edit this event , we will set edit and delete links
+    if ( $row[6] eq $auth_user || $auth_user eq $row[5] )
+     {
+      $del_icon = Img( href   => "calendar?".
+				 "action=delexec&amp;".
+                                 "backto=daily&amp;".
+				 "eventid=$row[4]&amp;".
+				 "user=$on{user}&amp;".
+				 "calendarday=$on{calendarday}&amp;".
+				 "calendarmonth=$on{calendarmonth}&amp;".
+				 "calendaryear=$on{calendaryear}",
+		      onclick => IG::JsConfirm( $lang{are_you_sure} ),
+		      align   => 'absmiddle',
+		      class   => 'noprint',
+		      src     => "$IG::img_url/delete.gif",
+		      title   => $lang{delete} );
+
+      $edit_link= "calendar?".
+                           "action=protomodi&amp;".
+                           "eventid=$row[4]&amp;".
+                           "user=$on{user}&amp;".
+                           "calendarday=$on{calendarday}&amp;".
+                           "calendarmonth=$on{calendarmonth}&amp;".
+                           "calendaryear=$on{calendaryear}".
+                           $equipment_param;
+
+      $edit_icon = Img(	src   => "$IG::img_url/edit.gif",
+			align => 'absmiddle',
+			href  => $edit_link,
+                        class => 'noprint',
+			title => $lang{edit} );
+			
+      $copy_icon = Img( href  => "calendar?".
+	  			 "action=protocopy&amp;".
+				 "eventid=$row[4]&amp;".
+				 "user=$on{user}&amp;".
+				 "calendarday=$on{calendarday}&amp;".
+				 "calendarmonth=$on{calendarmonth}&amp;".
+				 "calendaryear=$on{calendaryear}".
+		                 $equipment_param,
+		        align => 'absmiddle',
+		        class => 'noprint',
+		        src   => "$IG::img_url/wizard.png",
+		        title => $lang{copy} ); 
+     }
+    else
+     {
+      $del_icon = $edit_icon = $copy_icon = '&nbsp;';
+      $edit_link = '';
+     }
+
+    ## Controlla se e' una memo altrimenti stampa
+    if ($row[8] == 5)
+     {
+      if ($on{user} eq $auth_user || $auth_user eq $row[5])
+       {
+        $memo.= $edit_icon . $copy_icon . $del_icon;
+       }
+      $memo.="$row[3]<br>";
+     }
+    else
+     {
+      my $or1 = substr("0".$row[1],-4,2);
+      my $mi1 = substr($row[1],-2,2);
+      $row[1] = $or1.":".$mi1;
+
+      my $or2 = substr("0".$row[2],-4,2);
+      my $mi2 = substr($row[2],-2,2);
+      $row[2] = $or2.":".$mi2;
+
+      if (!$fin && $or1 > $ini)
+       {
+        $fin    = substr('0'.($or1-1),-2,2);
+        $finmin = $mi1;
+       }
+
+
+      if ( !$on{print} )  
+       {
+        for my $i ("$ini" .. "$fin")
+         {
+          $min1 = $i == $fin ? $finmin : '00';
+          $min2 = $i == $ini ? $inimin : '00';
+          $o = substr('0'.($i+1), -2, 2);
+          my $edit_link = "calendar?action=proto&amp;".
+                          "user=$on{user}&amp;".
+		  	  "calendarday=$on{calendarday}&amp;".
+			  "calendarmonth=$on{calendarmonth}&amp;".
+			  "calendaryear=$on{calendaryear}&amp;".
+			  "ora1=$i&amp;".
+			  "ora2=$o&amp;".
+			  "min2=$min1&amp;".
+			  "min1=$min2";
+
+          TaskListItem( ["$i:$min2",
+  			  $edit_link,
+		          ''],
+		        ["$o:$min1",
+			  $edit_link,
+			  '',
+			  'link'],
+		        [ '&nbsp;',
+			  '',
+			  "style=\"cursor:pointer; vertical-align:top; width:100%\" onclick=\"document.location='$edit_link';\""],
+		        [ '']
+		      );
+         }
+       }
+      my $sp = '<br>' x ($or2-$or1);
+
+      TaskListItem(
+		["$row[1]$sp",
+		 $edit_link],
+		[$row[2],
+		 $edit_link,
+		 '','link'],
+		[$row[3],
+		 '',
+		 ( $edit_link
+		   ? "onclick=\"document.location='$edit_link';\""
+		   : '').
+		 " valign=\"top\" style=\"cursor:pointer; width:100%\""],
+		[$edit_icon . $copy_icon . $del_icon,
+		 '',
+		 'nowrap']
+		  );
+
+      $ini    = $or2;
+      $inimin = $mi2;
+      $fin    = '';
+     }
+   }
+
+  if ( !$on{print} )  
+   {  
+    for my $i ("$ini" .. "$last_hour" )
+     {
+      $min1 = $i == $fin ? $finmin : '00';
+      $min2 = $i == $ini ? $inimin : '00';
+      $o = substr('0'.($i+1),-2,2);
+
+      my $edit_link = "calendar?action=proto&amp;".
+ 		        "user=$on{user}&amp;".
+			"calendarday=$on{calendarday}&amp;".
+			"calendarmonth=$on{calendarmonth}&amp;".
+			"calendaryear=$on{calendaryear}&amp;".
+			"ora1=$i&amp;".
+			"ora2=$o&amp;".
+			"min2=$min1&amp;".
+			"min1=$min2";
+
+      TaskListItem(   ["$i:$min2",
+			$edit_link,
+			''],
+		      ["$o:$min1",
+			$edit_link,
+			'',
+			'link'],
+		      [ '&nbsp;',
+			'',
+			"style=\"cursor:pointer; vertical-align:top; width:100%\" ".
+			"onclick=\"document.location='$edit_link';\""],
+		      [ '']
+		  );
+     }
+   }
+
+  TaskListFoot(1);
+
+  TaskMsg(Img( href => "calendar?".
+                                "action=proto&amp;".
+                                "user=$on{user}&amp;".
+                                "calendarday=$on{calendarday}&amp;".
+                                "calendarmonth=$on{calendarmonth}&amp;".
+                                "calendaryear=$on{calendaryear}&amp;".
+                                "eventtype=5",
+               src  => "$IG::img_url/memo.gif").
+	  Br(2) . $memo,4 );
+
+  TaskFoot();
+  HtmlFoot();
+ }
+
+##############################################################################
+##############################################################################
+sub _event_type_icon
+ {
+  my ( $event_type, $event_location) = @_;
+  
+  my $event_args = ( [ $lang{appointment},    'clock.gif'      ],
+                     [ $lang{appointment},    $event_location
+                                              ? 'car.gif'
+                                              : 'building.gif' ],
+                     [ $lang{telephone_call}, 'telephone.png'  ],
+                     [ $lang{email},          'email-png'      ],
+                     [ $lang{meeting},        'group.gif'      ],
+                     [ $lang{memorandum},     'note.png'       ]
+                   )[$event_type];
+
+  my  $title = $$event_args[0] . ' - '.
+               ( $event_location
+                 ? $lang{out_of_office}
+                 : $lang{in_office} );
+
+  return Img( src   => "$IG::img_url/$$event_args[1]",
+              align => 'absmiddle',
+              style => 'margin-right:2px',
+              title => $title );
+ }
+
+##############################################################################
+##############################################################################
+sub protocopy
+ {
+  protomodi();
+ }
+ 
+##############################################################################
+##############################################################################
+sub protomodi
+ {
+  my ($dg, $dm, $da, $ora1, $ora2);
+
+  QuoteParams();
+  DbQuery("SELECT * FROM calendar ".
+	  "where eventid='$in{eventid}'".
+	  " and (touser='$in{user}' or fromuser='$in{user}')");
+
+  (	$on{fromuser},
+	$on{touser},
+	$dg,
+	$dm,
+	$da,
+	$on{weekday},
+	$on{reserved},
+	$ora1,
+	$ora2,
+	$on{eventtext},
+	$on{startdate},
+	$on{eventid},
+	$on{showbyisms},
+	$on{location},
+	$on{activepopup},
+	$on{contactid},
+	$on{category},
+	$on{repeatend},
+        $on{notes},
+        $on{popupstatus},
+        $on{eventtype},
+       	$on{parent},
+	$on{confirmation},
+	$on{invitation_note} ) = FetchRow();
+ 
+  $on{ora1} = substr('0'.$ora1,-4,2);
+  $on{min1} = substr($ora1,-2,2);
+  $on{ora2} = substr('0'.$ora2,-4,2);
+  $on{min2} = substr($ora2,-2,2);
+
+  (	$on{calendarday},
+	$on{calendarmonth},
+	$on{calendaryear} ) = IG::GetValuesByDate($on{startdate});
+
+  if    ($dg==0 && $dm==0 && $da==0 && $on{weekday}==8)	{ $on{repeat} = 1   }
+  elsif ($dg==0 && $dm==0 && $da==0)			{ $on{repeat} = 7   }
+  elsif ($da==0 && $dm==0)				{ $on{repeat} = 30  }
+  elsif ($da==0)	       				{ $on{repeat} = 365 }
+  else							{ $on{repeat} = '0' }
+
+  $on{alluser} = 'checked' if $on{touser} eq 'all';
+  
+  if( $on{action} eq 'protocopy' )
+   {
+    ## copy a booking (if any)
+    my $booking_eventid = $on{parent} || $on{eventid};
+    DbQuery( "select equipmentid, note ".
+             "from bookings ".
+	     "where eventid='".DbQuote($booking_eventid)."' ".
+	     "order by bookingid ".
+	     "limit 2");
+    ($on{new_booking_equip}, $on{new_booking_note} ) = FetchRow();
+    push @IG::errmsg, $lang{can_clone_only_a_booking}
+         if $on{new_booking_equip} && FetchRow();
+
+    $on{eventtext} = "$on{eventtext} ($lang{copy})";
+    $on{confirmation} = $on{invitation_note} = $on{parent} = $on{eventid} = '';
+   }
+  
+  if( $on{touser} ne $auth_user && 
+      ($on{fromuser} ne $auth_user || $on{parent}) )
+   {
+    HtmlHead();
+    TaskMsg( $lang{Err_cant_access_event} );
+    HtmlFoot();
+    return;
+   }
+
+  proto();
+ }
+
+#############################################################################
+#############################################################################
+sub proto
+ {
+  my %ajax_req;
+  require IG::Utils;
+
+  ## Adjust default values
+  $on{user} ||= $auth_user;
+  ( $on{calendarday},
+    $on{calendarmonth},
+    $on{calendaryear}   ) = IG::GetValuesByDate( $on{eventdate} || $tv{today} )
+                              if !$on{calendarday};
+
+  ## Set Ajax requests
+  if ( $on{eventid} && CheckPrivilege('igforms_view') )
+   {
+    $ajax_req{getpersonalizedfieldslist} = "igforms?".
+                                           "action=build_form_mask&amp;".
+                                           "igformid=calendar&amp;".
+                                           "recordid=$on{eventid}";
+   }
+
+  HtmlHead( ajax_req    => \%ajax_req,
+            javascript  => "<script type=text/javascript>\n".
+                           "pjx.prototype.pjxInitialized = function(el)".
+                           "{ document.getElementById(el).innerHTML = 'Loading...';}".
+                           "</script>\n",
+            base_target => 'rightframe' );
+
+  TaskHead( title       => IG::UsrInf( 'name', $on{user} ). ' - '.
+                           $IG::days[IG::GetDayByDate( $on{calendarday},
+                                                       $on{calendarmonth},
+                                                       $on{calendaryear})].
+                           " $on{calendarday}".
+                           " $IG::months{$on{calendarmonth}}[0]".
+                           " $on{calendaryear}",
+            width       => '100%',
+            minwidth    => '550px',
+            icon        => 1 );
+
+  FormHead( labelstyle  => 'width: 110px',
+            target      => $on{backto} =~ /^contacts/
+                         ? 'mainf'
+                         : $on{onaction} eq 'close'
+                           ? '_self'
+                           : '',
+		ckchanges  => 'true',
+            onsubmit    => $on{backto} =~ /^contacts/
+                         ? "setTimeout('self.close()',500);"
+                         : '',
+            status      => $on{fromuser} eq 'planner' ? 'r' : 'rw',
+            cgiaction   => 'protoagg');
+
+  Input( type    => 'hiddens',
+         data    => { user	  => '',
+                      fromuser	  => '',
+                      onaction    => '',
+                      backto	  => '',
+		      parent      => '',
+		      equipmentid => '',
+		      havetoclaim => '',
+                      eventid	  => MkId() } );
+
+  my $readonly_if_attendee = $on{parent} ? 'true' : 'false';
+
+  my $have_children = 0;
+  if( $on{eventid} ) 
+   {
+    DbQuery( "select count(*) from calendar".
+             " where parent='".DbQuote($on{eventid})."'" );
+    $have_children = FetchRow() > 0;
+   }
+
+  ## Event ########################################################## PAN 1
+  my $pan1
+     = Input( type       => 'select',
+              show       => $lang{type},
+              labelstyle => 'width:13%;',
+              name       => 'eventtype',
+              onchange   => 'show_time_box(this.value);',
+	      readonly   => $readonly_if_attendee,
+              style      => 'width:150px',
+              data       => [([1, $lang{appointment}],
+                              [2, $lang{telephone_call}],
+                              [3, $lang{email}],
+                              [4, $lang{meeting}],
+                              [5, $lang{memorandum}]
+                            )] ).
+
+       Input( type       => 'select',
+              labelstyle => 'width:auto;',
+              float      => 'left',
+              name       => 'location',
+	      readonly   => $readonly_if_attendee,
+              style      => 'width:100px',
+              data       => [([0, $lang{in_office}],
+                              [1, $lang{out_of_office}] )] ).
+
+       Input( type       => 'date',
+              float      => 'left',
+              name       => 'eventdate',
+	      readonly   => $readonly_if_attendee,
+              labelstyle => 'margin-left:10px; width:auto',
+              show       => $lang{date},
+              value      => IG::GetDateByFormat( $on{calendarday},
+                                                 $on{calendarmonth},
+                                                 $on{calendaryear}) ).
+
+       "<div id=\"time_box\" style=\"clear:left; width:100%;\">".
+       Input( type       => 'select',
+              labelstyle => 'width:13%;',
+              show       => $lang{start_time},
+              name       => 'ora1',
+	      readonly   => $readonly_if_attendee,
+              value      => '09',
+              data       => [('01' .. '24')] ).
+
+       Input( type       => 'select',
+              float      => 'left',
+              name       => 'min1',
+	      readonly   => $readonly_if_attendee,
+              labelstyle => 'width:auto',
+              style      => 'margin-right:15px',
+              value      => '00',
+              data       => [( '00', '05', '10', '15', '20', '25', 
+                               '30', '35', '40', '45', '50', '55')] ).
+
+       Input( type       => 'select',
+              name       => 'ora2',
+	      readonly   => $readonly_if_attendee,
+              float      => 'left',
+              labelstyle => 'width:90px',
+              value      => 10,
+              show       => $lang{end_time},
+              data       => [('01' .. '24')] ).
+
+       Input( type       => 'select',
+              name       => 'min2',
+	      readonly   => $readonly_if_attendee,
+              float      => 'left',
+              labelstyle => 'width:auto',
+              value      => '00',
+              data       => [( '00', '05', '10', '15', '20', '25',
+                               '30', '35', '40', '45', '50', '55')] ).
+       "</div>".
+
+       ( $on{backto} !~ /^contacts/
+         ? Input( show       => $lang{contact},
+                  labelstyle => 'width:13%;',
+                  containerstyle=>'padding-top:15px;',
+	          readonly   => $readonly_if_attendee,
+                  style      => 'width:350px',
+                  type       => 'contactfinder')
+         : Input( type       => 'hidden',
+                  name       => 'contactid')
+       ).
+
+       Input( type       => 'textarea',
+              focus      => ($readonly_if_attendee eq 'true' 
+	                    ? 'false'
+			    : 'true'),
+              fieldstyle => 'width:80%',
+              labelstyle => 'width:13%; height:60px;',
+              style      => 'width:100%; height:60px',
+              show       => $lang{description},
+	      readonly   => $readonly_if_attendee,
+              name       => 'eventtext').
+
+       Input( type       => 'textarea',
+              fieldstyle => 'width:80%',
+              labelstyle => 'width:13%; height:60px;',
+              style      => 'width:100%; height:60px',
+              show       => $lang{notes},
+              name       => 'notes');
+
+
+  IG::JsExec( position => 'footer',
+              code     => <<END );
+
+function show_time_box(event_type)
+ {
+  if ( event_type == 5 )
+   { \$('time_box').style.display = 'none'; }
+  else
+   { \$('time_box').style.display = 'block'; }
+ } 
+show_time_box($on{eventtype});
+END
+
+  ## Properties ##################################################### PAN 2
+  my $pan2
+     = Input( type       => 'basictable',
+              table      => 'event_categories',
+              zerovalue  => 'true',
+              style      => 'width: 160px;',
+              show       => $lang{category},
+	      readonly   => $readonly_if_attendee,
+              name       => 'category').
+
+       ( $on{user} eq $auth_user
+         ? Input( type     => 'select',
+                  show     => $lang{reserve},
+                  style    => 'width: 130px',
+                  value    => $on{reserved} ne ''
+                            ? $on{reserved}
+			    : IG::ConfigParam('calendar.share_mode') eq 'private'
+                              ? 1
+                              : 0,
+                  name     => 'reserved',
+                  readonly => $readonly_if_attendee,
+                  data     => [( ['0',$lang{public}],
+				 ['1',$lang{private}]
+			)] )
+         : Input( type     => 'hidden',
+                  name     => 'reserved',
+                  value    => '0' ) ).
+
+       Input( show       => $lang{repeat},
+              containerstyle => 'padding-top:15px',
+              type       => 'select',
+              name       => 'repeat',
+	      readonly   => $readonly_if_attendee,
+              data       => [( ['0',  $lang{select}],
+                               ['1',  $lang{daily}],
+                               ['7',  $lang{weekly}],
+                               ['30', $lang{monthly}],
+                               ['365',$lang{yearly}]
+                           )] ).
+
+       Input( type       => 'date',
+              name       => 'repeatend',
+	      readonly   => $readonly_if_attendee,
+              show       => $lang{repeat_date_end} ).
+
+       Input( show       => $lang{reminder},
+              type       => 'select',
+              name       => 'activepopup',
+              containerstyle => 'padding-top:15px',
+              style      => 'font-size:10px; width:200px',
+              data       => [( [0,    $lang{none}],
+                               [300,  "$lang{alert_popup}: ".
+                                      "5 $lang{minutes_before}"],
+                               [600,  "$lang{alert_popup}: ".
+                                      "10 $lang{minutes_before}"],
+		               [1800, "$lang{alert_popup}: ".
+		                     "30 $lang{minutes_before}"],
+                             (    $IG::plugin_conf{sms}{username}
+                               && $IG::plugin_conf{sms}{password}
+                             ? ( [3600, "$lang{alert_popup}: ".
+                                        "60 $lang{minutes_before}"],
+                                 [30000,  "Sms: 5 $lang{minutes_before}"],
+                                 [60000,  "Sms: 10 $lang{minutes_before}"],
+                                 [180000, "Sms: 30 $lang{minutes_before}"],
+                                 [360000, "Sms: 60 $lang{minutes_before}"] )
+                             : ( [3600, "$lang{alert_popup}: ".
+		                        "60 $lang{minutes_before}"]) )
+                           )] ).
+
+       Input( show       => $lang{isms_notify},
+              type       => 'checkbox',
+              name       => 'showbyisms').
+
+       Input( show       => $lang{public_event},
+              type       => 'checkbox',
+              readonly   => $on{parent} || $have_children ? 'true' : 'false',
+              name       => 'alluser' );
+
+
+  ## Invitations ################################################### PAN 3
+  my $pan3;
+  my $some_can_be_deleted = 0;
+  my $parent = $on{parent} || $on{eventid};
+
+  if ( $on{user} eq $auth_user )
+   { 
+    $pan3 .= TaskListMenu( [$lang{user}], 
+                           [$lang{notes}, '', 'width="70%"'], 
+			   [$lang{confirm}],
+			   $on{eventid} eq $parent ? [''] : '',
+			 );
+    if( $on{eventid} ) 
+     {			 
+      DbQuery("select eventid, touser, confirmation, invitation_note, parent ".
+              " from calendar".
+              " where parent='".DbQuote($parent)."'".
+              " or eventid='".DbQuote($parent)."'".
+              " order by parent, touser");
+      while ( my ( $eventid,
+                   $touser,
+                   $confirmation,
+                   $invitation_note,
+                   $parent2 ) = FetchRow()
+            )
+       {
+        my $note_cell =
+           $touser eq $auth_user
+           ? Input( type       => 'textarea',
+                    fieldstyle => 'width:100%',
+                    style      => 'width:100%; height:30px',
+                    name       => 'invitation_note' )
+           : $invitation_note;
+
+        my $confirmation_cell =
+           $touser eq $auth_user
+           ? Input( type       => 'select',
+                    name       => 'confirmation',
+                    style      => 'width:120px',
+                    data       => [([0, $lang{invitation_toconfirm}],
+                                    [1, $lang{invitation_confirmed}],
+                                    [2, $lang{invitation_rejected}],
+                                   )] )
+           : ( $lang{invitation_toconfirm},
+               $lang{invitation_confirmed},
+              Blush($lang{invitation_rejected}))[$confirmation];
+
+        my $can_be_deleted = $on{eventid} eq $parent && $eventid ne $parent;
+        my $delete_cell = $can_be_deleted
+                          ? Input( type       => 'checkbox',
+    		                   fieldstyle => 'margin:0;padding:0;',
+    		                   name       => 'attendee_to_del',
+    		                   value      => $eventid )
+    			  : '';
+
+        my @tasklistparam;
+        push @tasklistparam, ( [IG::UsrInf('name',$touser),
+                                '',
+                                $parent2 ? '' : 'style="font-weight:bolder;"'],
+                               [$note_cell, '', 'width="70%"'],
+                               [$confirmation_cell] );
+        push @tasklistparam, $delete_cell if $on{eventid} eq $parent;
+        $pan3 .= TaskListItem( @tasklistparam );
+
+        $some_can_be_deleted ||= $can_be_deleted;
+       }
+     }
+    else
+     {
+      $pan3 .= TaskListItem( [IG::UsrInf('name',$on{user}), 
+                              '', 
+			      'style="font-weight:bolder;"'],
+                             [Input( type       => 'textarea',
+                                     fieldstyle => 'width:100%',
+                                     style      => 'width:100%; height:30px',
+                                     name       => 'invitation_note' ), 
+			      '', 'width="70%"'], 
+                             [$lang{invitation_toconfirm}],
+			     [] );
+     }
+
+    $pan3 .= TaskListItem
+              (  
+               [ Input( type       => 'groupselector',
+                        allvalue   => 'true',
+                        style      => 'width:180px;',
+                        value      => -1, ## no one selected
+                        zerovalue  => 1,
+                        name       => 'new_attendee' ).
+                       
+                 Input( type       => 'submit',
+                        style      => 'width:200px;',
+                        name       => 'add_attendee',
+                        value      => $lang{add_attendee} ) ],
+ 
+               [ Input( type       => 'textarea',
+                        fieldstyle => 'width:100%',
+                        style      => 'width:100%; height:30px',
+                        name       => 'new_attendee_note' ),
+                '', 'width="70%"'],
+               [],
+	       [],
+	     ) if !$on{eventid} || $on{eventid} eq $parent;
+
+    $pan3 .= TaskListFoot(6,0,1);
+
+    if ( $some_can_be_deleted ) 
+     {
+      $pan3 .=
+       HLayer
+        ( right_layers
+           => [( Input( type       => 'text',
+                        style      => 'width:190px',
+                        labelstyle => 'width:auto',
+                        name       => 'del_attendee_note',
+                        show       => $lang{del_attendee_note} ),
+
+                 Input( type       => 'submit',
+                        name       => 'del_attendee',
+                        value      => $lang{remove_attendee} ),
+                              
+                 Img( src   => "$IG::img_url/arrow_link_up.gif",
+                      width => 13,
+                      style => "position:relative; top:-10px; margin:0px 3px 0px 0px;",
+                      height=> 18 )
+               )]
+        );
+     }
+   }
+
+
+  ## Bookings ####################################################### PAN 4
+  my $pan4;
+  $pan4 .= TaskListMenu( [$lang{equipment}], 
+                         [$lang{notes}, '', 'width="70%"'], 
+			 [$lang{booking_approvedby}],
+			 $on{parent} ? '' : ['']
+			 );
+  my $enable_delete = 0;
+  if( $on{eventid} ) 
+   {
+    DbQuery( "select bookingid, equipmentid, approvedby, bookings.note, ".
+             "bookings.claimed, equipments.description ".
+             "from bookings ".
+	     "left join equipments on equipments.id = bookings.equipmentid ".
+	     "where eventid='".DbQuote($on{parent} || $on{eventid})."'" );
+    while( my ($bookingid, $equipmentid, $approvedby, $note, 
+               $claimed, $equip_name) = FetchRow() )
+     {
+      my @tasklistparam;
+      
+      my $users_to_claim;
+      for( sort keys %{$on{"booking_${bookingid}_toclaim"}} )
+       {
+        $users_to_claim .= '<br>' if $users_to_claim;
+	$users_to_claim .= MkEntities( IG::UsrInf( 'name', $_ ) );
+       }
+
+      $users_to_claim = IG::GetDateFromTime($claimed) if    !$users_to_claim
+                                                         && $claimed;
+
+      push @tasklistparam, 
+	   ( $equip_name,
+	     !$on{parent} 
+	     ? Input( type       => 'text',
+	              fieldstyle => 'width:100%',
+		      style      => 'width:100%',
+		      value      => $note,
+		      name       => 'booking_'.$bookingid.'_note' )
+	     : $note,
+	     $users_to_claim
+	     ? [$users_to_claim, '', 'style="color:#ffffff; background-color: #ff0000;"']
+	     : $approvedby 
+	       ? IG::UsrInf( 'name', $approvedby ) 
+	       : $lang{booking_tobeapproved}
+	   );
+      if( !$on{parent} && ($on{user} eq ($on{fromuser} || $on{user})) ) 
+       {
+        push @tasklistparam, Input( type       => 'checkbox',
+    		                    fieldstyle => 'margin:0;padding:0;',
+				    name       => 'bookings_to_delete',
+				    value      => $bookingid );
+	$enable_delete = 1;
+       }
+
+      $pan4 .= TaskListItem( @tasklistparam );
+     }
+   }
+
+  if( !$on{parent} ) 
+   {
+    my $users_to_claim;
+    for( sort keys %{$on{booking_new_toclaim}} )
+     {
+      $users_to_claim .= "<br>" if $users_to_claim;
+      $users_to_claim .= MkEntities( IG::UsrInf( 'name', $_ ) );
+     }
+
+    $pan4 .= TaskListItem
+              (
+               Input( type      => 'select',
+                      style     => 'width:250px;',
+		      data      => "select id, description ".
+			           "from equipments ".
+			           "left join users_groups_link".
+			           " on groupid = booking_group".
+			           "    and userid='$auth_user' ".
+			           "where userid='$auth_user'".
+			           " or booking_group='all'",
+                      zerovalue => 'true',
+                      name      => 'new_booking_equip' ),
+               [Input( type       => 'text',
+                       fieldstyle => 'width:100%',
+		       style      => 'width:100%;', 
+		       name       => 'new_booking_note' ),
+                '', 'width="70%"'],
+               $users_to_claim
+               ? [$users_to_claim, '', 'style="color:#ffffff; background-color: #ff0000;"']
+               : '',
+               []
+              );
+   }
+
+  $pan4 .= TaskListFoot(9,0,1);
+
+  $pan4 .= Input (  type  => 'submit',
+                    float => 'right',
+                    name  => 'del_bookings',
+                    value => $lang{del_bookings} ) if $enable_delete;
+
+  $pan4 .= Input (  type  => 'submit',
+                    float => 'right',
+                    name  => 'booking_claim',
+		    style => 'color:#FFFFFF; background: #ff0000;',
+                    value => $lang{claim_conflict_bookings} )
+           if $on{havetoclaim};
+
+
+  ## File Repository ############################################ PAN  5
+  my $pan5 = "<iframe frameborder=\"0\" style=\"padding:0px; width:100%; height:260px;\"".
+             " src=\"\" id=\"files\" name=\"myframe\"></iframe>";
+
+  my $tab_files_action = "\$('files').src='filemanager?".
+                          "repid=$on{eventid}&amp;repapp=calendar'";
+
+
+  ## Personalized Fields ######################################## PAN 6
+  my $pan6 = [ $lang{personalized_fields},
+               $on{eventid} && CheckPrivilege('igforms_view') ? '&nbsp;' : '',
+               "getpersonalizedfieldslist".
+               "(['NO_CACHE'],['layer_content5'])" ];
+
+
+  IG::TabPane( data       => [( [$lang{event},    $pan1 ],
+                                [$lang{property}, $pan2 ],
+			        [$lang{invitations}, $pan3 ],
+			        [$lang{bookings}, $pan4 ],
+                                [$lang{open_repository},
+                                 ($on{eventid}
+                                  ? ( $pan5, $tab_files_action )
+                                  : ( '','') ) ],
+                                $pan6
+                              )],
+               width      => '100%',
+               height     => 280,
+               label_type => 1,
+               default    => $on{default_pane} );
+                                                                                                                                                                                                                
+
+  Input( type  => 'submit',
+         style => 'margin-top:15px;',
+         name  => 'save',
+         value => $lang{save} );
+
+  Input( type  => 'submit',
+         style => 'margin-top:15px;',
+         float => 'left',
+         name  => 'apply',
+         value => $lang{apply} );
+
+  Input( type  => 'reset',
+         style => 'margin-top:15px',
+         float => 'left',
+         value => $lang{restore} );
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+ 
+#############################################################################
+#############################################################################
+sub protoagg
+{
+ my $bookings_lock = AutoReleasedBookingLock::new();
+ my ($user, $ora1, $ora2);
+
+ ## validate params
+ if (   $on{eventtype} !=5
+     && (   ($on{ora1} < 1 && $on{ora1} ne '00')
+         || ($on{ora2} < 1 && $on{ora2} ne '00')
+         ||  $on{ora1} > 24
+         ||  $on{ora2} > 24
+         ||  $on{ora1} > $on{ora2}
+         ||  $on{min1} > 59
+         ||  $on{min2} > 59 )
+    )
+  { push @IG::errmsg, $lang{Err_schedule}; }
+
+ if (!$on{eventtext})
+  {
+   push @IG::errmsg, $lang{Err_event};
+   $lang{description} = Blush($lang{description});
+  }
+
+ if (!($on{eventdate} = CkDate($on{eventdate})))
+  {
+   push @IG::errmsg, $lang{Err_issue};
+   $lang{date} = Blush($lang{date});
+  }
+
+ if (!($on{repeatend} = CkDate($on{repeatend},1)))
+  {
+   push @IG::errmsg, $lang{Err_repeat_end};
+   $lang{repeat_date_end} = Blush($lang{repeat_date_end});
+  }
+
+ ## ---------- checks about invitations -----------
+ if ( $on{new_attendee} )
+  {
+   DbQuery("select touser, parent, eventid from calendar".
+           " where eventid='".DbQuote($on{eventid})."'".
+	   " and fromuser='".DbQuote($on{fromuser})."'");
+   my ($touser, $parent, $eventid) = FetchRow();
+
+   die "Can't add new attendee for a not owned event.\n"
+     if $eventid && $touser ne $auth_user;
+   die "Can't add new attendee from a child event.\n"
+     if $parent;
+
+   if ( !$on{new_attendee_note} )
+    {
+     push @IG::errmsg, $lang{Err_note_x_new_attendee};
+     ## no field label to blush
+    }
+
+   push @IG::errmsg, $lang{Err_cant_invite_yourself} 
+     if $on{new_attendee} eq $auth_user;
+   push @IG::errmsg, $lang{Err_alluser_invitation}
+     if $on{alluser};
+
+   if ( $eventid ) 
+    {
+     ## check if already have this attendee
+     DbQuery("select count(*) ".
+             "from calendar ".
+             "where parent='".DbQuote($eventid)."'".
+             " and touser='".DbQuote($on{new_attendee})."'");
+
+     push @IG::errmsg, $lang{Err_attendee_duplicated}
+       if FetchRow() > 0;
+    }
+  }
+
+ my @attendee_to_del = ref( $on{attendee_to_del} ) eq 'ARRAY'
+		       ? @{$on{attendee_to_del}}
+		       : ($on{attendee_to_del});
+
+ push @IG::errmsg, $lang{Err_del_attendee_no_one}
+   if $on{del_attendee} && !$on{attendee_to_del};
+
+ if ( $on{del_attendee} && !$on{del_attendee_note} )
+  {
+   push @IG::errmsg, $lang{Err_note_x_attendee2del};
+   $lang{del_attendee_note} = Blush($lang{del_attendee_note});
+  }
+
+ ## store old values to discover field changes 
+ DbQuery( "select confirmation, invitation_note,".
+          " day, month, year, weekday, ".
+	  " starttime, endtime,".
+	  " startdate, repeatend".
+          " from calendar where eventid='".DbQuote($on{eventid})."'" );
+ my ( $confirmation_old,
+      $invitation_note_old,
+      $day_old,
+      $month_old,
+      $year_old,
+      $weekday_old,
+      $starttime_old,
+      $endtime_old,
+      $startdate_old,
+      $repeatend_old ) = FetchRow();
+ ## -------- end checks about invitations --------
+
+ ## on errors back to proto 
+ proto() && return if @IG::errmsg;
+
+
+ ( $on{calendarday},
+   $on{calendarmonth},
+   $on{calendaryear} ) = IG::GetValuesByDate( $on{eventdate} );
+
+ if ( $on{alluser} )
+  { $user = 'all'; }
+ elsif ( $on{user} eq 'all' )
+  { $user = $auth_user; }
+ else
+  { $user = $on{user}; }
+
+ $on{fromuser} ||= $auth_user;
+ $on{eventid}  ||= MkId();
+
+ $ora1 = $on{ora1} . substr('00' . $on{min1}, -2, 2);
+ $ora2 = $on{ora2} . substr('00' . $on{min2}, -2, 2);
+
+ my $data        = IG::GetDateByFormat(	$on{calendarday},
+					$on{calendarmonth},
+					$on{calendaryear});
+
+ my $calendarday = IG::GetDayByDate(	$on{calendarday},
+					$on{calendarmonth},
+					$on{calendaryear});
+ my $event_weekday = $calendarday;
+
+ if ( $on{repeat} == 0 )
+  {
+   $calendarday = 8;
+   $on{repeatend} = $tv{empty_date};
+  }
+ elsif ( $on{repeat} == 1 )
+  {
+   $on{calendarmonth} = $on{calendaryear} = $on{calendarday} = 0;
+   $calendarday = 8;
+  }
+ elsif ( $on{repeat} == 7 )
+  {
+   $on{calendarday} = $on{calendarmonth} = $on{calendaryear} = 0;
+  }
+ elsif ($on{repeat} == 30 )
+  {
+   $on{calendarmonth} = $on{calendaryear} = 0;
+   $calendarday=8;
+  }
+ elsif ($on{repeat} == 365 )
+  {
+   $on{calendaryear} = 0;
+   $calendarday = 8
+  }
+
+ ## ---------- checks about bookings -----------
+ if ( $on{parent} ) 
+  {
+   die "Can't delete bookings from an invitation" if $on{del_bookings};
+   die "Can't add bookings from an invitation" if $on{new_booking_equip};
+  }
+
+ my @bookings_to_delete;
+ if ( $on{del_bookings} ) 
+  {
+   @bookings_to_delete = ref($on{bookings_to_delete}) eq 'ARRAY'
+		       ? @{$on{bookings_to_delete}}
+		       : ($on{bookings_to_delete});
+   my $some_checked = 0;
+   $some_checked ||= $_ for @bookings_to_delete;
+
+   push @IG::errmsg, $lang{Err_del_booking_no_one}
+     unless $some_checked;
+  }
+  
+ my $have_bookings = 0;
+ my %claimed_bookings;   ## map: bookingid|'new' => 0|1
+ my %booking_equipments; ## map: bookingid => equipmentid
+
+ ## check existing booking (for updated event date/time)
+ DbQuery( "select bookings.bookingid, equipments.id, equipments.description,".
+          " bookings.eventid, bookings.claimed ".
+          "from bookings ".
+          "join equipments on equipments.id = bookings.equipmentid ".
+	  "where bookings.eventid='".DbQuote( $on{eventid} )."'" );
+ my @existing_bookings;
+ while( my ($bookingid, $equipmentid, $equipmentname,
+            $eventid, $claimed) = FetchRow() )
+  {
+   ## store existing bookings
+   push @existing_bookings, [ $bookingid,
+                              $equipmentid,
+                              $equipmentname,
+                              $eventid,
+                              $claimed ];
+  }
+  
+ for my $row ( @existing_bookings )
+  {
+   my ( $bookingid,
+        $equipmentid,
+        $equipmentname,
+        $eventid,
+        $claimed ) = @{$row};
+
+   my $is_to_delete = 0;
+   $booking_equipments{$bookingid} = $equipmentid;
+   $is_to_delete ||= $_ eq $bookingid for @bookings_to_delete;
+   next if $is_to_delete;
+   $have_bookings = 1;
+   
+   ## --- if the note is mandatory
+   ##my $notekey = "booking_${bookingid}_note";
+   ##push @IG::errmsg, sprintf( "insert a note for %$1s", $equipmentname ) 
+   ##     unless $on{$notekey};
+
+   my @conflict_eventids =
+      _checkBooking( equipmentid   => $equipmentid,
+                     equipmentname => $equipmentname,
+		     eventid       => $on{eventid},
+		     startdate     => $data,
+		     repeatend     => $on{repeatend},
+		     starttime     => $ora1,
+		     endtime       => $ora2 );
+
+   for ( @conflict_eventids ) 
+    {
+     my ($eventid, $errmsg, $owner) = @{$_};
+
+     if ( $on{booking_claim} ) ## the user has claimed bookings
+      {
+       if ( $on{"booking_${bookingid}_note"} ) ## note was inserted
+        { $claimed_bookings{$bookingid} = 1; }
+       else
+        { push @IG::errmsg, $lang{Err_note_for_claim}; } ## enter a note!
+      }
+     elsif ( !$claimed ) ## the booking is not already claimed
+      {
+       push @IG::errmsg, $errmsg;
+       $on{havetoclaim} = 1; ## enable claim button in proto()
+      }
+
+     ## remember users to message
+     $on{"booking_${bookingid}_toclaim"}{$owner} = $eventid; 
+    }
+
+   ## can't book an equipment twice in an event
+   push @IG::errmsg, sprintf( $lang{booking_duplicated}, $equipmentname )
+     if $on{new_booking_equip} && $equipmentid eq $on{new_booking_equip};
+  }
+ 
+ ## check for new booking 
+ if ( $on{new_booking_equip} )
+  {
+   $have_bookings = 1;
+   DbQuery( "select description from equipments ".
+            "where id='".DbQuote($on{new_booking_equip})."'" );
+   my $equipmentname = FetchRow() || "#$on{new_booking_equip}";
+   my @conflict_eventids =
+      _checkBooking( equipmentid   => $on{new_booking_equip},
+                     equipmentname => $equipmentname,
+		     eventid       => $on{eventid},
+		     startdate     => $data,
+		     repeatend     => $on{repeatend},
+		     starttime     => $ora1,
+		     endtime       => $ora2 );
+   
+   for ( @conflict_eventids ) 
+    {
+     my ($eventid, $errmsg, $owner) = @{$_};
+     if ( $on{booking_claim} ) ## the user has claimed bookings
+      {
+       if ( $on{new_booking_note} ne '' ) ## note was inserted
+        { $claimed_bookings{new} = 1; }
+       else
+        { push @IG::errmsg, $lang{Err_note_for_claim}; } ## enter a note!
+      }
+     else
+      {
+       push @IG::errmsg, $errmsg;
+       $on{havetoclaim} = 1; ## enable claim button in proto()
+      }
+     ## remember users to message
+     $on{booking_new_toclaim}{$owner} = $eventid;
+    }
+   
+   ## --- if the note is mandatory
+   ##push @IG::errmsg, sprintf( "insert a note for %$1s", $equipmentname )
+   ##     unless $on{new_booking_note};
+  }
+
+ if ( $have_bookings )
+  {
+   push @IG::errmsg, $lang{Err_booking_endless}
+     if $on{repeat} && $on{repeatend} == $tv{empty_date};
+
+   push @IG::errmsg, $lang{Err_booking_memo} 
+     if $on{eventtype} == 5;
+
+   push @IG::errmsg, $lang{Err_booking_repeat}
+     if $on{repeat} > 1;
+  }
+
+ ## goto proto() if there are errors
+ proto() && return if @IG::errmsg;
+
+ ## ---- end checks about bookings ----
+
+ my $default_pane = $on{del_attendee} || $on{add_attendee}
+                  ? 2
+                  : $on{del_bookings}
+                    ? 3
+                    : 0;
+
+ my $location    = $on{backto} eq 'contacts' 
+                   && !$on{apply} 
+		   && !$on{del_attendee}
+		   && !$on{add_attendee}
+		   && !$on{del_bookings}
+                 ? 'contacts?action=showrecord&amp;'.
+                             "contactid=$on{contactid}"
+                 : 'calendar?'.
+                   'action=' . ( $on{apply} 
+		                 || $on{del_attendee} 
+                                 || $on{add_attendee}
+				 || $on{del_bookings}
+		                 ? "protomodi&amp;".
+		                   "default_pane=$default_pane&amp;".
+                                   "eventid=$on{eventid}&amp;".
+                                   "backto=$on{backto}"
+                                 : $on{backto} eq 'weekly'   ? 'weekly'
+                                 : $on{backto} eq 'monthly'  ? 'monthly2'
+                                 : $on{backto} eq 'monthly2' ? 'monthly2'
+                                 : 'daily' ) .
+                   "&amp;user=$on{user}&amp;".
+                   "calendarday=$on{calendarday}&amp;".
+		   "calendarmonth=$on{calendarmonth}&amp;".
+		   "calendaryear=$on{calendaryear}";
+
+ $location .= "&amp;equipmentid=$on{equipmentid}" if $on{equipmentid};
+
+ $on{showbyisms}    = $on{showbyisms} ? '1' : '0';
+ $on{category}    ||= '0';
+ $on{popupstatus} ||= '0';
+ $on{activepopup} ||= '0';
+ $on{location}    ||= '0';
+ $on{eventtype}   ||= '0';
+ $on{confirmation}||= '0';
+
+ ## Check if invitation
+ QuoteParams();
+ DbQuery( "select count(*) from calendar where parent='$in{eventid}'" );
+ my $have_children = FetchRow() > 0;
+ my $is_invitation = $have_children || $on{parent};
+ 
+ my $was_accepted_by_all_but_no_more = 0;
+ my $parentq = DbQuote( $on{parent} || $on{eventid} );
+ 
+ if ( $is_invitation && $on{confirmation}!=1 && $confirmation_old==1 )
+  {
+   ## check if the event was accepted by all users 
+   ## because now is accepted no more.
+   DbQuery( "select count(*) from calendar ".
+            "where (eventid='$parentq' or parent='$parentq')".
+	    " and confirmation<>1" );
+   $was_accepted_by_all_but_no_more = FetchRow() == 0;
+   ## see later: an IGMsg will be sent to all users to notify that the
+   ## event is no more accepted.
+  }
+
+ my $existing_fromuserq = $in{fromuser};
+ if ( ($have_children || $on{new_attendee}) && $on{fromuser} ne $user )
+  {
+   ## the fromuser of a master event of an invitation == touser
+   $on{fromuser} = $user;
+   $in{fromuser} = DbQuote( $on{fromuser} );
+  }
+   
+ DbWrite( table            => 'calendar',
+          action           => 'insert',
+          overwrite_clause => "eventid = '".DbQuote($on{eventid})."'".
+                              " and fromuser='$existing_fromuserq'",
+          values           => [ $on{fromuser},
+                                $user,
+                                $on{calendarday},
+                                $on{calendarmonth},
+                                $on{calendaryear},
+                                $calendarday,
+                                $on{reserved},
+                                $ora1,
+                                $ora2,
+                                $on{eventtext},
+                                $data,
+                                $on{eventid},
+                                $on{showbyisms},
+                                $on{location},
+                                $on{activepopup},
+                                $on{contactid},
+                                $on{category},
+                                $on{repeatend},
+                                $on{notes},
+                                $on{popupstatus},
+                                $on{eventtype},
+                                $on{parent},
+                                $on{confirmation},
+                                $on{invitation_note} ]
+        );
+
+ LogD("Insert event in $user calendar", 'insert', 'calendar', $on{eventid});
+
+ if ( !$on{alluser} && $on{user} ne $auth_user )
+  {
+   IG::SendIsms( receiver => $on{user},
+		 body     => "$lang{alert_insert_event}: ".
+		             "$data - $on{eventtext}");
+  }
+
+ if ( $on{del_attendee} ) ## attendees deletion
+  {
+   for ( @attendee_to_del ) 
+    { 
+     my $idq = DbQuote($_);
+     DbQuery( "select touser, eventtext, startdate from calendar ".
+              "where eventid='$idq' and parent='".$in{eventid}."'" );
+     my ($attendee, $eventtext, $startdate) = FetchRow();
+
+     IG::SendIsms ( receiver => $attendee,
+		    body     => sprintf( "$lang{invitation_deleted}",
+					 $eventtext,
+					 $startdate,
+				     	 $on{del_attendee_note}
+                                       )
+		  ) if $attendee;
+
+     DbQuery( "delete from calendar ".
+              "where eventid = '$idq' and parent='".$in{eventid}."'" );
+    }
+  }
+
+ my $mod_note = ''; ## note that will be sent to child event user
+ $mod_note .= "$lang{repeat}, " if ($on{calendarday} != $day_old
+                                    && $on{calendarday} * $day_old == 0)
+                                || ($on{calendarmonth} != $month_old
+                                    && $on{calendarmonth} * $month_old == 0)
+                                || ($on{calendaryear} != $year_old
+                                    && $on{calendaryear} * $year_old == 0)
+                                || ($calendarday != $weekday_old
+                                    && ($calendarday == 8 || $weekday_old == 8));
+
+ $mod_note .= "$lang{start_date}, "      if $data ne $startdate_old;
+ $mod_note .= "$lang{repeat_date_end}, " if $on{repeatend} ne $repeatend_old;
+ $mod_note .= "$lang{start_time}, "      if $ora1 != $starttime_old;
+ $mod_note .= "$lang{end_time}, "        if $ora2 != $endtime_old;
+ $mod_note =~ s/, $//;
+
+ if ( !$on{parent} ) 
+  {
+   ## update children events with all parent changes
+   DbQuery( "update calendar ".
+            "set day=$in{calendarday}, ".
+	        "month=$in{calendarmonth}, ".
+		"year=$in{calendaryear}, ".
+		"weekday=$calendarday, ".
+		"starttime=$ora1, ".
+		"endtime=$ora2, ".
+		"eventtext='$in{eventtext}', ".
+		"startdate='$data', ".
+		"location=$in{location}, ".
+		"contactid='$in{contactid}', ".
+		"category=$in{category}, ".
+		"repeatend='$in{repeatend}', ".
+    		"eventtype=$in{eventtype} ".
+	    "where parent='$in{eventid}'" );
+
+   if ( $mod_note ) 
+    {
+     ## we have changes to notify to user on children event (attendee)
+     DbQuery( "select touser, eventid from calendar ".
+              "where parent='$in{eventid}'" );
+     while ( my ($attendee, $childid) = FetchRow() ) 
+      {
+       IG::SendIsms( receiver => $attendee,
+		     body     => sprintf( "$lang{invitation_changed}",
+		                          '<noparse>'.
+		        	            "<a href=\"calendar?".
+				              "user=$attendee&amp;".
+					      "eventid=$childid\">".
+		        	               MkEntities( $on{eventtext} ).
+		        	            "</a>".
+		        	          '</noparse>',
+					  $mod_note )
+		   );
+      }
+
+     ## because we have changes all users have to re-confirm the event
+     DbQuery( "update calendar ".
+              "set confirmation=0 ".
+	      "where parent='$in{eventid}'" );
+    }
+  }
+
+ ## add new attendee/s and alert them
+ if ( $on{new_attendee} ) 
+  {
+   my @attendees;
+
+   if ( $on{new_attendee} eq 'all' )
+    {
+     ## expands group requests
+     DbQuery( $on{gs_groupid} && $on{gs_groupid} ne 'all'
+              ? "SELECT users_groups_link.userid ".
+                "FROM users_groups_link ".
+                "LEFT JOIN users ".
+                "ON users_groups_link.userid = users.login ".
+                "WHERE users_groups_link.groupid = '".DbQuote($on{gs_groupid})."'".
+                " and users.login <>'' and users.status<>'2'"
+
+              : "select login from users where login<>'' and status<>'2'" );
+
+     push @attendees, $_ while $_ = FetchRow();
+    }
+   else
+    {
+     push @attendees, $on{new_attendee};
+    }
+
+   for my $new_attendee_login ( @attendees )
+    {
+     ## skip the event owner from attendees
+     next if $new_attendee_login eq $on{fromuser};
+
+     ## check if this attendee already exists in the event
+     DbQuery("select eventid from calendar".
+             " where parent='".DbQuote($on{eventid})."'".
+             " and touser='$new_attendee_login' limit 1");
+     next if FetchRow();
+
+     my $child_id = DbQuote( MkId() );
+
+     DbWrite( table  => 'calendar',
+              action => 'insert',
+              values => [ $on{fromuser},
+                          $new_attendee_login,
+                          $on{calendarday},
+                          $on{calendarmonth},
+                          $on{calendaryear},
+                          $calendarday,
+                          $on{reserved},
+                          $ora1,
+                          $ora2,
+                          $on{eventtext},
+                          $data,
+                          $child_id,
+                          $on{showbyisms},
+                          $on{location},
+                          $on{activepopup},
+                          $on{contactid},
+                          $on{category},
+                          $on{repeatend},
+                          $on{notes},
+                          $on{popupstatus},
+                          $on{eventtype},
+                          $on{eventid},
+                          0,
+                          $on{new_attendee_note}  ]
+            );
+
+     IG::SendIsms( receiver => $new_attendee_login,
+                   body     => sprintf( "$lang{invitation_msg}",
+		                        '<noparse>'.
+		        	          "<a href=\"calendar?".
+					     "user=$new_attendee_login&amp;".
+					     "default_pane=2&amp;".
+                                             "eventid=$child_id\">".
+                                             MkEntities( $on{eventtext} ).
+                                          "</a>".
+                                        '</noparse>',
+                                        $data )
+                 );
+    }
+  }
+
+ ## check invitation rejected by an attendee 
+ if (    $on{parent}
+      && $on{confirmation} == 2
+      && $on{confirmation} != $confirmation_old )
+  {
+   DbQuery( "select touser, eventtext, startdate from calendar ".
+            "where eventid='$in{parent}' limit 1" );
+   my ($inviting_user, $invitation_text, $invitation_date) = FetchRow();
+
+   IG::SendIsms( receiver => $inviting_user,
+		 body     => sprintf( "$lang{invitation_rejected_msg}",
+		                       '<noparse>'.
+		        	         "<a href=\"calendar?".
+						   "user=$inviting_user&".
+					           "eventid=$on{parent}\">".
+		        	            MkEntities( $invitation_text ).
+		        	         "</a>".
+		        	       '</noparse>',
+				       $invitation_date )
+               ) if $inviting_user;
+  }
+
+ ## check invitation accepted by an attendee
+ if (    $is_invitation
+      && $on{confirmation} == 1
+      && $on{confirmation} != $confirmation_old )
+  {
+   ## check if all user has accepted the invitation
+   DbQuery( "select count(*) from calendar ".
+            "where (eventid='$parentq' or parent='$parentq')".
+	    " and confirmation<>1" );
+   if ( FetchRow() == 0 ) ## if so send a message to all 
+    {
+     ## send all inviting/attendees that all have accepted the invitation
+     DbQuery( "select touser, eventid, eventtext, startdate from calendar ".
+              "where eventid='$parentq' or parent='$parentq'" );
+     while( my ($touser, $eventid, $eventtext, $startdate ) = FetchRow() )
+      {
+       IG::SendIsms( receiver => $touser,
+                     body     => sprintf( "$lang{invitation_accepted}",
+                                          '<noparse>'.
+                                            "<a href=\"calendar?".
+                                                      "user=$touser&amp;".
+                                                      "eventid=$eventid\">".
+                                              MkEntities( $eventtext ).
+                                            "</a>".
+                                          '</noparse>',
+                                          $startdate )
+                   ) if $touser;
+      }
+    }
+  }
+
+ if ( $was_accepted_by_all_but_no_more )
+  {
+   ## send all inviting/attendees that we have rejected the invitation
+   ## that was previously accepted by all.
+   DbQuery( "select touser, eventid, eventtext, startdate from calendar ".
+            "where eventid='$parentq' or parent='$parentq'" );
+   while ( my ($touser, $eventid, $eventtext, $startdate ) = FetchRow() )
+    {
+     IG::SendIsms( receiver => $touser,
+                   body     => sprintf( "$lang{invitation_nomore_accept}",
+                                        '<noparse>'.
+                                          "<a href=\"calendar?".
+                                                    "user=$touser&amp;".
+                                                    "eventid=$eventid\">".
+                                           MkEntities( $eventtext ).
+                                          '</a>'.
+                                        '</noparse>',
+                               $startdate )
+                 ) if $touser;
+    }
+  }
+
+ ## ----------- bookings update -----------
+ my $have_to_recheck_claimed_bookings = 0;
+ if ( !$on{parent} ) 
+  {
+   ## update notes for existing bookings
+   for ( grep /^booking_.+_note$/, keys %on )
+    {
+     next unless /booking_(.+)_note/;
+     my $bookingid = $1;
+     my $note = $on{$_};
+     DbQuery( "update bookings set note='".DbQuote($note)."' ".
+              "where bookingid='".DbQuote($bookingid)."'".
+	      " and eventid='$in{eventid}'");
+     
+     my $is_claimed = 0;
+     $is_claimed = 1 for keys %{$on{"booking_${bookingid}_toclaim"}};
+     if ( $claimed_bookings{$bookingid} )
+      {
+       my $claimtime = time;
+       DbQuery( "update bookings ".
+                "set claimed=$claimtime,".
+		" approvedby=''".
+                "where bookingid='".DbQuote($bookingid)."'".
+		" and claimed=0" );
+
+       ## send message to the user that currently is booking the equipment
+       for ( keys %{$on{"booking_${bookingid}_toclaim"}} )
+        {
+         _claim_booking
+          ( recipient               => $_,
+	    bookingid               => $bookingid,
+	    current_booking_eventid => $on{"booking_${bookingid}_toclaim"}{$_}
+          );
+        }
+      }
+     elsif ( !$is_claimed ) ## available equipment
+      {
+       my $approvedby = _booking_autoapprove( $booking_equipments{$bookingid} );
+       DbQuery( "update bookings set claimed=0, approvedby='$approvedby' ".
+                "where bookingid='".DbQuote($bookingid)."'" );
+      }
+
+     $have_to_recheck_claimed_bookings = 1;
+    }
+    
+   ## delete selected bookings
+   if ( $on{del_bookings} )
+    {
+     for ( @bookings_to_delete )
+      {
+       DbQuery( "delete from bookings ".
+                "where bookingid='".DbQuote($_)."'".
+		" and eventid='$in{eventid}'");
+       $have_to_recheck_claimed_bookings = 1;
+      }
+    }
+    
+   ## new booking
+   if ( $on{new_booking_equip} )
+    {
+     my $bookingid  = DbQuote( MkId() );
+     my $equipid    = DbQuote( $on{new_booking_equip} );
+     my $approvedby = _booking_autoapprove( $on{new_booking_equip} );
+     my $note       = DbQuote( $on{new_booking_note} );
+     my $claimed    = $claimed_bookings{new} ? time : 0;
+     DbQuery( "insert into bookings ".
+              "values( '$bookingid', '$in{eventid}', '$equipid',".
+	      " '$approvedby', '$note', $claimed )" );
+     if ( $claimed )
+      {
+       ## send message to the user that currently is booking the equipment
+       for ( keys %{$on{booking_new_toclaim}} )
+        {
+         _claim_booking
+          ( recipient               => $_,
+	    bookingid               => $bookingid,
+	    current_booking_eventid => $on{booking_new_toclaim}{$_}
+          );
+        }
+      }
+    }
+  }
+
+ _recheck_claimed_bookings() if $have_to_recheck_claimed_bookings;
+
+ if ( $on{onaction} eq 'close' )
+  {
+   IG::AutoCloseTask();
+  }
+ else
+  {
+   IG::Redirect( $location );
+  }
+}
+
+#############################################################################
+#############################################################################
+
+=head3 _checkBooking()
+
+Performs checks for booking conflicts.
+Assumptions:
+1) recurrent events with booking have daily repetition only.
+2) recurrent events with booking have a repatend date.
+3) no bookings in memo.
+
+return an array which elements are array so defined:
+[0] eventid given event is conflicting to
+[1] the error message to display to the user
+[2] the owner of the conflicting booking event
+=cut
+
+sub _checkBooking
+ {
+  my @conflict_eventids;
+  my %data = @_;
+  
+  my $equipmentid   = DbQuote( $data{equipmentid} );
+  my $equipmentname = DbQuote( $data{equipmentname} );
+  my $eventid       = DbQuote( $data{eventid} );
+
+  my $startdate     = DbQuote( $data{startdate} );
+  my $repeatend     = $data{repeatend} ne $tv{empty_date}
+                    ? DbQuote( $data{repeatend} ) 
+		    : $startdate;
+  
+  my $claimed_condition = $data{find_claiming}
+                        ? "bookings.claimed <> 0"
+                        : "bookings.claimed = 0";
+  
+  my $query = <<QUERY;	   
+select calendar.touser, calendar.startdate, calendar.reserved,
+       calendar.eventtext, calendar.weekday, calendar.starttime,
+       calendar.endtime, calendar.eventid, bookings.bookingid
+from bookings
+join calendar on calendar.eventid = bookings.eventid
+join equipments on equipments.id = bookings.equipmentid
+where bookings.equipmentid = '$equipmentid'
+      and ($claimed_condition)
+      and calendar.eventtype <> 5 and
+      ((repeatend='$tv{empty_date}'
+        and startdate>='$startdate' and startdate<='$repeatend')
+       or
+       (repeatend<>'$tv{empty_date}'
+        and repeatend>='$startdate' and startdate<='$repeatend'))
+      and calendar.starttime < $data{endtime}
+      and calendar.endtime > $data{starttime}
+      and calendar.eventid <> '$eventid'
+QUERY
+  
+  my $cid = DbQuery( query => $query, 
+                     type  => 'NESTED' );
+
+  while( my ( $touser,
+              $startdate,
+              $reserved,
+              $eventtext,
+              $wd,
+              $starttime,
+              $endtime,
+              $eventid,
+              $bookingid  ) = FetchRow($cid) )
+   {
+    $eventtext = $lang{reserved} if $reserved;
+    my $ore_min1 = sprintf( "%d:%02d", int($starttime / 100), $starttime % 100 );
+    my $ore_min2 = sprintf( "%d:%02d", int($endtime / 100), $endtime % 100 );
+    push @conflict_eventids, 
+         [$eventid,
+          sprintf( $lang{booking_conflict},
+	           $equipmentname,
+		   IG::UsrInf('name',$touser),
+		   "$startdate $ore_min1 - $ore_min2",
+	  	   $eventtext ),
+	  $touser,
+	  $bookingid
+	 ];
+   }
+
+  return @conflict_eventids;
+ }
+
+#############################################################################
+#############################################################################
+
+=head3 _booking_autoapprove
+  
+ check if the given (or auth_user) can approve the bookings of an equipment
+ return the name of given user if the user can approve the bookings
+ or '' if the user can't.
+=cut
+
+sub _booking_autoapprove
+ {
+  my $equipid = DbQuote(shift);
+  my $user = shift || $auth_user;
+  
+  DbQuery("select booking_approve_group from equipments where id='$equipid'");
+  my $booking_approve_group = FetchRow() || 'all';
+  my $approvedby = '';
+  if ( $booking_approve_group ne 'all' )
+   {
+    DbQuery( "select userid from users_groups_link ".
+             "where userid='$user'".
+	     " and groupid='".DbQuote($booking_approve_group)."'" );
+    $approvedby = FetchRow(); ## $user or ''
+   }
+  else
+   { $approvedby = $auth_user; }
+
+  return $approvedby;
+ }
+
+#############################################################################
+#############################################################################
+
+=head3 _recheck_claimed_bookings
+
+Recheck claimed booking (of all users) to see if their equipments are now 
+available
+
+=cut
+
+sub _recheck_claimed_bookings
+ {
+  my @bookings_to_check;
+  DbQuery( "select bookings.bookingid, equipments.id, equipments.description,".
+           " bookings.eventid, calendar.startdate, calendar.repeatend,".     
+	   " calendar.starttime, calendar.endtime, calendar.eventtext,".     
+	   " calendar.touser, bookings.claimed ".			     
+           "from bookings ".	      	      				     
+	   "join calendar on calendar.eventid = bookings.eventid ".	     
+           "join equipments on equipments.id = bookings.equipmentid ".	     
+	   "where bookings.claimed <> 0 ".		     		     
+	   "order by equipments.id, bookings.claimed" );
+  while( my ( $bookingid,
+              $equipmentid,
+              $equipmentname,
+              $eventid,
+              $startdate,
+              $repeatend,
+              $starttime,
+              $endtime,
+              $eventtext,
+              $touser,
+              $claimed ) = FetchRow() )
+   {
+    ## store events to check
+    push @bookings_to_check,
+            [ $bookingid,
+              $equipmentid,
+              $equipmentname,
+              $eventid,
+              $startdate,
+              $repeatend, 
+              $starttime,
+              $endtime,
+              $eventtext,
+              $touser,
+              $claimed ];
+   }
+
+  for my $row ( @bookings_to_check )
+   {
+    my ($bookingid, $equipmentid, $equipmentname,
+        $eventid, $startdate, $repeatend, 
+	$starttime, $endtime, $eventtext,
+	$touser, $claimed ) = @{$row};
+
+    my @conflict_eventids =
+       _checkBooking( equipmentid   => $equipmentid,
+                      equipmentname => $equipmentname,
+		      eventid       => $eventid,
+		      startdate     => $startdate,
+		      repeatend     => $repeatend,
+		      starttime     => $starttime,
+		      endtime       => $endtime );
+    if( $#conflict_eventids == -1 ) ## no more conflict
+     {
+      my $approvedby = _booking_autoapprove( $equipmentid, $touser );
+      DbQuery( "update bookings ".
+               "set claimed=0, approvedby='$approvedby' ".
+	       "where bookingid='".DbQuote( $bookingid )."'" );
+
+      IG::SendIsms ( sender   => $IG::login_admin,
+                     receiver => $touser,
+		     body     => sprintf( "$lang{claimed_booking_released}",
+		                          $equipmentname,
+					  IG::GetDateFromTime( $claimed ),
+		                          '<noparse>'.
+		        	              "<a href=\"calendar?".
+						 "user=$touser&".
+					         "eventid=$eventid\">".
+		        	                 MkEntities( $eventtext ).
+		        	              "</a>".
+		        	          '</noparse>',
+					  $startdate
+					).
+				 ($approvedby ? '' : $lang{booking_tobeapproved})
+		   );
+      
+     }
+   }
+ }
+
+#############################################################################
+#############################################################################
+
+=head3 _claim_booking
+  Seed an ISMS to the user that owner the given booking to ask him to free
+  the equipment.
+=cut
+
+sub _claim_booking
+ {
+  my %data = @_;
+  my $recipient = $data{recipient};
+  my $eventid = $data{current_booking_eventid};
+  my $bookingid = DbQuote( $data{bookingid} );
+  
+  DbQuery( "select equipments.description, bookings.note ".
+           "from bookings ".
+	   "left join equipments on equipments.id = bookings.equipmentid ".
+	   "where bookings.bookingid='$bookingid'" );
+  my ($equipmentname, $note) = FetchRow();
+
+  $equipmentname ||= "#$data{equipmentid}";
+  $note          ||= 'any note'; 
+
+  DbQuery( "select eventtext, startdate from calendar ".
+           "where eventid='".DbQuote($eventid)."'" );
+  my ($eventtext, $startdate) = FetchRow();
+
+  $eventtext ||= 'no description';
+  
+  IG::SendIsms(receiver => $recipient,
+	       body     => sprintf( "$lang{claimed_booking_msg}",
+		                    $equipmentname,
+			 	    '<noparse>'.
+		        	              "<a href=\"calendar?".
+						 "user=$recipient&".
+					         "eventid=$eventid\">".
+		        	                 MkEntities( $eventtext ).
+		        	              "</a>".
+		        	    '</noparse>',
+				    $startdate,
+				    $note
+				  )
+	      );
+ }
+
+#############################################################################
+#############################################################################
+sub delexec
+ {
+  my $bookings_lock = AutoReleasedBookingLock::new();
+  QuoteParams();
+  DbQuery("SELECT fromuser, touser, startdate, eventtext, parent ".
+  	  "FROM calendar where eventid = '$in{eventid}'");
+  my ($sender, $receiver, $data, $eventtext, $parent) = FetchRow();
+
+  (push @IG::errmsg, $lang{Err_cant_delete_child}) && protomodi() && return
+       if $parent;
+
+  DbQuery("SELECT count(*) FROM calendar ".
+          "where eventid = '$in{eventid}'".
+	  " and (fromuser='$auth_user' or touser='$auth_user')");
+  (push @IG::errmsg, $lang{Err_cant_access_event}) && daily() && return
+       if FetchRow()==0;
+     
+  
+  DbQuery("SELECT count(*) FROM calendar where parent = '$in{eventid}'");
+  (push @IG::errmsg, $lang{Err_cant_delete_parent}) && protomodi() && return
+       if FetchRow()>0;
+
+  DbQuery( query =>[( "DELETE FROM bookings where eventid='$in{eventid}'",
+
+                      "DELETE FROM calendar ".
+  	              "where eventid = '$in{eventid}'".
+  	              " and (fromuser='$auth_user' or touser='$auth_user')" 
+		    )] );
+
+  LogD("deleted this event: $eventtext", "delete", "calendar", $on{eventid});
+
+  if ($sender ne $auth_user)
+   {
+    IG::SendIsms( receiver => $sender,
+  		    body     => "$lang{alert_delete_event}: ".
+  		                "$data - $eventtext");
+   }
+  
+  _recheck_claimed_bookings();
+  
+  $on{backto} ||= 'daily';
+  
+  IG::Redirect( "calendar?".
+		"action=$on{backto}&amp;".
+		"user=$on{user}&amp;".
+		"calendarday=$on{calendarday}&amp;".
+		"calendarmonth=$on{calendarmonth}&amp;".
+		"calendaryear=$on{calendaryear}" );
+ }
+
+##############################################################################
+##############################################################################
+sub minicalendar
+ {
+  require IG::Utils;
+  _check_date();
+  HtmlHead(javascript=>"<script language=\"javascript\">
+			function p(v)
+			 {
+			  var f = window.opener.document.getElementById('$on{field}');
+			  f.value = v;
+                          f.focus();
+			  self.close();
+			 }
+			</script>");
+  TaskHead(	width=>"100%",
+		title=>'IGCalendar',
+		icon=>2);
+
+  my $common_link_part = "calendar?".
+		                   "action=minicalendar&amp;".
+		                   "form=$on{form}&amp;".
+		                   "field=$on{field}&amp;".
+		                   "user=$on{user}&amp;".
+		                   "calendarday=1&amp;".
+		                   "calendarmonth=$on{calendarmonth}&amp;".
+		                   "calendaryear=$on{calendaryear}";
+
+  IG::MkCalendar(user		=> $on{user},
+		 day		=> $on{calendarday},
+		 month		=> $on{calendarmonth},
+		 year		=> $on{calendaryear},
+		 nextmonth	=> $common_link_part . "&amp;nextmonth=1",
+		 prevmonth	=> $common_link_part . "&amp;prevmonth=1",
+		 nextyear	=> $common_link_part . "&amp;nextyear=1",
+		 prevyear	=> $common_link_part . "&amp;prevyear=1",
+		 daylink	=> "javascript:p('CALENDARDATE')",
+		 target		=> '',
+		 cellheight	=> 20,
+		 showevent	=> 'none' );
+
+  TaskFoot();
+  HtmlFoot();
+ }
+
+##############################################################################
+##############################################################################
+sub calendar
+ {
+  require IG::Utils;
+  _check_date();
+
+  HtmlHead(); 
+  TaskHead( title    => 'IGCalendar',
+	    width    => '100%',
+            minwidth => 200,
+	    align    => 'center',
+	    icon     => 1 );
+
+  my %month_hash = map { $_ => $IG::months{$_}[0] } ('01' .. '12');
+
+  FormHead( target     => 'mainf',
+            labelstyle => 'font-size:10px; margin-left:1px; width: 55px',
+            cgiaction  => 'default_action');
+
+  Input(    type       => 'groupselector',
+            show       => $lang{user},
+            style      => 'width: 120px; font-size:10px;',
+            name       => 'user') unless $on{equipmentid};
+
+  Input(    type       => 'select',
+            show       => $lang{equipment},
+            style      => 'width:140px; font-size:10px;',
+            data       => "select id, description ".
+                          "from equipments ".
+                          "left join users_groups_link".
+                          " on groupid = booking_group".
+                          "    and userid='$auth_user' ".
+                          "where userid='$auth_user'".
+                          " or booking_group='all'",
+            zerovalue  => 'true',
+            name       => 'equipmentid' ) if $on{equipmentid};
+
+  Input(    type       => 'text',
+            show       => $lang{year},
+            name       => 'calendaryear',
+            style      => 'width: 120px',
+            maxlen     => 4 );
+
+  Input(    type       => 'select',
+            show       => $lang{month},
+            order      => 'byvalue',
+            style      => 'width: 120px',
+            name       => 'calendarmonth',
+            data       => \%month_hash );
+
+  Input(    type       => 'basictable',
+            table      => 'event_categories',
+            zerovalue  => 'true',
+            style      => 'width: 120px',
+            show       => $lang{category},
+            name       => 'category');
+
+  Input(    name       => 'visualizza',
+            show       => $lang{view},
+            style      => 'margin-left: 63px',
+            type       => 'submit');
+
+  FormFoot();
+
+  PrOut '<br><br>';
+
+  IG::MkCalendar(user		=> $on{user},
+                 category       => $on{category},
+		 day		=> $on{calendarday},
+		 month		=> $on{calendarmonth},
+		 year		=> $on{calendaryear},
+		 nextmonth	=> "calendar?".
+		                   "action=calendar&amp;".
+		                   "user=$on{user}&amp;".
+		                   "nextmonth=1&amp;".
+		                   "category=$on{category}&amp;".
+		                   "calendarday=$on{calendarday}&amp;".
+		                   "calendarmonth=$on{calendarmonth}&amp;".
+		                   "calendaryear=$on{calendaryear}",
+		 prevmonth	=> "calendar?".
+		                   "action=calendar&amp;".
+		                   "user=$on{user}&amp;".
+		                   "prevmonth=1&amp;".
+		                   "category=$on{category}&amp;".
+		                   "calendarday=$on{calendarday}&amp;".
+		                   "calendarmonth=$on{calendarmonth}&amp;".
+		                   "calendaryear=$on{calendaryear}",
+		 nextyear	=> "calendar?".
+		                   "action=calendar&amp;".
+		                   "user=$on{user}&amp;".
+		                   "nextyear=1&amp;".
+		                   "category=$on{category}&amp;".
+		                   "calendarday=$on{calendarday}&amp;".
+		                   "calendarmonth=$on{calendarmonth}&amp;".
+		                   "calendaryear=$on{calendaryear}",
+		 prevyear	=> "calendar?".
+		                   "action=calendar&amp;".
+		                   "user=$on{user}&amp;".
+		                   "prevyear=1&amp;".
+		                   "category=$on{category}&amp;".
+		                   "calendarday=$on{calendarday}&amp;".
+		                   "calendarmonth=$on{calendarmonth}&amp;".
+		                   "calendaryear=$on{calendaryear}",
+		 daylink	=> "calendar?".
+		                   "action=daily&amp;".
+		                   "user=$on{user}&amp;".
+		                   "category=$on{category}&amp;".
+		                   "calendarmonth=$on{calendarmonth}&amp;".
+		                   "calendaryear=$on{calendaryear}&amp;".
+		                   "calendarday=CALENDARDAY",
+		 target		=> 'rightframe',
+		 cellheight	=> 20,
+		 showevent	=> 'colorize' );
+
+  TaskFoot();
+  HtmlFoot();
+ }
+
+##############################################################################
+##############################################################################
+sub monthly2
+ {
+  use IG::Utils;
+  _check_date();
+  my ($mitt, $day, $memo, $data, $bgda, $clgio);
+
+  HtmlHead();
+
+  my $title;
+  if( $on{equipmentid} ) 
+   {
+    DbQuery( "select description from equipments ".
+             "where id='".DbQuote( $on{equipmentid} )."'" );
+    $title = "$lang{equipment} ".MkEntities("$on{equipmentid} '".(FetchRow()."'"));
+   }
+  else
+   { $title = IG::UsrInf('name',$on{user}); }
+
+  TaskHead( width => "100%",
+            title => "$lang{calendar} - ".
+                     "$title - ".
+                     "$IG::months{$on{calendarmonth}}[0] ".
+                     $on{calendaryear} );
+
+  my $equipment_param = $on{equipmentid} 
+                        ? "&amp;equipmentid=$on{equipmentid}" 
+			: '';
+
+  my $html = HLayer
+    ( intra_space  => 3,
+      bottom_space => 1,
+      left_layers  => _buttons_views(),
+      right_layers =>
+       [(
+         MkButton( icon_src => "$IG::img_url/${IG::tema}left.gif",
+                   link => "calendar?".
+                           "action=monthly2&amp;".
+                           "calendaryear=$on{calendaryear}&amp;".
+                           "calendarmonth=$on{calendarmonth}&amp;".
+                           "user=$on{user}&amp;".
+                           "prevmonth=true".
+			   $equipment_param ),
+                           
+         "<span style=\"color:gray; font-weight:bold\">".
+         "&nbsp;$IG::months{$on{calendarmonth}}[0]</span>",
+
+         MkButton( icon_src => "$IG::img_url/${IG::tema}right.gif",
+                   link => "calendar?".
+                           "action=monthly2&amp;".
+                           "calendaryear=$on{calendaryear}&amp;".
+                           "calendarmonth=$on{calendarmonth}&amp;".
+                           "user=$on{user}&amp;".
+                           "nextmonth=true".
+			   $equipment_param ),
+
+         "&nbsp;" x 5,
+
+         MkButton( icon_src => "$IG::img_url/${IG::tema}left.gif",
+                   link => "calendar?".
+                           "action=monthly2&amp;".
+                           "calendaryear=$on{calendaryear}&amp;".
+                           "calendarmonth=$on{calendarmonth}&amp;".
+                           "user=$on{user}&amp;".
+                           "prevyear=1".
+			   $equipment_param ),
+                           
+         "<span style=\"color:gray; font-weight:bold\">".
+         "&nbsp;$on{calendaryear}</span>",
+         
+         MkButton( icon_src => "$IG::img_url/${IG::tema}right.gif",
+                   link => "calendar?".
+                           "action=monthly2&amp;".
+                           "calendaryear=$on{calendaryear}&amp;".
+                           "calendarmonth=$on{calendarmonth}&amp;".
+                           "user=$on{user}&amp;".
+                           "nextyear=1".
+			   $equipment_param )
+        )]
+    );
+
+  TaskMsg($html,7) if !$on{print};
+
+  PrOut "<div id=\"months_container\" style=\"border:1px solid black; width:100%;".
+          ( $on{print} ? '' : "height:350px; overflow:scroll" ) . '">' .
+        "<table cellspacing=0 cellpadding=1 style=\"width:100%; background:$IG::clr{bg_task}\">".
+	"<tr><td><table cellspacing=1 cellpadding=0 style=\"width:100%; background:black\"><tr>";
+
+  my $target_where = $on{equipmentid}
+                     ? "equipmentid='".DbQuote($on{equipmentid})."'"
+		     : "calendar.touser = '".DbQuote($on{user})."' ".
+		       "or calendar.touser = 'all'";
+
+  for my $i (1 .. IG::GetDaysInMonth($on{calendarmonth}, $on{calendaryear}))
+   {
+    $data = IG::GetDateByFormat( $i,
+				 $on{calendarmonth},
+                                 $on{calendaryear} );
+    while (1)
+     {
+      $day = IG::GetDayByDate( $i, $on{calendarmonth}, $on{calendaryear} );
+      if ($day == $clgio)
+       {
+        # Per evidenziare la giornata di oggi
+        $bgda = $data eq $tv{today} ? '#66CC99' : $IG::clr{bg_task};
+
+        PrOut "<td style=\"background:$bgda; padding:1px; vertical-align:top;".
+                          "width:110px; height:110px;\">".
+	      "<a style=\"background:#EEEEEE; font-size:20px; padding:2px;".
+	                 "margin:0px; display:block;\"".
+	         " href=\"calendar?".
+		         "action=daily&amp;".
+		         "user=$on{user}&amp;".
+		         "calendarday=$i&amp;".
+		         "calendarmonth=$on{calendarmonth}&amp;".
+		         "calendaryear=$on{calendaryear}".
+			 "$equipment_param\">".
+	      $i.
+	      " <span style=\"font-size:10px; color:$IG::clr{font_low_evidence};\">".
+	      substr($IG::days[$clgio],0,3)."</span></a>\n";
+ 
+        QuoteParams();
+        DbQuery("SELECT calendar.reserved, calendar.starttime,".
+                " calendar.endtime, calendar.eventtext, calendar.eventid,".
+                " calendar.fromuser, calendar.touser, calendar.contactid,".
+                " calendar.eventtype,".
+	        " contacts.contactname, contacts.tel1,".
+		" equipments.description, bookings.claimed,".
+	        " bookings.approvedby, calendar.parent, calendar.confirmation ".
+	        "FROM calendar LEFT JOIN contacts ".
+ 	        "ON calendar.contactid = contacts.contactid ".
+	        "left join bookings".
+	        " on (calendar.parent='' and bookings.eventid=calendar.eventid)".
+	        " or (calendar.parent<>'' and bookings.eventid=calendar.parent) ".
+	        "left join equipments on equipments.id=bookings.equipmentid ".
+  	        "WHERE".
+  	        " calendar.startdate<='$data' and".
+	        " (calendar.repeatend>='$data' or calendar.repeatend is null) and".
+	        " ($target_where) and".
+	        " (calendar.day=$i or calendar.day=0) and".
+	        " (calendar.month=$in{calendarmonth} or calendar.month=0) and".
+	        " (calendar.year=$in{calendaryear} or calendar.year=0) and".
+	        " (calendar.weekday=$day or calendar.weekday=8) ".
+	        "ORDER BY calendar.starttime");
+
+        while (my @row = IG::FetchGroupedRows( group_by_indexes  => 4, 
+                                               to_concat_indexes => [11,12,13]))
+         {
+          $row[3] = MkLink($row[3]);
+
+          ## Se l'evento è collegato a un contatto lo visualizza
+          if ($row[7])
+           {
+            $row[3] = "<a href=\"contacts?".
+                                "action=showrecord&amp;".
+                                "contactid=$row[7]\" target=\"mainf\">".
+                      $row[9] . "</a> $row[3]";
+           }
+
+          ## Controlla se e' un evento inserito da altri.
+          if ($row[5] ne $on{user} && !$on{equipmentid})
+           {
+            $row[3] = "<strong>$lang{from} ".
+                      IG::UsrInf('name',$row[5]).
+                      ":</strong> $row[3]";
+           }
+
+          $row[3] = IG::BookingNotes( description   => $row[3],
+                                      touser        => $row[6],
+				      equipmentlist => $row[11],
+				      claimed       => $row[12],
+				      approvedby    => $row[13]);
+
+          ## Check if it's a reserved or public event
+          $row[3] = _event_icons( event        => $row[3],
+                                  reservation  => $row[0],
+				  sharemode    => $row[6],
+				  eventid      => $row[4],
+			          parent       => $row[14],
+			          confirmation => $row[15] );
+
+          ## Controlla se e' una memo altrimenti stampa
+          if ($row[8] == 5)
+           {
+            if ($on{user} eq $auth_user || $auth_user eq $row[5])
+             {
+              $memo .= Img( src   => "$IG::img_url/bullet.gif",
+                            title => $lang{notes} );
+             }
+            $memo.=" $row[3]<br>";
+           }
+          else
+           {
+            $row[1] = substr('0'.$row[1], -4, 2) .':'. substr($row[1], -2, 2);
+            $row[2] = substr('0'.$row[2], -4, 2) .':'. substr($row[2], -2, 2);
+
+	    TaskMsg("<a href=\"calendar?".
+	                      "action=protomodi&amp;".
+	                      "backto=monthly&amp;".
+	                      "eventid=$row[4]&amp;".
+                              "calendarday=$on{calendarday}&amp;".
+                              "calendaryear=$on{calendaryear}&amp;".
+                              "calendarmonth=$on{calendarmonth}&amp;".
+	                      "user=$on{user}".
+			      $equipment_param.
+			      "\">".
+	            "$row[1]</a> - $row[3]", 5 );
+           }
+          if ($memo) { TaskMsg($memo,5); $memo='' }
+         }
+        PrOut "</td>";
+        $clgio++;
+        last;
+       }
+      else
+       {
+        PrOut "<td style=\"background:$IG::clr{bg_task}; vertical-align:top\">".
+              "<div style=\"width:100%;background:#EEEEEE; height:30px;\">&nbsp;</div>".
+              "</td>";
+        $clgio++;
+       }
+     }
+    if ($clgio>6)
+     {
+      PrOut "</tr><tr>\n";
+      $clgio = 0;
+     }
+   }
+
+  for (0 .. 6-$clgio)
+   { PrOut "<td bgcolor=\"$IG::clr{bg_task}\">&nbsp;</td>"; }
+
+  PrOut "</tr></table></td></tr></table></div>\n";
+
+  IG::JsExec( code => <<END );
+ window.onload = container_maximize;
+ window.onresize = container_maximize;
+  
+ function container_maximize()
+  {
+   getSize();
+   if ( maxHeight > 120 )
+    { \$('months_container').style.height = maxHeight - 120; }
+  }
+END
+
+  TaskFoot();
+  HtmlFoot();
+ }
+
+###################################################################################
+###################################################################################
+sub findshow
+ {
+  my %item;
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer( bottom_space => 0,
+            right_layers =>
+             [(
+	       FormHead( name      => 'findnavi',
+	                 target    => 'mainf',
+	                 method    => 'get',
+	                 cgiaction => 'findexec',
+	                 labelstyle=> 'border:0px; width:auto',
+	                 autofocus => 'false',
+	                 float     => 'left' ),
+
+               Input( type     => 'findable' ),
+
+               Input( type     => 'logins',
+                      allvalue => 1,
+                      name     => 'user'),
+
+               Input( type     => 'text',
+                      name     => 'keytofind',
+                      focus    => 'true',
+                      value    => $IG::cookie{lastsearch},
+                      style    => 'width:100px; margin-right: -5px;',
+                      onblur   => "document.cookie='".
+                                  "lastsearch=' + escape(this.value)"),
+
+               Input( type     => 'image',
+                      name     => $lang{find},
+                      src      => "$IG::img_url/${IG::tema}search.gif",
+                      alt      => $lang{find}),
+				
+               FormFoot()
+             )]
+	 );
+   }
+
+  HtmlFoot();
+ }
+
+###################################################################################
+###################################################################################
+sub findexec
+ {
+  my ($counter, $query);
+
+  if ($on{ajax_request})
+   {
+    HttpHead( expires => '+30s' );
+    TaskMsg( Input( type       => 'button',
+                    float      => 'right',
+                    onclick    => "winPopUp('calendar?".
+                                       "action=proto&amp;".
+                                       "contactid=$on{contactid}&amp;".
+                                       "backto=contacts&amp;".
+                                       "user=$auth_user&amp;".
+	                               ($on{neweventparams} 
+					? $on{neweventparams}."&amp;"
+					: '' ).
+                                       "calendarday=$tv{day}&amp;".
+                                       "calendarmonth=$tv{month}&amp;".
+                                       "calendaryear=$tv{year}'".
+                                       ",600,550,'calendar');",
+                    show       => $lang{new_event},
+                    fieldstyle => 'margin:0px',
+                    style      => 'margin:0px;font-size:10px; height:15px' ).
+
+	     Img( src   => "$IG::img_url/calendar.gif",
+                  style => 'margin-right:2px',
+                  align => 'absmiddle').
+
+             "<a href=\"calendar\">$lang{calendar}</a>"
+            ,7);
+   }
+  else
+   {
+    $IG::set_cookie{lastsearch} = $on{keytofind};
+
+    HtmlHead( shortcuts => _short_cuts() );
+    TaskHead( minwidth  => 600,
+              title     => $lang{calendar});
+
+    HLayer( left_layers =>
+             [(
+	       MkButton( text => $lang{calendar},
+	                 link => "calendar?calendaryear=$on{calendaryear}" )
+              )]
+          );
+
+    TaskMsg("$lang{calendar} - $lang{find}: <strong>$on{keytofind}</strong>",4);
+   }
+
+  ## Build Query
+  QuoteParams();
+  if ( !$on{ajax_request} && length( $on{keytofind} ) < 2 ) 
+   {
+    $query = '1=0';
+    push @IG::errmsg, $lang{Err_find};
+   }
+  else
+   {
+    $query = ($on{contactid}
+              ? " (calendar.contactid='$in{contactid}'".
+                ( $on{ajax_request} 
+                  ? " or masterCnt.contactid='$in{contactid}'"
+                  : "").")"
+              : " (contacts.contactname~*'$in{keytofind}' or ".
+                "  ((calendar.reserved=0 or".
+                "    calendar.fromuser='$auth_user' or".
+                "    calendar.touser='$auth_user') ".
+                "   and (calendar.eventtext~*'$in{keytofind}'".
+	        "        or calendar.notes~*'$in{keytofind}') ))".
+                ($on{user} ne 'all'
+                 ? " and (calendar.touser='$in{user}' or calendar.touser='all') "
+                 : '')
+            );
+   }
+
+  TaskListMenu(	[$lang{date}],
+		[$lang{sender}],
+                [$lang{receiver}],
+		[$lang{description}] );
+
+  DbQuery(my $query = "SELECT calendar.startdate, calendar.starttime, calendar.endtime,".
+	  " calendar.eventtext, calendar.fromuser, calendar.eventid,".
+	  " calendar.contactid, contacts.contactname, calendar.touser, ".
+	  " calendar.eventtype ".
+  	  "FROM calendar ".
+          "left join contacts ON calendar.contactid = contacts.contactid ".
+          ( $on{ajax_request} 
+	    ? "left join contacts masterCnt on masterCnt.contactid = contacts.master "
+	    : "" ).
+	  "WHERE $query ".
+          "ORDER BY calendar.startdate desc" );
+
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+    my $ora;
+
+    if ($row[9] == 5)
+     {
+      $ora = $lang{memorandum};
+     }
+    else
+     {
+      $row[1] = substr('0'.$row[1],-4,2).':'.substr($row[1],-2,2);
+      $row[2] = substr('0'.$row[2],-4,2).':'.substr($row[2],-2,2);
+      $ora = "$row[1] - $row[2]";
+     }
+
+    $row[3] = "$row[7]: $row[3]" if $row[7] && !$on{ajax_request};
+
+    TaskListItem
+      (
+	["$row[0]<div style=\"color:$IG::clr{font_low_evidence};\">$ora</div>",
+	 "calendar?user=$row[8]&amp;eventid=$row[5]",
+	 "nowrap" . ( $row[0] eq $tv{today}
+	              ? " style=\"background:$IG::clr{bg_evidence}\""
+	              : '' )],
+	[IG::UsrInf('name',$row[4]),
+	 "",
+	 "nowrap"],
+        [IG::UsrInf('name',$row[8]),
+         "",
+         "nowrap"],
+        [IG::MkLink($row[3])]
+       )
+   }
+
+  if ($on{ajax_request})
+   {
+    TaskListFoot(7);
+   }
+  else
+   {
+    push @IG::errmsg, $lang{no_events} if !$counter && length($on{keytofind}) > 1;
+
+    TaskListFoot();
+    TaskFoot();
+    HtmlFoot();
+   }
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+         TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
+         IG::LastDocuments().
+         TaskFoot();
+ }
+###################################################################################
+###################################################################################
+
+=head3 invitationtoconfirm
+ Show the list of invitation the user have to confirm or reject
+=cut
+
+sub invitationtoconfirm
+{
+  my $title = "$lang{invitationstoconfirm}: " . IG::UsrInf('name');
+
+  HtmlHead( title => $title );
+  TaskHead( title => $title,
+            width => '100%' );
+
+  DbQuery( "select calendar.eventid, calendar.fromuser, calendar.eventtext,".
+           "       calendar.startdate, calendar.repeatend, calendar.year, ".
+           "       calendar.reserved, calendar.starttime, calendar.endtime ".
+           "from calendar ".
+	   "left join calendar childev on childev.parent = calendar.eventid ".
+           "where calendar.touser='$auth_user' and".
+	   " calendar.confirmation=0 and".
+	   " (calendar.parent<>'' or childev.eventid<>'') ".
+	   " and (calendar.startdate >= '$tv{today}'".
+	   "      or (calendar.year=0 and calendar.repeatend>='$tv{today}'))".
+	   "order by calendar.startdate, calendar.starttime" );
+  
+  TaskListMenu( [$lang{date}],
+		[$lang{hour}],
+		[$lang{from}],
+		[$lang{description}],
+	      );
+                
+  my %dejavue;  
+  while( my ($eventid, $fromuser, $eventtext, 
+             $startdate, $repeatend, $year,
+             $reserved, $starttime, $endtime) = FetchRow() )
+   {
+    next if $dejavue{$eventid}++;
+    my $date = $startdate;
+    $date .= Br(1)."- $repeatend" if $repeatend ne $tv{empty_date};
+    $date .= Br(1)."- ..." if $year == 0 && $repeatend eq $tv{empty_date};
+    
+    my $eventlink = "calendar?".
+                    "action=protomodi&amp;".
+		    "user=$auth_user&amp;".
+		    "eventid=$eventid&amp;".
+		    "default_pane=2";
+
+    my( $calendarday,
+        $calendarmonth,
+	$calendaryear ) = IG::GetValuesByDate($startdate);
+	
+    my $daylink = "calendar?".
+                  "action=daily&amp;".
+	  	  "calendarday=$calendarday&amp;".
+		  "calendarmonth=$calendarmonth&amp;".
+		  "calendaryear=$calendaryear";
+
+    TaskListItem(
+      [$date, $daylink ],
+      [sprintf( "%02d:%02d - %02d:%02d", 
+                int($starttime / 100), $starttime % 100,
+		int($endtime / 100), $endtime % 100 ),
+       $eventlink],
+      [IG::UsrInf('name',$fromuser)],
+      [$eventtext, $eventlink],
+    );
+   }
+  TaskListFoot();
+
+  TaskFoot();
+  HtmlFoot();
+}
+###################################################################################
+###################################################################################
+
+=head3 invitationinquestion
+ Show the list of invitation in the user calendar not confirmed 
+ by all users (to be confirmed or refused).
+=cut
+
+sub invitationinquestion
+{
+  $on{user} ||= $auth_user;
+  my $title = "$lang{invitationinquestion}: " . IG::UsrInf('name',$on{user});
+  HtmlHead( title => $title );
+  TaskHead( title => $title,
+            width => '100%' );
+
+  my $user = DbQuote( $on{user} );
+  DbQuery("select calendar.eventid, calendar.fromuser, calendar.eventtext,".
+          "       calendar.startdate, calendar.repeatend, calendar.year,".
+          "       calendar.reserved, calendar.starttime, calendar.endtime,".
+	  "       calendar.confirmation, parentev.confirmation,".
+	  "       brotherev.confirmation, childev.confirmation ".
+          "from calendar ".
+          "left join calendar childev on childev.parent=calendar.eventid ".
+          "left join calendar parentev on calendar.parent<>''".
+  	  "          and parentev.eventid=calendar.parent ".
+          "left join calendar brotherev on calendar.parent<> ''".
+  	  "          and brotherev.parent = calendar.parent ".
+          "where calendar.touser = '$user'".
+          " and (calendar.parent<>'' or childev.eventid<>'')".
+	  " and (calendar.startdate >= '$tv{today}'".
+	  "      or (calendar.year=0 and calendar.repeatend>='$tv{today}'))".
+          " and (calendar.confirmation in (0,2) or".
+  	  "      childev.confirmation in (0,2) or".
+  	  "      parentev.confirmation in (0,2) or".
+  	  "      brotherev.confirmation in (0,2)) ".
+  	  " and (calendar.reserved=0 or".
+          "      calendar.fromuser='$auth_user' or".
+          "      calendar.touser='$auth_user') ".
+	  "order by calendar.startdate, calendar.starttime, calendar.eventid,".
+	  "         brotherev.confirmation desc, childev.confirmation desc" );
+  
+  TaskListMenu( [$lang{date}],
+		[$lang{hour}],
+		[$lang{from}],
+		[$lang{description}],
+		[$lang{confirm}],
+	      );
+                
+  my %dejavue;  
+  while( my ($eventid, $fromuser, $eventtext, 
+             $startdate, $repeatend, $year,
+             $reserved, $starttime, $endtime,
+	     $conf1, $conf2, $conf3, $conf4) = FetchRow() )
+   {
+    next if $dejavue{$eventid}++;
+    my $date = $startdate;
+    $date .= Br(1)."- $repeatend" if $repeatend ne $tv{empty_date};
+    $date .= Br(1)."- ..." if $year == 0 && $repeatend eq $tv{empty_date};
+
+    my $refused = $conf1 == 2 || $conf2 == 2 || $conf3 == 2 || $conf4 == 2;
+    
+    my $eventlink = "calendar?".
+                    "action=protomodi&amp;".
+		    "user=$user&amp;".
+		    "eventid=$eventid&amp;".
+		    "default_pane=2";
+
+    my( $calendarday,
+        $calendarmonth,
+	$calendaryear ) = IG::GetValuesByDate($startdate);
+	
+    my $daylink = "calendar?".
+                  "user=$user&amp;".
+                  "action=daily&amp;".
+	  	  "calendarday=$calendarday&amp;".
+		  "calendarmonth=$calendarmonth&amp;".
+		  "calendaryear=$calendaryear";
+
+    TaskListItem(
+      [$date, $daylink ],
+      [sprintf( "%02d:%02d - %02d:%02d", 
+                int($starttime / 100), $starttime % 100,
+		int($endtime / 100), $endtime % 100 ),
+       $eventlink],
+      [IG::UsrInf('name',$fromuser)],
+      [$eventtext, $eventlink],
+      [$refused 
+       ? Blush($lang{invitation_rejected})
+       : $lang{invitation_toconfirm}],
+    );
+   }
+  TaskListFoot();
+
+  TaskFoot();
+  HtmlFoot();
+}
+###################################################################################
+###################################################################################
+
+=head3 bookingtoapprove
+ Show the list of bookings that the current user can approve/reject with the related 
+ claiming booking.
+=cut
+
+sub bookingtoapprove
+ {
+  my $bookings_lock = AutoReleasedBookingLock::new();
+  HtmlHead( title   => $lang{bookings_to_approve},
+            onevent => 'onload="if (parent.chkmsg && parent.chkmsg.ajaxUpdate) '.
+                                 'parent.chkmsg.ajaxUpdate()"');
+
+  TaskHead( title => $lang{bookings_to_approve} );
+
+  my $conn
+  = DbQuery( "select calendar.touser, calendar.fromuser, calendar.eventtext,".
+           " calendar.startdate, calendar.repeatend, calendar.reserved,".
+	   " calendar.starttime, calendar.endtime, calendar.eventid,".
+	   " bookings.bookingid, bookings.equipmentid, equipments.description,".
+	   " bookings.claimed, bookings.note ".
+           "from bookings ".
+	   "join calendar on calendar.eventid = bookings.eventid ".	     
+           "join equipments on equipments.id = bookings.equipmentid ".
+	   "left join users_groups_link".
+	   " on users_groups_link.groupid = equipments.booking_approve_group".
+	   "    and users_groups_link.userid = '$auth_user'".
+	   "where bookings.approvedby='' and claimed=0".
+	   " and (users_groups_link.userid='$auth_user'".
+	   "      or equipments.booking_approve_group='') ".
+	   "order by bookings.equipmentid, calendar.startdate,".
+	   " calendar.starttime, bookings.claimed");
+  
+  TaskListMenu( [$lang{equipment}],
+                [$lang{date}],
+		[$lang{hour}],
+		[$lang{user}],
+		[$lang{description}],
+		[$lang{booking_claimed}],
+		[$lang{actions}] );
+                
+  while ( my ($touser, $fromuser, $eventtext, 
+              $startdate, $repeatend, $reserved,
+	      $starttime, $endtime, $eventid, 
+              $bookingid, $equipmentid, $equipmentname,
+       	      $claimed, $note) = FetchRow($conn) )
+   {
+    my $date = $startdate;
+    $date .= Br(1)."- $repeatend" if $repeatend ne $tv{empty_date};
+
+    my $eventlink;
+    if( $auth_user eq $touser || $auth_user eq $fromuser )
+     { $eventlink = "calendar?user=$touser&eventid=$eventid"; }
+    else 
+     { $eventtext = $lang{reserved} if $reserved; }
+
+    my $claimed_note = '';
+    $claimed_note = IG::GetDateFromTime( $claimed ).
+                    Img( src   => "$IG::img_url/red.gif",
+		         title => $note )
+	          if $claimed;
+	     
+    my $actions = Img( src     => "$IG::img_url/tick.gif",
+                       title   => $lang{booking_approve},
+                       href    => "calendar?".
+                                   "action=approvebooking&amp;".
+		       		   "bookingid=$bookingid&amp;".
+		       		   "backto=bookingtoapprove",
+		       ## onclick => IG::JsConfirm( $lang{are_you_sure} )
+		     ).('&nbsp;' x 1).
+		  Img( src     => "$IG::img_url/delete.gif",
+                       title   => $lang{booking_reject},
+                       href    => "calendar?".
+                                   "action=deletebooking&amp;".
+		      		   "bookingid=$bookingid&amp;".
+		      		   "backto=bookingtoapprove",
+		       onclick => IG::JsConfirm( $lang{are_you_sure} )
+		     );
+    
+    TaskListItem(
+      [$equipmentname, "equipments?action=protomodi&id=$equipmentid" ],
+      [$date],
+      [sprintf( "%02d:%02d - %02d:%02d", 
+                int($starttime / 100), $starttime % 100,
+		int($endtime / 100), $endtime % 100 )],
+      [IG::UsrInf('name',$touser)],
+      [$eventtext, $eventlink],
+      [$claimed_note],
+      [$actions]
+    );
+    
+    my @conflict_eventids =
+      _checkBooking( equipmentid   => $equipmentid,
+                     equipmentname => $equipmentname,
+		     eventid       => $eventid,
+		     startdate     => $startdate,
+		     repeatend     => $repeatend,
+		     starttime     => $starttime,
+		     endtime       => $endtime,
+		     find_claiming => 1 );
+
+    for ( @conflict_eventids ) 
+     {
+      my ($eventid, $errmsg, $owner, $bookingid2) = @{$_};
+      DbQuery( 
+        query =>
+           "select calendar.touser, calendar.fromuser, calendar.eventtext,".
+           " calendar.startdate, calendar.repeatend, calendar.reserved,".
+	   " calendar.starttime, calendar.endtime, calendar.eventid,".
+	   " bookings.equipmentid, equipments.description,".
+	   " bookings.claimed, bookings.note ".
+           "from bookings ".
+	   "join calendar on calendar.eventid = bookings.eventid ".	     
+           "join equipments on equipments.id = bookings.equipmentid ".
+	   "where bookings.bookingid='".DbQuote($bookingid2)."'"
+      );
+
+      my ( $touser,
+           $fromuser,
+           $eventtext, 
+           $startdate,
+           $repeatend,
+           $reserved,
+           $starttime,
+           $endtime,
+           $eventid,
+           $equipmentid,
+           $equipmentname,
+           $claimed,
+           $note            ) = FetchRow();
+      
+      my $date = $startdate;
+      $date .= Br(1)."- $repeatend" if $repeatend ne $tv{empty_date};
+
+      my $eventlink;
+      my $eventlink;
+      if( $auth_user eq $touser || $auth_user eq $fromuser )
+       { $eventlink = "calendar?user=$touser&eventid=$eventid" }
+      else 
+       { $eventtext = $lang{reserved} if $reserved; }
+
+      my $claimed_note = '';
+      $claimed_note = Blush(IG::GetDateFromTime( $claimed )).
+                      Img( src   => "$IG::img_url/red.gif",
+		           title => $note )
+	            if $claimed;
+	     
+      my $actions = ('&nbsp;' x 5).
+                    Img( src     => "$IG::img_url/tick.gif",
+                         title   => $lang{booking_approve},
+                         href    => "calendar?".
+                                     "action=deletebooking&amp;".
+		       		     "bookingid=$bookingid&amp;".
+				     "giveto=$bookingid2&amp;".
+		       		     "backto=bookingtoapprove",
+		         ## onclick => IG::JsConfirm( $lang{are_you_sure} )
+		    ).('&nbsp;' x 1).
+		    Img( src     => "$IG::img_url/delete.gif",
+                         title   => $lang{booking_reject},
+                         href    => "calendar?".
+                                     "action=deletebooking&amp;".
+		      		     "bookingid=$bookingid2&amp;".
+		      		     "backto=bookingtoapprove",
+		         onclick => IG::JsConfirm( $lang{are_you_sure} )
+		       );
+      
+      TaskListItem(
+        [],
+        [Blush($date)],
+        [Blush(sprintf( "%02d:%02d - %02d:%02d", 
+                        int($starttime / 100), $starttime % 100,
+		        int($endtime / 100), $endtime % 100 ))],
+        [Blush( IG::UsrInf( 'name', $touser ) ) ],
+        [$eventtext.Br(1).Blush($note), $eventlink],
+        [$claimed_note],
+        [$actions]
+      );
+       
+     }
+   }
+  
+  TaskListFoot();
+
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+
+=head3 approvebooking
+ Approve a booking and reject the related claiming booking
+=cut
+
+sub approvebooking
+{
+  my $bookings_lock = AutoReleasedBookingLock::new();
+  my $bookingid     = $on{bookingid} || die 'Missing bookingid';
+  my $backto        = "calendar?action=". ($on{backto} || 'bookingtoapprove');
+  
+  ## check booking is really to be approved and that the user can do it.
+  DbQuery( "select calendar.touser, calendar.eventtext,".
+           " calendar.startdate, calendar.repeatend,".
+	   " calendar.starttime, calendar.endtime, calendar.eventid,".
+	   " bookings.equipmentid, equipments.description,".
+	   " bookings.claimed, bookings.note ".
+           "from bookings ".
+	   "join calendar on calendar.eventid = bookings.eventid ".	     
+           "join equipments on equipments.id = bookings.equipmentid ".
+	   "left join users_groups_link".
+	   " on users_groups_link.groupid = equipments.booking_approve_group ".
+	   "    and users_groups_link.userid = '$auth_user'".
+	   "where bookings.bookingid='".DbQuote( $bookingid )."'".
+	   " and bookings.approvedby='' and claimed=0".
+	   " and (users_groups_link.userid='$auth_user'".
+	   "      or equipments.booking_approve_group='') " );
+  
+  my ($touser, $eventtext, 
+      $startdate, $repeatend, 
+      $starttime, $endtime, $eventid, 
+      $equipmentid, $equipmentname,
+      $claimed, $note) = FetchRow();
+  
+  my $error;
+  
+  $error = $lang{Err_cant_approve} unless $touser;
+
+  if( $error ) 
+   {
+    HtmlHead( title => $lang{booking_approve});
+    TaskHead( title => $lang{booking_approve});
+    TaskMsg( $error, 1);
+
+    Input( type    => 'button',
+           show    => $lang{continue},
+           onclick => "document.location='$backto'" );
+
+    TaskFoot();
+    HtmlFoot();
+    return;
+   }
+
+  DbQuery( "update bookings set approvedby='$auth_user' ".
+           "where bookingid='".DbQuote( $bookingid )."'" );
+
+  ## message the approved user
+  IG::SendIsms( receiver => $touser,
+	        body     => sprintf( "$lang{booking_approved_msg}",
+				       $equipmentname,
+		                       '<noparse>'.
+		        	         "<a href=\"calendar?".
+				       	 "user=$touser&".
+				         "eventid=$eventid\">".
+		        	           MkEntities( $eventtext ).
+		        	         "</a>".
+		        	       '</noparse>',
+				       $startdate
+				     )
+              );
+
+  my @conflict_eventids = 
+        _checkBooking( equipmentid   => $equipmentid,
+	               equipmentname => $equipmentname,
+		       eventid       => $eventid,
+		       startdate     => $startdate,
+		       repeatend     => $repeatend,
+		       starttime     => $starttime,
+		       endtime       => $endtime,
+		       find_claiming => 1 );
+
+  ## delete the claiming bookings that are in conflict with the approved one
+  for(@conflict_eventids) 
+   {
+    my ($eventid2, $errmsg, $owner, $bookingid2) = @{$_};
+    DbQuery( "delete from bookings ".
+             "where bookingid='".DbQuote($bookingid2)."'".
+	     " and eventid='".DbQuote($eventid2)."'" );
+    
+    DbQuery( "select startdate, eventtext ".
+             "from calendar ".
+	     "where eventid='".DbQuote($eventid2)."'" );
+    my ($startdate2, $eventtext2) = FetchRow();
+
+    IG::SendIsms( receiver => $owner,
+		  body     => sprintf( "$lang{booking_delete_msg}",
+				       $equipmentname,
+		                       '<noparse>'.
+		        	         "<a href=\"calendar?".
+				       	 "user=$owner&".
+				         "eventid=$eventid2\">".
+		        	           MkEntities( $eventtext2 ).
+		        	         "</a>".
+		        	       '</noparse>',
+				       $startdate2
+				     )
+		);
+   }
+  
+  _recheck_claimed_bookings();
+
+  IG::Redirect( $backto );
+}
+
+#############################################################################
+#############################################################################
+sub deletebooking
+{
+  my $bookings_lock = AutoReleasedBookingLock::new();
+  my $bookingid = $on{bookingid} || die 'Missing bookingid';
+  my $backto = "calendar?action=". ($on{backto} || 'bookingtoapprove');
+  my $giveto = DbQuote( $on{giveto} );
+  
+  DbQuery( "select calendar.touser, calendar.eventtext,".
+           " calendar.startdate, calendar.repeatend, calendar.reserved,".
+           " calendar.starttime, calendar.endtime, calendar.eventid,".
+           " bookings.equipmentid, equipments.description,".
+           " bookings.claimed, bookings.note ".
+           "from bookings ".
+           "join calendar on calendar.eventid = bookings.eventid ".
+           "join equipments on equipments.id = bookings.equipmentid ".
+           "left join users_groups_link approve_group_link".
+           " on approve_group_link.groupid = equipments.booking_approve_group ".
+	   "    and approve_group_link.userid = '$auth_user' ".
+           "left join users_groups_link admin_group_link".
+           " on admin_group_link.groupid = equipments.booking_admin_group ".
+	   "    and admin_group_link.userid = '$auth_user' ".
+           "where bookings.bookingid='".DbQuote( $bookingid )."'".
+           " and ((bookings.approvedby=''".
+	   "       and (approve_group_link.userid='$auth_user'".
+           "            or equipments.booking_approve_group='') ".
+           "   or (bookings.approvedby<>''".
+	   "       and (admin_group_link.userid='$auth_user'".
+           "            or equipments.booking_admin_group='') )))" );
+  
+  my ( $touser,
+       $eventtext,
+       $startdate,
+       $repeatend,
+       $reserved,
+       $starttime,
+       $endtime,
+       $eventid,
+       $equipmentid,
+       $equipmentname,
+       $claimed,
+       $note ) = FetchRow();
+  
+  __deleteError( $lang{Err_cant_del_booking},
+                 $lang{booking_delete},
+                 $backto ) && return unless $touser;
+  
+  DbQuery( "delete from bookings ".
+           "where bookingid='".DbQuote($bookingid)."'".
+	   " and eventid='".DbQuote($eventid)."'" );
+
+  IG::SendIsms(  receiver => $touser,
+                 body     => sprintf( "$lang{booking_delete_msg}",
+				       $equipmentname,
+		                       '<noparse>'.
+		        	         "<a href=\"calendar?".
+				       	 "user=$touser&".
+				         "eventid=$eventid\">".
+		        	           MkEntities( $eventtext ).
+		        	         "</a>".
+		        	       '</noparse>',
+				       $startdate
+				     )
+              );
+
+  if ( !$giveto ) 
+   {
+    ## auto assign the equipment to the booking that was claimed first
+    _recheck_claimed_bookings();
+    IG::Redirect( $backto );
+    return;
+   }
+   
+  ## we have to assign the equipment to a specific booking
+   
+  ## check we can give the equipment
+  DbQuery( "select calendar.touser, equipments.id, equipments.description,".
+           " bookings.eventid, calendar.startdate, calendar.repeatend,".     
+           " calendar.starttime, calendar.endtime, calendar.eventtext,".     
+           " calendar.touser, bookings.claimed ".                          
+           "from bookings ".                                               
+           "join calendar on calendar.eventid = bookings.eventid ".        
+           "join equipments on equipments.id = bookings.equipmentid ".
+           "where bookings.bookingid='".DbQuote( $giveto )."'" );
+
+  ($touser, $equipmentid, $equipmentname,
+   $eventid, $startdate, $repeatend, 
+   $starttime, $endtime, $eventtext,
+   $touser, $claimed) = FetchRow();
+           
+  die "can't give the equipment $equipmentname to a non claimed booking" 
+      unless $claimed;
+
+  __deleteError( $lang{Err_cant_approve},
+                 $lang{booking_delete},
+                 $backto ) && return unless $touser;
+
+  my @conflict_eventids =
+    _checkBooking( equipmentid   => $equipmentid,
+                   equipmentname => $equipmentname,
+                   eventid       => $eventid,
+                   startdate     => $startdate,
+                   repeatend     => $repeatend,
+                   starttime     => $starttime,
+                   endtime       => $endtime );
+  
+  if ( $#conflict_eventids >= 0 ) ## claimed booking still in conflict
+   {
+    my $conflict_msg = $lang{Err_cant_give_booking};
+    for ( @conflict_eventids ) 
+     {
+      my ($eventid, $errmsg, $owner) = @{$_};
+      $conflict_msg .= Br(1).$errmsg;
+     }
+
+    __deleteError( $conflict_msg, $lang{booking_delete}, $backto );
+    _recheck_claimed_bookings(); ## auto reassign equipment
+    return;
+   }
+   
+  ## we have already tested that the user has the privilege to approve or
+  ## administer the booking of the equipment
+  
+  ## update the booking: no more claimed (but active) and approved
+  DbQuery( "update bookings set claimed=0, approvedby='$auth_user' ".
+           "where bookings.bookingid='".DbQuote( $giveto )."'".
+           "      and bookings.equipmentid='".DbQuote( $equipmentid )."'" );
+
+  ## send a message to the user that had the booking approved
+  IG::SendIsms( receiver => $touser,
+                body     => sprintf( "$lang{booking_approved_msg}",
+                                     $equipmentname,
+                                     '<noparse>'.
+                                       "<a href=\"calendar?".
+                                       "user=$touser&".
+                                       "eventid=$eventid\">".
+                                         MkEntities( $eventtext ).
+                                       "</a>".
+                                     '</noparse>',
+                                     $startdate
+                                   )
+              );
+ 
+  
+  ## at last check the bookings that are in conflict with the booking that
+  ## has just been approved and delete them.
+  my @conflict_eventids = 
+        _checkBooking( equipmentid   => $equipmentid,
+	               equipmentname => $equipmentname,
+		       eventid       => $giveto,
+		       startdate     => $startdate,
+		       repeatend     => $repeatend,
+		       starttime     => $starttime,
+		       endtime       => $endtime,
+		       find_claiming => 1 );
+
+  ## delete the claiming bookings that are in conflict with the approved one
+  for( @conflict_eventids ) 
+   {
+    my ($eventid2, $errmsg, $owner, $bookingid2) = @{$_};
+    DbQuery( "delete from bookings ".
+             "where bookingid='".DbQuote($bookingid2)."'".
+	     " and eventid='".DbQuote($eventid2)."'" );
+    
+    DbQuery( "select startdate, eventtext, touser ".
+             "from calendar ".
+	     "where eventid='".DbQuote($eventid2)."'".
+	     " and touser='$owner'" );
+    my ($startdate2, $eventtext2, $touser2) = FetchRow();
+    next unless $touser2;
+
+    IG::SendIsms( receiver => $owner,
+		  body     => sprintf( "$lang{booking_delete_msg}",
+				       $equipmentname,
+		                       '<noparse>'.
+		        	         "<a href=\"calendar?".
+				       	 "user=$owner&".
+				         "eventid=$eventid2\">".
+		        	           MkEntities( $eventtext2 ).
+		        	         "</a>".
+		        	       '</noparse>',
+				       $startdate2
+				     )
+		);
+   }
+  IG::Redirect( $backto );
+ }
+
+#############################################################################
+#############################################################################
+sub __deleteError
+ {
+  my ( $errormsg, $title, $backto ) = @_;
+  HtmlHead( title => $title );
+  TaskHead( title => $title );
+
+  TaskMsg( $errormsg, 1 );
+  Input( type   => 'button',
+         show   => $lang{continue},
+         onclick=> "document.location='$backto'" );
+
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub claimedbookings
+ {
+  my $bookings_lock = AutoReleasedBookingLock::new();
+  HtmlHead( title   => $lang{manage_claimed_bookings},
+            onevent => 'onload="if (parent.chkmsg && parent.chkmsg.ajaxUpdate) '.
+                                  'parent.chkmsg.ajaxUpdate()"' );
+
+  TaskHead( title => $lang{manage_claimed_bookings} );
+
+  ## find claimed bookings we can administer
+  my $conn
+  =DbQuery("select calendar.touser, calendar.fromuser, calendar.eventtext,".
+           " calendar.startdate, calendar.repeatend, calendar.reserved,".
+	   " calendar.starttime, calendar.endtime, calendar.eventid,".
+	   " bookings.bookingid, bookings.equipmentid, equipments.description,".
+	   " bookings.claimed, bookings.note ".
+           "from bookings ".
+	   "join calendar on calendar.eventid = bookings.eventid ".	     
+           "join equipments on equipments.id = bookings.equipmentid ".
+	   "left join users_groups_link".
+	   " on users_groups_link.groupid = equipments.booking_admin_group".
+	   "    and users_groups_link.userid = '$auth_user'".
+	   "where claimed<>0".
+	   " and (users_groups_link.userid='$auth_user'".
+	   "      or equipments.booking_admin_group='all') ".
+	   "order by bookings.equipmentid, calendar.startdate,".
+	   " calendar.starttime, bookings.claimed");
+  
+  TaskListMenu( [$lang{equipment}],
+                [$lang{date}],
+		[$lang{hour}],
+		[$lang{user}],
+		[$lang{description}],
+		[$lang{booking_claimed}],
+		[$lang{actions}] );
+                
+  while( my ( $touser,
+              $fromuser,
+              $eventtext,
+              $startdate,
+              $repeatend,
+              $reserved,
+              $starttime,
+              $endtime,
+              $eventid,
+              $bookingid,
+              $equipmentid,
+              $equipmentname,
+              $claimed,
+              $note           ) = FetchRow($conn) )
+   {
+    my $date = $startdate;
+    $date .= Br(1)."- $repeatend" if $repeatend ne $tv{empty_date};
+
+    my $eventlink;
+    if( $auth_user eq $touser || $auth_user eq $fromuser )
+     { $eventlink = "calendar?user=$touser&eventid=$eventid" }
+    else 
+     { $eventtext = $lang{reserved} if $reserved; }
+
+    my $claimed_note = '';
+    $claimed_note = Blush( IG::GetDateFromTime( $claimed ) ).
+                    Img( src   => "$IG::img_url/red.gif",
+		         title => $note )
+	          if $claimed;
+	     
+    my $actions = Img( src     => "$IG::img_url/tick.gif",
+                       title   => $lang{booking_force_assign},
+                       href    => "calendar?".
+                                   "action=receiveclaim&amp;".
+		       		   "bookingid=$bookingid&amp;".
+		       		   "backto=claimedbookings",
+		       onclick => IG::JsConfirm( $lang{are_you_sure} )
+		     ).('&nbsp;' x 1).
+		  Img( src     => "$IG::img_url/delete.gif",
+                       title   => $lang{booking_delete},
+                       href    => "calendar?".
+                                   "action=deletebooking&amp;".
+		      		   "bookingid=$bookingid&amp;".
+		      		   "backto=claimedbookings",
+		       onclick => IG::JsConfirm( $lang{are_you_sure} )
+		     );
+    
+    TaskListItem(
+      [$equipmentname, "equipments?action=protomodi&id=$equipmentid" ],
+      [Blush($date)],
+      [Blush(sprintf( "%02d:%02d - %02d:%02d", 
+                      int($starttime / 100), $starttime % 100,
+		      int($endtime / 100), $endtime % 100 ))],
+      [Blush(IG::UsrInf('name',$touser))],
+      [$eventtext.Br(1).Blush($note), $eventlink],
+      [$claimed_note],
+      [$actions]
+    );
+    
+    my @conflict_eventids =
+      _checkBooking( equipmentid   => $equipmentid,
+                     equipmentname => $equipmentname,
+		     eventid       => $eventid,
+		     startdate     => $startdate,
+		     repeatend     => $repeatend,
+		     starttime     => $starttime,
+		     endtime       => $endtime );
+
+    for ( @conflict_eventids )  
+     {
+      my ($eventid, $errmsg, $owner, $bookingid2) = @{$_};
+
+      DbQuery("select calendar.touser, calendar.fromuser, calendar.eventtext,".
+              " calendar.startdate, calendar.repeatend, calendar.reserved,".
+              " calendar.starttime, calendar.endtime, calendar.eventid,".
+              " bookings.equipmentid, equipments.description,".
+              " bookings.claimed, bookings.note ".
+              "from bookings ".
+              "join calendar on calendar.eventid = bookings.eventid ".	     
+              "join equipments on equipments.id = bookings.equipmentid ".
+              "where bookings.bookingid='".DbQuote($bookingid2)."'" );
+
+      my ( $touser,
+           $fromuser,
+           $eventtext,
+           $startdate,
+           $repeatend,
+           $reserved,
+           $starttime,
+           $endtime,
+           $eventid,
+           $equipmentid,
+           $equipmentname,
+           $claimed,
+           $note           ) = FetchRow();
+      
+      my $date = $startdate;
+      $date .= Br(1)."- $repeatend" if $repeatend ne $tv{empty_date};
+
+      my $eventlink;
+      my $eventlink;
+      if( $auth_user eq $touser || $auth_user eq $fromuser )
+       { $eventlink = "calendar?user=$touser&eventid=$eventid" }
+      else 
+       { $eventtext = $lang{reserved} if $reserved; }
+
+      my $claimed_note = '';
+      $claimed_note = Blush(IG::GetDateFromTime( $claimed )).
+                      Img( src   => "$IG::img_url/red.gif",
+		           title => $note )
+	            if $claimed;
+     
+      my $actions;
+
+      TaskListItem(
+        [],
+        [$date],
+        [sprintf( "%02d:%02d - %02d:%02d", 
+                  int($starttime / 100), $starttime % 100,
+		  int($endtime / 100), $endtime % 100 )],
+        [IG::UsrInf('name',$touser)],
+        [$eventtext.($note ? Br(1).$note : ''), $eventlink],
+        [$claimed_note],
+        [$actions]
+      );
+       
+     }
+   }
+  
+  TaskListFoot();
+
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+
+=head3 approvebooking
+ Receive a claim for a booking and delete the conflicting booking(s)
+=cut
+
+sub receiveclaim
+ {
+  my $bookings_lock = AutoReleasedBookingLock::new();
+  my $bookingid = $on{bookingid} || die 'Missing bookingid';
+  my $backto = "calendar?action=". ($on{backto} || 'claimedbookings');
+  
+  ## check booking is really claimed and that the user manage it.
+  DbQuery( "select calendar.touser, calendar.eventtext,".
+           " calendar.startdate, calendar.repeatend,".
+	   " calendar.starttime, calendar.endtime, calendar.eventid,".
+	   " bookings.equipmentid, equipments.description,".
+	   " bookings.claimed, bookings.note ".
+           "from bookings ".
+	   "join calendar on calendar.eventid = bookings.eventid ".	     
+           "join equipments on equipments.id = bookings.equipmentid ".
+	   "left join users_groups_link".
+	   " on users_groups_link.groupid = equipments.booking_admin_group".
+	   "    and users_groups_link.userid = '$auth_user'".
+	   "where bookings.bookingid='".DbQuote( $bookingid )."'".
+	   " and claimed<>0".
+	   " and (users_groups_link.userid='$auth_user'".
+	   "      or equipments.booking_admin_group='all') " );
+  
+  my ($touser, $eventtext, 
+      $startdate, $repeatend, 
+      $starttime, $endtime, $eventid, 
+      $equipmentid, $equipmentname,
+      $claimed, $note) = FetchRow();
+  
+  my $error;
+
+  __receiveClaimError( $lang{Err_cant_receive_claim},
+                       $lang{manage_claimed_bookings},
+                       $backto ) unless $touser;
+
+  ## first delete the conflicting events
+  my @conflict_eventids = 
+        _checkBooking( equipmentid   => $equipmentid,
+	               equipmentname => $equipmentname,
+		       eventid       => $eventid,
+		       startdate     => $startdate,
+		       repeatend     => $repeatend,
+		       starttime     => $starttime,
+		       endtime       => $endtime );
+
+  ## delete the bookings that are in conflict with the one to receive
+  for (@conflict_eventids) 
+   {
+    my ($eventid2, $errmsg, $owner, $bookingid2) = @{$_};
+    DbQuery( "delete from bookings ".
+             "where bookingid='".DbQuote($bookingid2)."'".
+	     " and eventid='".DbQuote($eventid2)."'" );
+    
+    DbQuery( "select startdate, eventtext ".
+             "from calendar ".
+	     "where eventid='".DbQuote($eventid2)."'" );
+    my ($startdate2, $eventtext2) = FetchRow();
+    IG::SendIsms( receiver => $owner,
+		  body     => sprintf( "$lang{booking_delete_msg}",
+				       $equipmentname,
+		                       '<noparse>'.
+		        	         "<a href=\"calendar?".
+				       	 "user=$owner&".
+				         "eventid=$eventid2\">".
+		        	           MkEntities( $eventtext2 ).
+		        	         "</a>".
+		        	       '</noparse>',
+				       $startdate2
+				     )
+		);
+   }
+  
+  ## recheck that there are no conflict now
+  my @conflict_eventids = 
+        _checkBooking( equipmentid   => $equipmentid,
+	               equipmentname => $equipmentname,
+		       eventid       => $eventid,
+		       startdate     => $startdate,
+		       repeatend     => $repeatend,
+		       starttime     => $starttime,
+		       endtime       => $endtime );
+
+  if ( $#conflict_eventids >= 0 ) ## strange: still in conflict
+   {
+    my $conflict_msg = $lang{Err_cant_receive_claim2};
+    for(@conflict_eventids) 
+     {
+      my ($eventid, $errmsg, $owner) = @{$_};
+      $conflict_msg .= Br(1).$errmsg;
+     }
+    __receiveClaimError( $conflict_msg, $lang{booking_delete}, $backto );
+    _recheck_claimed_bookings(); ## auto reassign equipment
+    return;
+   }
+
+  DbQuery( "update bookings set approvedby='$auth_user', claimed=0 ".
+           "where bookingid='".DbQuote( $bookingid )."'" );
+
+  ## message the approved user
+  IG::SendIsms( receiver => $touser,
+                body     => sprintf( "$lang{booking_approved_msg}",
+				       $equipmentname,
+		                       '<noparse>'.
+		        	         "<a href=\"calendar?".
+				       	 "user=$touser&".
+				         "eventid=$eventid\">".
+		        	           MkEntities( $eventtext ).
+		        	         "</a>".
+		        	       '</noparse>',
+				       $startdate
+				     )
+              );
+
+  _recheck_claimed_bookings();
+
+  IG::Redirect( $backto );
+ }
+
+#############################################################################
+#############################################################################
+sub __receiveClaimError
+ {
+  my ( $errormsg, $title, $backto ) = @_;
+  HtmlHead( title => $title );
+  TaskHead( title => $title );
+
+  TaskMsg( $errormsg, 1 );
+  Input(	type   => 'button',
+	   	show   => $lang{continue},
+		onclick=> "document.location='$backto'" );
+
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+## class to put a lock on bookinigs. The lock will be autoreleased when the
+## class instance go out of scoope
+
+package AutoReleasedBookingLock;
+
+my $lockBookingCount = 0;
+
+sub new
+ { 
+  IG::Lock( resource_id => "bookings" ) unless $lockBookingCount;
+  $lockBookingCount++;
+  bless {} 
+ }
+
+sub DESTROY
+ {
+  $lockBookingCount--;
+  die 'lockBookingCount < 0' if $lockBookingCount < 0;
+  IG::UnLock( "bookings" ) unless $lockBookingCount;
+ }
+

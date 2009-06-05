@@ -1,0 +1,20 @@
+## IGSuite 4.0.0
+## Language: offers_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+offer_not_accepted      =>'Offer not accepted',
+new_revision		=>'Nuevas rev',
+accepted		=>'Aceptadas',
+not_accepted		=>'Rechazadas',
+offers_protocol		=>'Protocolo Presupuestos',
+save_offer		=>'Guarda en el protocolo Presupuestos',
+offers_stats		=>'Estadísticas Presupuestos',
+stat_0			=>'Total tipos de presupuestos y resultado',
+stat_1			=>'Tendencia presupuestos presentados durante los últimos 12 meses',
+stat_2			=>'Tendencia últimos 12 meses para',
+find_offers		=>'Búsqueda Presupuestos'
+  ));
+
+1;

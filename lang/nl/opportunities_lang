@@ -1,0 +1,26 @@
+## IGSuite 4.0.0
+## Language: opportunity_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+close_the_opportunity   => 'Close the opportunity',
+opportunity_closed	=> 'Bedrijfskans Gesloten',
+opportunity_open	=> 'Bedrijfskans Open',
+Err_enddate		=> 'Error in verwachte sluitingsdatum',
+Err_opportunity_name	=> 'Attentie! U moet de bedrijfskans benoemen',
+Err_amount		=> 'Error in waarde hoeveelheid',
+update_opportunity	=> 'Bewerk Bedrijfskans',
+new_opportunity		=> 'Nieuwe Bedrijfskans',
+opportunity_name	=> 'Naam Bedrijfskans',
+existing_business	=> 'Bestaande bedrijven',
+new_business		=> 'Nieuwe bedrijven',
+probability		=> 'Kans',
+opportunity_source	=> 'Kansen lead',
+sales_stage		=> 'Verkoop laag',
+expected_close_date	=> 'Verwachte sluiting dag',
+   ));
+
+1;
+
+

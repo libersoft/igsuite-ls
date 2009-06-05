@@ -1,0 +1,42 @@
+## IGSuite 4.0.0
+## Language: igfax_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+arrived_byfax		=>'arrivata per fax',
+attempt_time		=>'Numero tentativi',
+ca			=>'Alla C.a.',
+cc			=>'Per conoscenza',
+cover_page		=>'Cover Page',
+delete_attach		=>'Cancella allegato',
+direction               =>'Direzione',
+document_exist		=>'Documento presente',
+document_tosend		=>'Documento da inviare',
+edit_fax_notes          =>'Modifica le note',
+Err_no_document_cover   =>'Nessun documento o copertina fax da spedire',
+Err_no_fax_number       =>'Devi inserire un numero di fax nella scheda contatti prima di inviare il fax',
+events_report		=>'Rapportino',
+inner_fax		=>'Fax in arrivo',
+insert_tospool		=>'Inserisci in fax in uscita',
+max_5rows		=>'Puoi inserire un massimo di 5 righe',
+multi_receivers         =>'Destinatari multipli',
+no_preview		=>'Anteprima non disponibile. Controllare nel file di configurazione di IGSuite il path dell\'applicazione \'convert\' (www.imagemagick.org)',
+notify1			=>'A spedizione avvenuta',
+notify2			=>'Nessuna notifica',
+notify3			=>'Notifica se riavviato',
+notify_byemail		=>'Notifica E-Mail',
+outer_fax		=>'Fax in uscita',
+pages_without_cover	=>'Pagine esclusa la cover',
+placed_call		=>'Numero telefonate',
+probable_receiver	=>'Destinatario Ipotetico',
+sendfax			=>'Invia Fax',
+sendfax_ok		=>'Fax correttamente inserito nella coda dei fax in uscita',
+send_it_this_night      =>'Invialo stanotte',
+single_receiver         =>'Destinatario Singolo',
+to_be_seen		=>'e per conoscenza comunicato a',
+view_fax		=>'Visualizza Fax',
+without_paper_fax	=>'Fax spedito senza l\'uso di un supporto cartaceo',
+   ));
+
+1;

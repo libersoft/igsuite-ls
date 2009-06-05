@@ -1,0 +1,35 @@
+## IGSuite 4.0.0
+## Language: contracts_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+days_to_expire          =>'Days to expire',
+in_revision_contract    =>'In revision contract',
+contract_status		=>'Contract Status in this phase',
+active_contract		=>'Active Contract',
+inactive_contract	=>'Inactive Contract',
+Err_type_phase          =>'Tu dois sélectionner un tipe de contrat et une phase',
+phase_manager		=>'Gestion Phase',
+Err_contract_type       =>'Attention: il n\'y a pas la typologie du contrat',
+Err_phase_name          =>'Attention: il n\'y a pas le nom de la phase',
+Err_priority            =>'Attention: il n\'y a pas la priorité',
+no_other_revision       =>'Aucun autre contrat de révisionner',
+next_revue		=>'Prochain réexamen',
+contracts_protocol	=>'Protocole contrats',
+new_contract		=>'Nouveau contrat',
+save_contract		=>'Sauvegarde dans le protocole contrats',
+new_phase		=>'Nouvelle phase',
+make_standard_phases	=>'Crées phases standard',
+contracts_phases	=>'Gestion phases',
+close_phase		=>'Fermes phases',
+days_before_alert	=>'Jours de préavis au délai',
+phase_name		=>'Phase',
+contract_duration	=>'Durée',
+phase_bgcolor		=>'Fond de la phase',
+move_to_phase		=>'Passes à phase',
+change_duedate		=>'Modifies délai',
+   ));
+
+1;
+

@@ -1,0 +1,34 @@
+## IGSuite 4.0.0
+## Language: contracts_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+days_to_expire          =>'Days to expire',
+in_revision_contract    =>'In revision contract',
+contract_status		=>'Contract Status in this phase',
+active_contract		=>'Active Contract',
+inactive_contract	=>'Inactive Contract',
+Err_type_phase          =>'You have to select a contract type and a phase',
+phase_manager		=>'Phase Manager',
+Err_contract_type	=>'Attention: contract type is missing',
+Err_phase_name		=>'Attention: phase name is missing',
+Err_priority		=>'Attention: priority is missing',
+no_other_revision	=>'No other contracts revision',
+next_revue		=>'Next Revue',
+contracts_protocol	=>'Contracts Protocol',
+new_contract		=>'New Contract',
+save_contract		=>'Save in Contracts Protocol',
+new_phase		=>'New Phase',
+make_standard_phases	=>'Make standard phases',
+contracts_phases	=>'Contracts Phases',
+close_phase		=>'Close Phase',
+days_before_alert	=>'Days before alert from expire date',
+phase_name		=>'Phase',
+contract_duration	=>'Duration',
+phase_bgcolor		=>'Phase Background color',
+move_to_phase		=>'Move to Phase',
+change_duedate		=>'Change expire date',
+  ));
+
+1;

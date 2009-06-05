@@ -1,0 +1,250 @@
+INSTALLARE IGSUITE 4.0
+----------------------------------------------------------------------------------
+
+Indice Argomenti
+
+        1. Introduzione
+        2. Quick Installation ( NEW! )
+        3. Requisiti di installazione
+        4. Configurazione ed installazione
+        5. Quick Start
+        6. Aggiornamento On-Line
+        7. Upgrade da versioni precedenti
+        8. Manifest
+        9. Copyright
+
+
+
+1. Introduzione
+
+IGSuite è una "suite" di programmi per ufficio finalizzata a migliorare la
+gestione e i rapporti di lavoro. Sfruttando le caratteristiche di un ambiente
+Web-based, si rende molto facile nell'utilizzo e comprende un pacchetto di
+applicazioni del tutto personalizzabili.
+
+Per il suo utilizzo lato client occorre semplicemente un browser di nuova
+generazione (che supporti JavaScript CSS2 e i Cookie). Puntando il proprio
+browser all'indirizzo del server, si potrà accedere ad una sessione
+personalizzata, un ambiente in cui sarà possibile gestire il proprio posto di
+lavoro "virtuale" scegliendone l'aspetto grafico, il linguaggio, numerosi
+parametri di personalizzazione e la possibilità di definire dei gruppi utente
+ai quali conferire permessi di accesso alle singole funzioni.
+
+
+2. Quick Installation ( NEW! )
+
+Dalla release 3.2.3 è disponibile per IGSuite un package manager denominato
+IGPacMan che attraverso un interfaccia web guida l'utente passo passo verso
+il controllo dei requisiti e l'installazione automatica del sistema. IGPacMan
+può essere utilizzato sia su piattaforma Windows che Linux e nella maggior
+parte dei casi semplifica notevolmente il processo di installazione o
+aggiornamento di IGSuite.
+
+
+3. Requisiti di installazione
+
+IGSuite è composto da CGI scritti in Perl che si avvalgono prevalentemente di
+moduli (librerie) già presenti nel pacchetto. Soltanto alcuni moduli dovranno
+essere installati prima di procedere con l'installazione della Suite, è il
+caso in particolare dei moduli Perl per interfacciare IGSuite ad un RDBMS
+(attualmente PostgreSQL, MySQL o SQLite).
+
+I requisiti per installare la suite sono:
+
+
+3.1. Perl http://www.perl.org
+
+C'è poco da dire su Perl; IGSuite utilizza alcuni moduli standard di Perl
+cosiddetti Core ed altri non standard. I moduli non standard sono
+prevalentemente quelli che IGSuite utilizza per interfacciarsi al Database e
+cioè DBD::Pg per PostgreSQL, DBD::mysql per MySQL o DBD::sqlite per SQLite,
+per i quali vi rimandiamo alle relative documentazioni ufficiali (
+http://www.cpan.org ).
+
+N.B. Dalla release 3.2.5 solo per sistemi Linux/Unix è presente all'interno
+del pacchetto uno script ( install_modules.pl ) che si occupa di installare
+automaticamente tutti i moduli Perl necessari.
+
+
+3.2. PostgreSQL http://www.postgresql.org o MySQL http://www.mysql.com
+
+Due dei più maneggevoli Database attualmente disponibili. Durante il nostro
+lavoro abbiamo avuto modo di testare le prestazioni di entrambe e sicuramente
+MySQL offre prestazioni maggiori rispetto alla velocità di risposta, ma di
+contro IGSuite è nativo per PostgreSQL e proprio su questo database è stato
+maggiormente testato.
+
+
+3.3. SQLite http://search.cpan.org/~adamk/DBD-SQLite-1.25/lib/DBD/SQLite.pm
+
+Questo incredibile database è estremamente versatile e utilissimo ma solo ed
+esclusivamente nel caso si voglia testare la Suite o la si voglia utilizzare
+per ininfluenti quantità di dati. L'implementazione di SQLite è molto recente
+ne sconsigliamo quindi il suo utilizzo in server di produzione.
+
+
+Per quanto riguarda la configurazione del server RDBMS che si vuole
+utilizzare, occorrerà individuare o creare un utente che abbia i permessi di
+creazione di tabelle e database. In caso di problemi si può far riferimento
+agli [HowTo] che abbiamo predisposto o alla documentazione sui relativi siti
+ufficiali, non ultimo si potrà utilizzare la mailing-list o il forum.
+
+N.B. ABBIAMO RISCONTRATO CHE LA MAGGIOR PARTE DEI PROBLEMI DI INSTALLAZIONE
+DI IGSUITE, E' DOVUTA ALLA NON ESATTA DEFINIZIONE ALL'INTERNO DELL'RDBMS DI
+UTENTI CON I DIRITTI PER LA CREAZIONE DI DATABASE E TABELLE.
+
+
+3.4. DBD::Pg o DBD::mysql o DBD::SQLite http://www.cpan.org
+
+Sono i moduli che permettono a Perl di interagire con i relativi database,
+l'unico accorgimento da avere è che quello installato sul proprio sistema sia
+compatibile con la versione del Database che si sta utilizzando.
+
+Per chi utilizza Linux Vi rimandiamo alla documentazione relativa alla
+distribuzione in uso. Infatti per alcune distribuzioni l'installazione dei
+moduli avviene grazie ad un gestore di pacchetti interno (Es. per Suse c'è
+Yast per Debian APT) per altre distribuzioni occorrerà invece partire dai
+pacchetti offerti da http://www.cpan.org e procedere con l'installazione
+manuale:
+
+Esempio da riga di comando:
+host:/ # cpan
+cpan> install DBD::Pg
+
+Per chi utilizza Windows invece si può scaricare Perl da ActivePerl
+http://www.activeperl.com una distribuzione di Active State. All'interno
+della distribuzione ActivePerl si potrà trovare documentazione relativa a PPM
+(Perl Package Manager) per installare i moduli su citati.
+
+E' anche possibile seguire questo [HowTo] che spiega brevemente come
+installare moduli Perl sia su Linux che su Windows.
+
+
+3.5. Piattaforma: Linux (Qualsiasi distribuzione) ; Windows (da Win98 a Vista)
+
+Per scelta i mezzi con i quali è stato creato IGSuite hanno la particolarità
+di essere "portabili" su ogni piattaforma. Questo libera l'utente
+dall'obbligo di scegliere un sistema operativo piuttosto che un altro.
+
+Assicurarsi che i requisiti sopra elencati siano compatibili con la
+piattaforma che volete utilizzare per l'installazione di IGSuite e il tutto
+funzionerà senza problemi.
+
+Fin'ora il nostro staff ha testato con successo il funzionamento di IGSuite
+sui seguenti sistemi: Ubuntu, OpenSuse, RedHat, Mandriva, Gentoo, SME Server,
+Debian, Slackware, FreeBSD, Win98, Win2000 Server, Win XP, Win Vista.
+
+E' possibile anche consultare questo documenti: [Installare IG su Windows] 
+
+
+3.6. Apache http://www.apache.org
+
+Distribuito ormai per tutte le piattaforme, necessita soltanto di qualche
+accorgimento all'interno dei file di configurazione. Accertarsi che tutte le
+cartelle e in special modo "DocumentRoot" e "cgi-bin" (o in pratica le
+directory del proprio server web Apache che contengono rispettivamente i file
+di dati e gli script cgi di IGSuite) abbiano i permessi di lettura scrittura
+ed esecuzione (per quest'ultima), per l'utente che esegue Apache. IGSuite
+supporta sia Apache 1.x che 2.x.
+
+Per praticità si consiglia di configurare su Apache un VirtualHost creato ad
+hoc per IGSuite in modo da non interferire con altri "Siti" o script gestiti
+dal server.
+
+
+3.7. HylaFax http://www.hylafax.org (opzionale)
+
+E' senza dubbio il miglior server di Fax "Open" che esista. Non necessita di
+nessuna particolare attenzione. Una volta installato (può anche non essere
+installato IGSuite funziona ugualmente) dovrà essere configurato un utente
+che abbia accesso (tramite il protocollo FTP) ai fax ricevuti (consultare la
+documentazione sul sito ufficiale).
+
+N.B. Allo stato attuale non esiste una versione di Hylafax per Windows, tale
+feature quindi non è utilizzabile su server installati si piattaforma Windows
+
+
+4. Configurazione ed installazione
+
+Se prima di installare IGSuite non si è provveduto a risolvere i requisiti
+sopra elencati, si avranno numerose anomalie che impediranno sicuramente
+l'esecuzione di tutte le funzionalità della suite.
+
+Comunque come utente root/Amministratore di sistema, una volta scompattato il
+pacchetto digitare dal prompt dei comandi "perl install.pl", e rispondere
+alle domande che vi verranno fatte.
+
+Per configurare alcune feature di IGSuite occorre modificare manualmente il
+file di configurazione "dir_dei_cgi/conf/igsuite.conf" e seguire le
+spiegazioni in esso contenute, è possibile inoltre consultare questo
+documento su "[come configurare IGSuite]".
+
+
+5. Quick Start
+
+Una volta installato IGSuite se tutto è andato bene, si tratterà
+semplicemente di spostarsi su un Client e da un Browser (che supporti HTML 4;
+CCS; JavaScript; e l'uso dei cookies) puntare al server tramite un indirizzo
+tipo:
+
+Esempio: http://mioserver/cgi-bin/igsuite
+
+Verrà richiesta una Login e una Password; inserire quella impostata come
+amministratore di IGSuite durante l'installazione e una volta loggati
+cliccare su "Personale" e aggiungere gli altri utenti del sistema o seguire
+le indicazioni riportate.
+
+
+6. Aggiornamento On-Line
+
+Una volta installato è possibile aggiornare IGSuite con le ultime patch
+rilasciate dagli sviluppatori. Si hanno a disposizione due possibilità una
+manuale e una automatica:
+
+Aggiornamento manuale: Lanciare dal prompt dei comandi il seguente script:
+
+root@server# /directory/dei/cgi/igsuited --update-igsuite
+
+Aggiornamento automatico: "igsuited" è un demone che si occupa di effettuare
+numerose operazioni tra cui quella di tenere il sistema sempre aggiornato, è
+importante quindi lasciarlo in esecuzione in background. Per fare in modo che
+sia avviato ad ogni riavvio del sistema consultare la documentazione del
+proprio sistema operativo.
+
+
+7. Upgrade da versioni precedenti
+
+	* Per l'aggiornamento da versioni precedenti alla versione 3.2.0
+occorre leggere la seguente documentazione [Passare a IGSuite 3.2]
+
+	* Per l'aggiornamento dalla 3.2.x alla 3.2.5 è sufficiente eseguire
+la normale procedura di installazione. In alternativa ci si può avvalere del
+package manager [IGPacMan].
+
+	* Per l'aggiornamento dalla 3.2.x alla 4.0.0 è sufficiente eseguire
+la normale procedura di installazione. In alternativa ci si può avvalere del
+package manager [IGPacMan].
+
+BUG: per via di un bug presente nelle vecchie release, esiste la possibilità
+che in seguito all'aggiornamento da una precedente release si ritrovino tutti
+gli account degli utenti disabilitati, come se fossero scaduti. Basterà
+rientrare in ogni scheda utente e riattivare semplicemente gli account.
+
+N.B. E' buona norma in seguito ad ogni aggiornamento della suite controllare
+il contenuto del file di configurazione "igsuite.conf".
+
+
+8. Manifest
+
+Per visualizzare il Manifest inerente le ultime release seguire questo
+indirizzo
+http://www.igsuite.org/cgi-bin/igwiki?action=findexec&keytofind=manifest&fiel
+dtofind=name
+
+
+9. Copyright
+
+Copyright (c) 1998-2009. This is free software; see the source for copying
+conditions. There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR
+A PARTICULAR PURPOSE.
+

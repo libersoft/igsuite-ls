@@ -1,0 +1,13 @@
+## IGSuite 4.0.0
+## Language: archive_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+days_before_alert	=>'Dagen voor alert van verloop datum',
+save_archive		=>'Opslaan in Archief protocol',
+  ));
+
+1;
+
+

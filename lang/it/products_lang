@@ -1,0 +1,37 @@
+## IGSuite 4.0.0
+## Language: products_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+prices			=>'Prezzi',
+additional_information	=>'Informazioni aggiuntive',
+delivery_time		=>'Tempo di consegna',
+delivery_modality	=>'Modalità di consegna',
+packaging		=>'Confezionamento',
+min_quantity            =>'Quantità minima',
+max_quantity            =>'Quantità massima',
+qualified_customers	=>'Clienti Qualificati',
+partners		=>'Partners',
+competitors		=>'Concorrenti',
+disable_prices_list	=>'Disabilita listino Prezzi',
+last_prices_update	=>'Ultimo aggiornamento prezzi',
+history_view		=>'Visualizza Storico',
+unit_measure		=>'Unita di Misura',
+back_to_prices		=>'Torna a prezzi in Vigore',
+new_product		=>'Nuovo Prodotto',
+Err_price		=>'Attenzione: manca il prezzo',
+update_prices		=>'Aggiorna Prezzi',
+update_reference	=>'Aggiorna Riferimenti',
+article			=>'Articolo',
+make_offer		=>'Elabora Offerta',
+make_order		=>'Elabora Ordine',
+make_letter		=>'Elabora Lettera',
+make_summary		=>'Riepilogo',
+prices_history		=>'Storico Prezzi',
+unit			=>'UM',
+with_code		=>'Con codice contenente',
+find_products		=>'Cerca Prezzi',
+  ));
+
+1;

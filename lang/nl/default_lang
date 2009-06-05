@@ -1,0 +1,27 @@
+## IGSuite 4.0.0
+## Language: default_lang
+## Last update: 25/05/2009
+
+%default_lang = (
+email_msgs	=>'E-Mail',
+home		=>'home',
+letters		=>'brieven',
+offers		=>'offertes',
+orders		=>'orders',
+archive		=>'archief',
+fax_received	=>'fax_ontvangen',
+fax_sent	=>'fax_verzonden',
+basket		=>'basket',
+contracts	=>'contracten',
+nc_ext		=>'nc_ext',
+nc_int		=>'nc_int',
+templates	=>'templates',
+documentation	=>'documentatie',
+help_files	=>'ig_help_bestand',
+equipments	=>'materiaal',
+users_photo     =>'gebruikers_foto',
+   );
+
+1;
+
+

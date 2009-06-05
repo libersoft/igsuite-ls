@@ -1,0 +1,16 @@
+## IGSuite 4.0.0
+## Language: igsms_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+wait_for_status_update  =>'Attendere per l\'aggiornamento dello stato',
+available_msgs		=>'Numero messaggi disponibili per l\'invio',
+available_chars		=>'Caratteri a disposizione',
+err_no_credit		=>'Attenzione! credito insufficente o impossibile contattare il server per l\'invio degli Sms',
+err_no_text		=>'Errore: Inserire il testo del messaggio',
+err_wrong_number	=>'Errore: Numero di cellulare non valido',
+err_send_failed		=>'Errore: Invio non riuscito',
+  ));
+
+1;

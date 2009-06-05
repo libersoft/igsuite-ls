@@ -1,0 +1,10 @@
+## IGSuite 4.0.0
+## Language: igsuited_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+weather			=>'Meteo',
+  ));
+
+1;

@@ -1,0 +1,340 @@
+#! /usr/bin/perl
+# Procedure: tickler
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+no strict 'vars';
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	findexec	=> sub { CheckPrivilege('sys_tickler_view') },
+		findshow	=> sub { CheckPrivilege('sys_tickler_view') },
+		default_action	=> 0 );
+
+
+##############################################################################
+##############################################################################
+sub findshow
+ {
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    FormHead (	name=>'navi',
+		method=>'get',
+		target=>'mainf',
+		cgiaction=>'findexec',
+		labelstyle=>"border:0px; width:auto; color:$IG::clr{font_menu_title}; background-color:$IG::clr{bg_menu_title}",
+		fieldstyle=>'margin:1; padding:1',
+		float=>'left' );
+
+    HLayer( bottom_space => 0,
+            right_layers=>[(
+		    Input (	type=>'findable' ),
+
+		    Input (	type=>'select',
+				name=>'type',
+				data=>[(['offers',	$lang{offers}],
+					['orders',	$lang{orders}],
+					['contracts',	$lang{contracts}],
+					['archive',	$lang{archive}],
+					['equipments',	$lang{equipments}])]),
+
+		    Input (	type=>'date',
+				name=>'date1', 
+				show=>$lang{from},
+				style=>'width:70px; font-size:10px',
+				value=>$tv{today} ),
+
+		    Input (	type=>'date',
+				name=>'date2',
+				show=>$lang{to},
+				style=>'width:70px; font-size:10px',
+				value=>$tv{end_year} ),
+
+		    Input (	type=>'select',
+				name=>'order',
+				style=>'width:120px; font-size:10px',
+				data=>[([0, $lang{order_by_protocol}],
+					[1, $lang{order_by_duedate}],
+					[2, $lang{order_by_contact}]
+				       )]
+			  ),
+
+		    Input (	type=>'image',
+				name=>$lang{find},
+				src=>"$IG::img_url/${IG::tema}search.gif",
+				alt=>$lang{find}),
+				
+		    FormFoot()
+		)]
+	);
+  }
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub findexec
+ {
+  my $counter;
+
+  if ( !( $on{date1} = CkDate($on{date1}) ) )
+   { push @IG::errmsg, $lang{Err_departure_date}; }
+
+  if ( !( $on{date2} = CkDate($on{date2}) ) )
+   { push @IG::errmsg, $lang{Err_end_date}; }
+
+  Header();
+
+  if ($on{type} eq 'equipments')
+   {
+    QuoteParams();
+    DbQuery("SELECT id, description, date0, date1, date2, date3, brand ".
+	    "FROM equipments ".
+	    "WHERE status=0 and ".
+	    "((date0 >= '$in{date1}' and date0 <= '$in{date2}') or".
+	    " (date1 >= '$in{date1}' and date1 <= '$in{date2}') or".
+	    " (date2 >= '$in{date1}' and date2 <= '$in{date2}') or".
+	    " (date3 >= '$in{date1}' and date3 <= '$in{date2}')) ".
+            "ORDER BY id");
+
+    TaskListMenu(
+			['MAT.'],
+			['DESCRIZIONE'],
+			['TARGA/TELAIO'],
+			['REVISIONE'],
+			['TACHIGRAFO'],
+			['BOLLO'],
+			['ASSICUR']
+		);
+
+   while (my @row = FetchRow())
+    {
+     $counter++;
+     TaskListItem (
+	[$row[0],
+	 "equipments?action=protomodi&amp;id=$row[0]"],
+	[$row[1]],
+	[$row[6]],
+	[CkDate($row[2])],
+	[CkDate($row[3])],
+	[CkDate($row[4])],
+	[CkDate($row[5])] );
+    }
+   TaskListFoot();
+  }
+ elsif ($on{type} eq 'contracts')
+  {
+   my $order = ('contracts.id',
+                'contracts.expire',
+                'contracts.contactname')[$on{order}];
+
+   QuoteParams();
+   DbQuery("SELECT contracts.id, contracts.issue, contracts.contactname,".
+	  " contracts.owner, contracts.note, contracts.expire,".
+	  " contracts.startdate, contracts.phase, contracts.type,".
+	  " contracts.docref, contracts.duration, contracts.flag1,".
+	  " contracts.flag2, contracts.flag3, contracts.contactid,".
+	  " contracts.expire-current_date, contracts_phases.name,".
+	  " users.initial ".
+	  "FROM contracts ".
+	  "LEFT JOIN contracts_phases ".
+	  "ON contracts.phase = contracts_phases.id ".
+	  "LEFT JOIN users ".
+	  "ON contracts.owner = users.login ".
+	  "WHERE ". 
+	  "( contracts_phases.contractstatus = 2".
+	  " or contracts_phases.contractstatus = 1 )".
+	  " and contracts.expire >= '$in{date1}'".
+	  " and contracts.expire <= '$in{date2}' ".
+	  "ORDER BY $order");
+
+   TaskListMenu
+      (
+	      [$lang{number}],
+	      [$lang{contact_name}],
+	      [$lang{issue}],
+	      [$lang{due_date}],
+	      [$lang{rif}],
+	      [$lang{contract_type}],
+	      [$lang{referring}],
+	      [$lang{status}],
+	      [$lang{notes}],
+      );
+
+   while (my @row = FetchRow())
+    {
+     $counter++;
+     $row[5] = Blush($row[5]) if $row[15]<1;
+
+     TaskListItem(
+	[$row[0],
+	 "contracts?action=docview&amp;id=$row[0]"],
+	[$row[2]],
+	[$row[1]],
+	[$row[5]],
+	[MkLink($row[9])],
+	[GetTableVal("contracts_type",$row[8])],
+	[$row[17]],
+	[$row[16]],
+	[MkLink($row[4])],
+		);
+    }
+   TaskListFoot();
+  }
+ elsif ($on{type} eq 'offers')
+  {
+   my $order = ('offers.id','offers.expire','offers.contactname')[$on{order}];
+   QuoteParams();
+   DbQuery( "SELECT offers.id, offers.issue, offers.contactname,".
+            " offers.owner, offers.note1, offers.note, offers.category,".
+            " offers.expire, offers.flag1, offers.flag2, offers.flag3,".
+            " users.initial ".
+            "FROM offers ".
+            "LEFT JOIN users ON offers.owner=users.login ".
+            "WHERE offers.expire>='$in{date1}'".
+            " and offers.expire<='$in{date2}'".
+            " and offers.note<>'' ".
+	   "ORDER BY $order");
+   $counter=0;
+   TaskListMenu (
+		[$lang{number}],
+		[$lang{contact}],
+		[""],
+		[$lang{issue}],
+		[$lang{due_date}],
+		[$lang{rif}],
+		[$lang{result}],
+		[$lang{notes}]
+		);
+
+   while (my @row = FetchRow())
+      {
+        ++$counter;
+	TaskListItem (
+		[ParseLink($row[0])],
+		[$row[2]],
+		[$row[6]],
+		[$row[1]],
+		[$row[7]],
+		[$row[11]],
+		[MkLink($row[5])],
+		[MkLink($row[4])]
+			);
+      }
+   TaskListFoot();
+  }
+ elsif ($on{type} eq 'orders')
+  {
+   my $order = ('id','expire','contactname')[$on{order}];
+   QuoteParams();
+   DbQuery("SELECT * FROM orders ".
+	   "where expire>='$in{date1}' and expire<='$in{date2}' ".
+	   "ORDER BY $order");
+   $counter=0;
+   TaskListMenu (
+		[$lang{number}],
+		[$lang{contact}],
+		[$lang{issue}],
+		[$lang{due_date}],
+		[$lang{rif}],
+		[$lang{delivery}],
+		[$lang{notes}] );
+
+   while (my @row = FetchRow())
+      {
+       ++$counter;
+       if (!(CkDate($row[8]))) { $row[8] = $lang{opened_order}; }
+       TaskListItem (
+		[ParseLink($row[0])],
+		[$row[3]],
+		[$row[1]],
+		[$row[6]],
+		[$row[5]],
+		[$row[8]],
+		[MkLink($row[4])] );
+      }
+     TaskListFoot();
+  }
+ elsif ($on{type} eq 'archive')
+  {
+   my $order = ('id','expire','contactname')[$on{order}];
+
+   QuoteParams();
+   my $view = $on{view} ? "and type='$in{view}'" : ''; 
+
+   DbQuery("SELECT * FROM archive where expire >= '$in{date1}'".
+	   " and expire <= '$in{date2}' $view ORDER BY $order");
+   $counter=0;
+   TaskListMenu (
+		[$lang{number}],
+		[$lang{contact}],
+		[$lang{type}],
+		[$lang{date}],
+		[$lang{rif}],
+		[$lang{due_date}],
+		[$lang{owner}],
+		[$lang{notes}] );
+
+   while (my @row = FetchRow())
+    {
+      $counter++;
+      if (!(CkDate($row[4]))) { $row[4]="&nbsp;";}
+
+      TaskListItem (
+		[ParseLink($row[0])],
+		[$row[3],
+		 "archive?action=protomodi&amp;id=$row[0]"],
+		[$IG::docs_type{$row[7]},
+		 "tickler?".
+		 "action=findexec&amp;".
+		 "view=$row[7]&amp;".
+		 "type=$on{type}&amp;".
+		 "stampa=$on{stampa}&amp;".
+		 "order=$on{order}&amp;".
+		 "date1=$on{date1}&amp;".
+		 "date2=$on{date2}"],
+		[$row[2]],
+		[MkLink($row[1])],
+		[$row[4]],
+		[IG::UsrInf('name',$row[6])],
+		[MkLink($row[5])] );
+    }
+   TaskListFoot();
+  }
+  push @IG::errmsg, $lang{no_items} if !$counter;
+  Footer();
+ }
+
+##########################################################################
+##########################################################################
+sub Footer
+ { 
+  TaskFoot();
+  HtmlFoot();
+ }
+
+sub Header 
+ {
+  HtmlHead();
+  TaskHead( title    => "$lang{tickler} $lang{$on{type}}",
+	    minwidth => 500);
+ }

@@ -1,0 +1,35 @@
+## IGSuite 4.0.0
+## Language: contracts_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+days_to_expire          =>'Days to expire',
+in_revision_contract    =>'In revision contract',
+contract_status		=>'Contract Status in this phase',
+active_contract		=>'Active Contract',
+inactive_contract	=>'Inactive Contract',
+Err_type_phase          =>'Você tem que selecionar um tipo de contrato e fase',
+phase_manager           =>'Gerenciador fases',
+Err_contract_type       =>'Atenção: falta tipo do contrato',
+Err_phase_name          =>'Atenção: falta o nome da fase',
+Err_priority            =>'Atenção: falta a prioridade',
+no_other_revision       =>'Nenhuma revisão do contrato',
+next_revue		=>'Próxima revista',
+contracts_protocol	=>'Protocolo de Contratos',
+new_contract		=>'Novo contrato',
+save_contract		=>'Salvar em Protocolo de Contrato',
+new_phase		=>'Novo estado',
+make_standard_phases	=>'Fazer um modelo estado',
+contracts_phases	=>'Estado dos contratos',
+close_phase		=>'Fechar estado',
+days_before_alert	=>'Avisar antes do dia do término',
+phase_name		=>'Estado',
+contract_duration	=>'Duração',
+phase_bgcolor		=>'Cor de fundo do estado',
+move_to_phase		=>'Mover para estado',
+change_duedate		=>'Mudar dia do vencimento',
+  ));
+
+1;

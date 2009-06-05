@@ -1,0 +1,17 @@
+## IGSuite 4.0.0
+## Language: tiffedit_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+source_doc		=>'Source Document',
+target_doc		=>'Target Document',
+edit_doc		=>'Edit document',
+Err_target_doc		=>'Attention: insert a target document reference',
+Err_source_doc		=>'Attention: insert a source document reference',
+Err_nodoc		=>'Error: Can\'t find document',
+Err_pages_description	=>'Error: check pages descriprion inserted',
+ok_doc			=>'Document made successfully! view new document... ',
+  ));
+
+1;

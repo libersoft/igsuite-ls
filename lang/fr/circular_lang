@@ -1,0 +1,33 @@
+## IGSuite 4.0.0
+## Language: circular_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+Err_missing_subject     => 'Insert a message subject',
+attach_from_igfile      => 'Add an attach from IGFile',
+attach_from_selected    => 'Add an attach from selected file',
+attach_delete_selected  => 'Delete selected attachments',
+attach_delete_all       => 'Delete all attachments',
+limit_size              => 'Attachment limit size',
+circular_content        => 'Content of the circular',
+back_to_igwebmail       => 'Back to IGWebMail',
+send_and_save           => 'Send and Save',
+Err_missing_receiver    => 'Please! select a valid receiver group of contacts',
+share_mode0             => 'Shared message (only header info)',
+share_mode1             => 'Shared message (all message info)',
+share_mode2             => 'Message not shared',
+stop_sending		=> 'Arête envoi',
+send_circular		=> 'Envoi Circulaire',
+sent_messages           => 'Messages envoies',
+sending_message		=> 'Envoi message en course',
+use_text_below		=> 'Utiliser le texte en-dessous',
+notify			=> 'Demande notification de réception',
+replyto			=> 'Réponde à',
+select_group		=> 'Sélectionner un group de contacts pour envoyer le message',
+   ));
+1;
+
+
+
+

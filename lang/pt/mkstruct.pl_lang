@@ -1,0 +1,14 @@
+## IGSuite 4.0.0
+## Language: mkstruct.pl_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+error_alert_msg =>'Este procedimento é iniciado automaticamento pelo IGSuite nos seguintes casos:<br><br>1) ao primeiro início do IG 2) a fim de reconstrução da estrutura da base de dados 3) a fim de atualizar a versão do IG 4) no caso de erros inesperados... No caso de não dar certo l\ contacte o administrador de sistema.',
+next		=>'Próxima',
+procedure_ended	=>'Procedimento finalizado',
+error_logs	=>'Logs erros',
+  ));
+
+1;

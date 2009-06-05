@@ -1,0 +1,12 @@
+## IGSuite 4.0.0
+## Language: users_groups_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+Err_group_name		=> 'Attenzione manca il nome del gruppo',
+Err_group_description	=> 'Attenzione manca una descrizione del gruppo',
+alert_on_delete		=> 'Cancellando il gruppo si eliminano automaticamente tutti i permessi ad esso associati',
+   ));
+
+1;

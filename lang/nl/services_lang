@@ -1,0 +1,30 @@
+## IGSuite 4.0.0
+## Language: services_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+back_to_services	=>'Terug naar diensten lijst',
+close_service		=>'Sluit Diensten',
+do_services		=>'Voer Diensten uit',
+done_services		=>'Afgeronde diensten',
+del_service		=>'Verwijder Diensten',
+Err_service_date	=>'Dienst Datum',
+ext_equipment		=>'Extern materiaal', 
+material		=>'Gereedschap',
+new_service		=>'Nieuw Dienst',
+request_date		=>'Verzoek Datum',
+service_date		=>'Voltooi  Datum',
+service_type		=>'Dienst type',
+service_todo		=>'Onvoltooide Diensten',
+service_note		=>'Dienst Notitie',
+service_check		=>'Diensten Controles',
+today_services		=>'Diensten van vandaag',
+planned_services	=>'Geplande Diensten',
+plan_service		=>'Diensten Planning',
+Warn_service_notes	=>'ATENTIE ! Te registeren service moet worden genoteerd voor volgende redennen...',
+  ));
+
+1;
+
+

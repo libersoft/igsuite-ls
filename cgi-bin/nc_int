@@ -1,0 +1,513 @@
+#! /usr/bin/perl
+# Procedure: nc_int
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	proto		=> sub { CheckPrivilege('nc_int_edit') },
+		protoagg	=> sub { CheckPrivilege('nc_int_edit') },
+		protomodi	=> sub { CheckPrivilege('nc_int_edit') },
+		findshow	=> sub { CheckPrivilege('nc_int_view') },
+		findexec	=> sub { CheckPrivilege('nc_int_view') },
+		delshow		=> sub { CheckPrivilege('nc_int_edit') },
+		delexec		=> sub { CheckPrivilege('nc_int_edit') },
+		docview		=> sub { CheckPrivilege('nc_int_view') },
+		sign		=> sub { CheckPrivilege('nc_int_view') },
+		default_action	=> sub { CheckPrivilege('nc_int_view') });
+
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  my (	$query,
+	$alphabet_selector,
+	$page_selector ) = IG::MkProtocolList(); 
+
+  Header( $page_selector, $alphabet_selector );
+
+  my $base_link = "alphabet=$on{alphabet}&amp;".
+		  "view=$on{view}";
+
+  TaskListMenu
+   (
+    [$lang{number},	"order=id&amp;$base_link"],
+    [$lang{receiver},	"order=contactname&amp;$base_link"],
+    [$lang{issue},	"order=issue&amp;$base_link"],
+    [$lang{closing},	"order=duedate&amp;$base_link"],
+    [Img(src=>"$IG::img_url/user.gif")],
+    [$lang{notes}]
+   );
+
+  DbQuery( "SELECT nc_int.id, nc_int.issue, nc_int.contactname,".
+           " nc_int.owner, nc_int.note, nc_int.priority, nc_int.contactid,".
+           " nc_int.duedate, nc_int.npa, nc_int.docref, users.initial ".
+           "FROM nc_int ".
+           "LEFT JOIN users ON nc_int.owner=users.login ".
+           "WHERE $query" );
+
+  while (my @row = FetchRow())
+   {
+    $row[7] = Blush('Open') if !CkDate($row[7]);
+
+    TaskListItem( [ ParseLink($row[0]) ],
+                  [ $row[2] ],
+                  [ $row[1] ],
+                  [ $row[7] ],
+                  [ $row[10] ],
+                  [ MkLink($row[4]) ] );
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub docview
+ {
+  ## Change id if user request next or previous ID
+  $on{id} = IG::SearchProtocolId( direction => $on{change_id_to},
+                                  id        => $on{id} ) if $on{change_id_to};
+
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'r' ) || return;
+
+  ## retriew document info
+  DbQuery("SELECT * FROM nc_int WHERE id='".DbQuote($on{id})."'");
+  my @row = FetchRow();
+
+  IG::Warn( $lang{Err_nodocument} ) && return if !$row[0];
+  
+  ## adjust some values
+  $row[7] = Blush('Open') if !CkDate($row[7]);
+  $row[4] = MkLink($row[4]);
+  $row[9]  = MkLink($row[9]);
+
+  ## renders the page
+  Header();
+
+  IG::ShowProtocolInfo
+   ( id     => $row[0],
+     title  => $lang{nc_int_protocol},
+     fields => [( [ $lang{contact_name},
+                    "<a href=\"contacts?".
+			      "action=showrecord&amp;".
+			      "contactid=$row[6]\">".
+			       "$row[6] $row[2]</a>" ],
+                  [ $lang{referring},
+                    IG::UsrInf('name',$row[3]) ],
+                  [ $lang{document_integrity},
+                    IG::CkSign(id=>$row[0],owner=>$row[3]) ],
+                  [ $lang{issue},
+                    $row[1] ],
+                  [ $lang{archive_position},
+                    $row[8] ],
+                  [ $lang{document_reference},
+                    $row[9] ],
+                  [ $lang{closing},
+                    $row[7] ],
+                  [ '&nbsp;',
+                    '&nbsp;'],
+                  [ $lang{notes},
+                    $row[4] ],
+                )] );
+
+  ## Related Documents
+  IG::RelatedTo( $on{id}, $row[6] );
+
+  TaskFoot(	comments	=> 'yes',
+		commentid	=> $on{id},
+		commentbackurl	=> "action=docview&amp;id=$on{id}");
+  HtmlFoot();
+  LogD($row[2], 'view', 'nc_int', $on{id});
+ }
+
+##############################################################################
+##############################################################################
+sub sign
+ {
+  my $sign;
+  ## find owner
+  DbQuery("select owner from nc_int where id='".DbQuote($on{id})."'");
+  my $owner = FetchRow();
+  
+  $sign = IG::Sign(     id     => $on{id},
+                        action => 'update') if $owner eq $auth_user;
+
+  LogD('sign', 'update', 'nc_int', $on{id}) if $sign;
+  docview();
+ }
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  ## Check document accessibility
+  my $doc_status = IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' );
+  return if ! $doc_status;
+
+  HtmlHead();
+  TaskHead( title     => $lang{nc_int_protocol},
+            minwidth  => 500 );
+
+  FormHead( cgiaction => 'protoagg',
+            labelstyle=> 'width:130px',
+            autofocus => 'false' );
+
+  Input(    name      => 'id',
+	    type      => 'text',
+            readonly  => $doc_status == -1 ? 0 : 1,
+	    validate  => { pattern   => '^(3\d\d\d\d\d.\d\d)*$',
+                           onerror   => $lang{Err_protocol} },
+            show      => $lang{protocol_number} );
+
+  Input(    type      => 'label',
+            show      => 'File',
+            data      => IG::InputDocBox
+                          ( dir => $IG::htdocs_dir . $IG::S .
+			           $IG::default_lang{nc_int} . $IG::S .
+			           $IG::default_lang{templates} . $IG::S)
+       ) if !$on{print};
+
+  Input(    name      => 'owner',
+            readonly  => $doc_status == -1 ? 0 : 1,
+            type      => 'logins',
+            show      => $lang{rif} );
+
+  Input(    type      => 'sendmode');
+ 
+  Input(    type      => 'contactfinder',
+            validate  => { mandatory => 'true' },
+            extraselection => 1,
+	    show      => $lang{receiver} );
+
+  Input(    name      => 'issue',
+            type      => 'date',
+            value     => $tv{today},
+            validate  => { onerror   => $lang{Err_issue},
+	                   mandatory => 'true' },
+            show      => $lang{issue} );
+
+  Input(    name      => 'duedate',
+            type      => 'date',
+            validate  => { onerror => $lang{Err_end_date},
+	                   mandatory => 'false' },
+            show      => $lang{closing});
+
+  Input(    name      => 'npa',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 50,
+            show      => $lang{archive_position});
+
+  Input(    name      => 'docref',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 30,
+            show      => $lang{document_reference});
+  
+  Input(    name      => 'note',
+            type      => 'textarea',
+            style     => 'width:350px; height:60px;',
+            show      => $lang{notes});
+
+  Input(    name      => 'submit',
+            type      => 'submit',
+	    style     => 'margin-top:15px',
+            show      => $lang{save_asnew_protocol} );
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  ## Validate Form values
+  push @IG::errmsg, IG::FormValidate(); 
+  proto() && return if @IG::errmsg;
+ 
+  $on{id} ||= IG::MkLastNum('nc_int'); 
+ 
+  QuoteParams();
+  DbWrite( action           => 'insert',
+           overwrite_clause => "id = '$in{id}'",
+           table            => 'nc_int',
+           values           => [ $on{id},
+                                 $on{issue},
+                                 $on{contactname},
+                                 $on{owner},
+                                 $on{note},
+                                 '',
+                                 $on{contactid},
+                                 $on{duedate},
+                                 $on{npa},
+                                 $on{docref} ] );
+
+  LogD('', 'insert', 'nc_int', $on{id});
+ 
+  ## build document
+  IG::BuildDoc();
+ }
+
+#############################################################################
+#############################################################################
+sub protomodi
+ {
+  DbQuery("SELECT * FROM nc_int where id='".DbQuote($on{id})."'");
+    (	$on{id},
+	$on{issue},
+	$on{contactname},
+	$on{owner},
+	$on{note},
+	$on{priority},
+	$on{contactid},
+	$on{duedate},
+	$on{npa},
+	$on{docref}	) = FetchRow();
+
+  proto();
+ }
+
+############################################################################
+############################################################################
+sub findshow
+ {
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer
+     ( bottom_space => 0,
+       right_layers
+        =>[(
+              FormHead( name      => 'findnavi',
+		        method    => 'get',
+			target    => 'mainf',
+			autofocus => 'false',
+                        labelstyle=> 'border:0px; width:auto;',
+			cgiaction => 'findexec',
+			float     => 'left' ),
+
+              Input (	type      => 'findable' ),
+
+	      Input (	type      => 'select',
+			name      => 'method',
+			data      => [(['from',	 $lang{with_header}],
+			               ['id',	 $lang{with_protocol}],
+			               ['date',	 $lang{with_date}],
+			               ['npa',	 $lang{with_npa}],
+			               ['notes', $lang{with_notes}])]),
+
+	      Input (	type      => 'text',
+			name      => 'keytofind',
+                        focus     => 'true',
+			value     => $IG::cookie{lastsearch},
+                        style     => 'width:100px; margin-right: -5px;',
+			onblur    => "document.cookie='lastsearch=' + escape(this.value)"),
+
+	      Input (	type      => 'image',
+			name      => $lang{find},
+			src       => "$IG::img_url/${IG::tema}search.gif",
+			alt       => $lang{find}),
+			
+	      FormFoot()
+	  )]
+	 );
+   }
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub findexec
+ {
+  my $query;
+  $IG::set_cookie{lastsearch} = $on{keytofind};
+
+  Header();
+
+  TaskMsg("$lang{nc_int_protocol} - ".
+          "$lang{find}: <strong>$on{keytofind}</strong>",4);
+
+  ## Build Query
+  QuoteParams();
+  if ( length($on{keytofind}) < 2 )
+   {
+    push @IG::errmsg, $lang{Err_find};
+    $query = '1=0';
+   }
+  elsif ($on{method} eq 'id' || $on{keytofind} =~ /3\d\d\d\d\d\.\d\d/)
+   { $query = "nc_int.id ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'from')
+   { $query = "nc_int.contactname ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'npa')
+   { $query = "nc_int.npa ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'date')
+   {
+    $in{keytofind}=CkDate($on{keytofind});
+    $query = "nc_int.issue = '$in{keytofind}'";
+   }
+  elsif ($on{method} eq 'notes')
+   { $query = "nc_int.note ~* '$in{keytofind}'"; }
+
+  TaskListMenu
+   (
+    [$lang{number}],
+    [$lang{receiver}],
+    [$lang{issue}],
+    [$lang{rif}],
+    [$lang{notes}],
+   );
+
+  my $counter = 0;
+
+  DbQuery( "SELECT nc_int.id, nc_int.issue, nc_int.contactname,".
+           " nc_int.owner, nc_int.note, nc_int.priority, nc_int.contactid,".
+           " nc_int.duedate, nc_int.npa, nc_int.docref, users.initial ".
+           "FROM nc_int ".
+           "LEFT JOIN users ON nc_int.owner=users.login ".
+           "WHERE $query ".
+           "ORDER BY nc_int.issue desc, nc_int.id desc");
+
+  while ( my @row = FetchRow() )
+   {
+    ++$counter;
+
+    TaskListItem( [ ParseLink($row[0]) ],
+                  [ $row[2] ],
+                  [ $row[1] ],
+                  [ $row[10] ],
+                  [ MkLink($row[4]) ] );
+   }
+
+  push @IG::errmsg, $lang{no_items} if !$counter && length($on{keytofind}) > 1;
+
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub delshow
+ {
+  Header();
+  TaskMsg( $lang{warn_before_delete}.Br(2).
+  
+           FormHead( cgiaction => 'delexec',
+		     float     => 'left',
+		     onsubmit  => IG::JsConfirm( $lang{are_you_sure} ) ).
+
+	  Input(     type      => 'select',
+		     name      => 'id',
+		     zerovalue => 'true',
+		     style     => 'width: 300px',
+                     data      => 'SELECT id, id, contactname '.
+                                  'FROM nc_int '.
+                                  "where issue>='$tv{start_year}'".
+                                  " and issue<='$tv{end_year}' ".
+                                  'ORDER BY id desc',
+		     show      => $lang{protocol_number} ).
+
+	  Input(     type      => 'submit',
+		     show      => $lang{delete}).
+
+	  FormFoot()
+	  ,2);
+
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub delexec
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  IG::TrashDoc($on{id});
+  DbQuery("delete from nc_int where id='".DbQuote($on{id})."'");
+
+  LogD('', 'delete', 'nc_int', $on{id});
+
+  IG::Redirect('nc_int');
+ } 
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+         TaskHead( title=>$lang{last_documents},
+		   icon=>2,
+		   width=>180 ).
+	 IG::LastDocuments().
+	 TaskFoot();
+ }
+
+############################################################################
+############################################################################
+sub Header 
+ {
+  my ( $page_selector, $alphabet_selector ) = @_;
+
+  HtmlHead( shortcuts => _short_cuts() );
+  TaskHead( title     => $lang{nc_int_protocol},
+	    width     => '100%' );
+
+  HLayer(
+         MkButton( text => $lang{back_to_list},
+                   privilege => $on{action} eq 'docview',
+                   link => 'nc_int' ),
+
+         MkButton( text => $lang{new_protocol},
+                   link => 'nc_int?action=proto',
+                   privilege => CheckPrivilege('nc_int_edit') ),
+
+         MkButton( text => $lang{delete},
+                   link => 'nc_int?action=delshow',
+                   privilege => CheckPrivilege('nc_int_edit') ),
+
+         MkButton( text => $lang{reports},
+                   link => 'reports?table=nc_int',
+                   privilege => CheckPrivilege('nc_int_report') ),
+
+         MkButton( text => $lang{model_mng},
+                   link => 'docmaker?category=nc_int',
+                   privilege => CheckPrivilege('nc_int_template') ),
+
+         $page_selector,
+        ) if !$on{print};
+
+  PrOut $alphabet_selector;
+ }
+
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }

@@ -1,0 +1,11 @@
+## IGSuite 4.0.0
+## Language: archive_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+days_before_alert	=>'Dìas antes de avisar sobre el vencimiento',
+save_archive		=>'Guarda en el protocolo Archivo documentos',
+  ));
+
+1;

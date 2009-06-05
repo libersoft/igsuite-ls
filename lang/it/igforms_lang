@@ -1,0 +1,24 @@
+## IGSuite 4.0.0
+## Language: postit_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+edit_form         => 'Modifica il form',
+add_form_field    => 'Aggiungi un nuovo campo',
+field_label       => 'Etichetta del campo',
+field_type        => 'Tipo del campo',
+field_position    => 'Posizione del campo',
+field_values      => 'Valori del campo',
+field_css_style   => 'Stile CSS del campo',
+label_css_style   =>'Stile CSS dell\'etichetta',
+update_field_data =>'Aggiorna le proprietà del campo',
+text_type         => 'Campo di testo',
+date_type         => 'Campo di tipo data',
+select_type       => 'Campo di tipo select',
+textarea_type     => 'Campo area di testo',
+checkbox_type     => 'Campo di tipo checkbox',
+users_type        => 'Campo utenti IGSuite',
+   ));
+
+1;

@@ -1,0 +1,66 @@
+## IGSuite 4.0.0
+## Procedure: microview_tema
+## Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+$tema = 'microview_';
+
+%clr = (
+	font		  => '#000000',	    ## Text Color
+	font_link	  => '#075686',	    ## Link Color
+	font_button	  => '#075686',	    ## Button Color
+	font_menu	  => '#D6DFF7',	    ## Menu Text color
+	font_menu_title   => '#FFFFFF',	    ## Menu Title Color
+        font_low_evidence => '#999999',     ## Text Color in low evidence
+        font_menu_task    => '#FFFFFF',     ## Menu Task text color
+	font_barra	  => '#FFFFFF',	    ## Task Bar Color
+	bg		  => '#D6DFF7',	    ## Main Background Color
+	bg_menu		  => '#075685',	    ## Menu Background Color
+	bg_menu_title	  => '#075685',     ## Menu Title Background Color
+	bg_menu_item	  => '#075685',     ## Menu Item Background Color
+	bg_barra	  => '#075685',	    ## Task Bar Background Color
+	line_task	  => '#BCBCBC',	    ## Task Border Color
+        border            => '#999999',     ## Borders Color
+        border_low        => '#BCBCBC',     ## Borders Low Color
+	bg_link		  => '#DDDDDD',	    ## Task List Link Background Color
+	bg_list		  => '#F6F6F6',	    ## Task List Background Color
+	bg_task		  => '#FFFFFF',	    ## Task Content Background
+	bg_menu_task	  => '#5a91e1',     ## Task List Head Bacground Color
+	bg_evidence	  => '#FFFF99',	    ## Evidence Background High Color
+	bg_low_evidence	  => '#FFFAC9',	    ## Evidence Background Low Color
+	bg_button	  => '#FFFFFF',	    ## Form Button Background Color
+       );
+
+
+## Task features
+$tema{task}{corner_image} = '';
+$tema{task}{barra_bg_image} = '';
+$tema{task}{favicon} = 'favicon.gif';
+
+
+## Default Fonts Family and size 
+$barrafontname ||= 'arial, verdana, helvetica, sans-serif';
+$barrafontsize ||= '8px';
+$menufontname  ||= 'arial, verdana, helvetica, sans-serif';
+$menufontsize  ||= '8px';
+$tasksfontname ||= 'arial, verdana, helvetica, sans-serif';
+$tasksfontsize ||= '8px';
+$buttonfontname||= 'arial, verdana, helvetica, sans-serif';
+$buttonfontsize||= '8px';

@@ -1,0 +1,3207 @@
+#! /usr/bin/perl
+# Procedure: igsuite
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+ 
+use strict;
+use IG;
+use IG::Menu;
+use IG::Utils;
+IG::MkEnv(__PACKAGE__);
+ 
+my $cnt_users;
+my @taskstatus;
+my @tasks = ( $lang{personal_calendar},
+	      $lang{personal_links},
+	      $lang{todo},
+	      $lang{igsuite_login},
+	      $lang{personal_info},
+	      $lang{news},
+	      $lang{internal_news},
+	      $lang{personal_documents},
+	      $lang{poll},
+	      $lang{weather},
+	      $lang{opportunities},
+	      $lang{opportunities},
+	      $lang{create_quickly}  );
+
+
+IG::DTable( login          => 1,
+            ajaxrequest	   => sub {  !$IG::demo_version
+                                   && $on{ajaxaction} !~ /^(extoptions|copyright)$/x
+                                   ? CheckPrivilege()
+                                   : 1; },
+	    copyright      => 1,
+	    writecomments  => 1,
+	    main           => 1,
+	    documentupload => 1,
+	    zipdocument    => 1,
+	    unzipdocument  => 1,
+	    colourmap	   => 1,
+	    quickfinder    => sub { CheckPrivilege() },
+	    quickdocview   => sub { CheckPrivilege() },
+	    debug	   => sub { CheckPrivilege() },
+	    upload_meter   => sub { CheckPrivilege() },
+	    resourcemode   => sub { CheckPrivilege() },
+	    resourcemodeagg=> sub { CheckPrivilege() },
+	    setsessionyear => sub { CheckPrivilege() },
+	    showsessions   => sub { CheckPrivilege() },
+	    logout	   => sub { CheckPrivilege() }, 
+	    deletecomments => sub { CheckPrivilege() },
+	    summary	   => 1,
+	    blank          => 1,
+	    default_action => 1 );
+
+
+############################################################################
+############################################################################
+sub quickfinder
+ {
+  HtmlHead();
+  FormHead( name      => 'quickfinder',
+            cgiaction => 'quickdocview',
+            autofocus => 'false',
+            target    => 'mainf' );
+
+  Input( type       => 'text',
+         name       => 'id',
+         style      => "background:$IG::clr{bg_menu};".
+                       "color:$IG::clr{font_menu};".
+                       "margin: 0 -5px 0 0; width:60px" );
+
+  Input( type       => 'image',
+         width      => 22,
+         float      => 'left',
+         name       => 'quickfinderimg',
+         src        => "$IG::img_url/filefind.gif",
+         alt        => $lang{find} );
+
+  FormFoot();
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub quickdocview
+ {
+  $on{id} =~ /^([EF1-9]\d\d\d\d\d)(\.\d\d|)$/i;
+  my $id = uc( $1 . ($2 || '.'.$IG::tv{ye}) );
+  IG::Warn( $lang{Err_field}.$id ) && return if !$id;
+
+  my $doc_cgi = ( IG::ProtocolToDocType( $id ) )[1];
+  IG::Warn( $lang{Err_nodocument} ) && return if !$doc_cgi;
+
+  ## let docview() to check protocol privileges
+  IG::Redirect( "$doc_cgi?action=docview&amp;id=$id" );
+ }
+
+############################################################################
+############################################################################
+sub resourcemode
+ {
+  ## Find or set document type
+  my $resource_cgi     = DbQuote( $on{resource_cgi} );
+  my $resource_dbtable = DbQuote( $on{resource_dbtable} );
+
+  ## Try to find missed arguments ( works only if $on{id} is a protocol )
+  ( $resource_cgi,
+    $resource_dbtable ) = ( IG::ProtocolToDocType( $on{id} ) )[1,2]
+                        if    ! $resource_cgi
+                           || ! $resource_dbtable;
+
+  die("Any 'resource_dbtable' specified.\n") if !$resource_dbtable;
+  die("Any 'resource_cgi' specified.\n")     if !$resource_cgi;
+
+  ## Find document owner
+  DbQuery("select owner from $resource_dbtable where id='".DbQuote($on{id})."'");
+  my $doc_owner = FetchRow();
+
+  IG::CheckResourcePrivileges( id               => $on{id},
+                               mode             => 'w',
+                               resource_dbtable => $resource_dbtable,
+                               resource_cgi     => $resource_cgi
+                             ) || return;
+  my @items;
+  my $cnt;
+
+  ## Find users and groups available
+  DbQuery( "select groupid, name from users_groups ".
+           "order by name");
+  while ( my ($g_id, $g_name) = FetchRow() )
+   { $items[$cnt++] = [($g_id, $g_name)]; } 
+
+  $items[$cnt++] = [('-', '-'x15)];
+
+  DbQuery( "select login, name from users ".
+           "where login<>'' and status<>'2' ".
+           "order by name" );
+  while ( my ($u_login, $u_name) = FetchRow() )
+   { $items[$cnt++] = [($u_login, $u_name)]; } 
+
+  ## Read from database r&w privileges
+  DbQuery( "select who, privilege_type from users_privileges ".
+           "where resource_id = '".DbQuote($on{id})."'");
+  while ( my ($who, $privilege) = FetchRow() )
+   { $on{$privilege."_privileges"} .= "$who\n"; }
+  $on{w_privileges} = 'all' if !$on{w_privileges} && !$on{r_privileges};
+
+  HtmlHead( title   => "$lang{privileges_mng} $on{id}" );
+  TaskHead( width   => '100%',
+            icon    => 2,
+            padding => 10,
+            title   => "$lang{privileges_mng} $on{id}" );
+
+  FormHead( cgiaction=>'resourcemodeagg',
+            onsubmit =>"setTimeout('self.close()',500);" );
+  
+  Input(    type => 'hidden',
+            name => 'id' );
+
+  Input(    type => 'hidden',
+            name => 'owner',
+            value=> $doc_owner );
+
+  Input(    type => 'hidden',
+            override => 1,
+            name => 'resource_dbtable',
+            value=> $resource_dbtable );
+
+  Input(    type => 'hidden',
+            override => 1,
+            name => 'resource_cgi',
+            value=> $resource_cgi );
+
+  Input(    show => $lang{privilege_r},
+            name => 'r_privileges',
+            style=> 'height:200px;',
+            type => 'multiselect',
+            data => \@items );
+
+  Input(    show => $lang{privilege_w},
+            name => 'w_privileges',
+            allvalue=> $on{w_privileges} eq 'all' ? 'true' : '',
+            style=> 'height:200px',
+            type => 'multiselect',
+            data => \@items );
+
+  Input(    type => 'submit',
+            style=> 'margin-top:20px',
+            show => $lang{save} );
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub resourcemodeagg
+ {
+  die("Exception 20080730a!\n")
+   if    length( $on{id}               ) > 250
+      || length( $on{resource_dbtable} ) > 15
+      || length( $on{owner}            ) > 32;
+
+  IG::CheckResourcePrivileges( id               => $on{id},
+                               mode             => 'w',
+                               resource_cgi     => $on{resource_cgi},
+                               resource_dbtable => $on{resource_dbtable}
+                             ) || return;
+
+  QuoteParams();
+  DbQuery( "delete from users_privileges ".
+           "where resource_id = '$in{id}'" );
+
+  for (split /\r\n/, $on{r_privileges})
+   {
+    die("Exception 20080730b!\n") if length( $_ ) > 15;
+    DbQuery("insert into users_privileges ".
+            "values ( '$in{id}', '$in{resource_dbtable}', '$_', '$in{owner}', 'r')" );
+   }
+
+  for (split /\r\n/, $on{w_privileges})
+   {
+    next if $_ eq 'all';
+    die("Exception 20080730c!\n") if length( $_ ) > 15;
+    DbQuery("insert into users_privileges ".
+            "values ( '$in{id}', '$in{resource_dbtable}', '$_', '$in{owner}','w')" );
+   }
+
+  HtmlHead( onevent => "onload=\"self.close();\"" );
+  HtmlFoot();
+ } 
+
+############################################################################
+############################################################################
+sub _login_form
+ {
+  ## IG logo
+  PrOut <<END;
+<div style="font-size:24px; position:absolute; top:25px; right:30px;
+            font-weight:bold; text-align:right;">
+ <a style="display:block; color:#EEEEEE" href="http://www.igsuite.org">
+  IGSuite $IG::VERSION</a>
+ <img src="$IG::img_url/hpoints.gif" alt="vp" style="vertical-align:top; border:0;">
+</div>
+<div style="position:absolute; bottom:25px; left:20px;
+            color:#EEEEEE; text-align:left;">
+ <img src="$IG::img_url/hpoints.gif" alt="hp" border=0><br/>
+ <div style="font-size:16px; font-weight:bold">Integrated Groupware Suite</div>
+ <div style="font-size:12px;">
+  <a style="color:#EEEEEE" href="http://www.igsuite.org">http://www.igsuite.org</a> -
+  <a style="color:#EEEEEE" href="mailto:info\@igsuite.org">info\@igsuite.org</a>
+ </div>
+</div>
+END
+
+  ## company name
+  my $company = "<div style=\"margin-right:30px; font-size:20px;".
+                " color:#FFFFFF; font-weight:bold\">$IG::soc_name</div>";
+                
+     $company .= "<div style=\"margin-right:30px;font-size:12px\">".
+                 "<a style=\"color:#DDDDDD\" href=\"mailto:$IG::soc_email\">".
+                 "$IG::soc_email</a></div>" if $IG::soc_email;
+
+  my $form = FormHead( target     => '_top',
+                       mode       => 'html',
+	  	       labelstyle => 'background:transparent; width:auto; '.
+	  	                     'border:0px; color:#FFFFFF; clear:both;',
+		       fieldstyle => 'clear:both;',		 
+		       cgiaction  => 'login').
+		       
+             Input( type => 'hidden', name => 'caller').
+             Input( type => 'hidden', name => 'caller_action').
+
+             ( $on{errmsg} eq $lang{Err_session}
+               ? Input( type=>'hidden',
+		        name=>'warn',
+		        value=>'true')
+               : '').
+
+             Input( show    => $lang{user},
+		    name    => 'login',
+		    size    => 20,
+		    style   => 'background:#054266; color:#FFFFFF;',
+		    maxlen  => 32,
+		    type    => 'text' ).
+
+             Input( show    => 'Password',
+		    maxlen  => 72,
+	 	    style   => 'background:#054266; color:#FFFFFF;',
+		    size    => 20,
+		    value   => '',
+		    override=> 1,
+		    type    => 'password',
+		    name    => 'pwd').
+
+             Input( type=>'submit',
+                    style=>'margin-top:20px; color:#FFFFFF; background:#009c00;',
+		    value=>$lang{log_in}).
+
+             Input( type =>'label',
+                    fieldstyle =>
+                      'font-size:10px;margin-top:25px; margin-left:30px;'.
+                      'color:#BBBBBB; background:transparent;',
+                    float =>'left',
+                    data => IG::ToolTip
+                             ( show    => "[$lang{options}]",
+                               id      => 'extoptions',
+                               width   => '300px',
+                               bgcolor => $IG::clr{bg_task},
+                               fgcolor => '#054266',
+                               body    => Br(4),
+                               onclick => "ajaxrequest(['NO_CACHE',".
+                                                       "'ajaxaction__extoptions'],".
+                                                      "['extoptions_body']);"
+                             )
+                  ).
+                    
+             FormFoot();
+
+  $IG::tema eq '_microview'
+  ? MkTable( style       => 'width:100%; height:100%;',
+             style_c1_r  => 'width:30%;',
+             values => [( [ '&nbsp;', $form ] )]
+           )
+  : MkTable( style       => 'width:100%; height:100%;', # height:100% doesn't work on all browsers
+             style_c1_r  => 'width:45%; text-align:right',
+             style_c2_r  => 'width:10%; text-align:center',
+             style_c3_r  => 'width:45%; text-align:left',           
+             values => [( [$company,
+                           Img( src=>"$IG::img_url/vpoints.gif", alt=>'vp'),
+                           $form ] )]
+           );         
+
+  ## When IG is in a demo version it shows guest login informations
+  if ( $IG::demo_version )
+     {
+      my $access_link = "igsuite?action=login&amp;pwd=guest&amp;login";
+      
+      IG::ToolTip
+             ( show    => "<div style=\"font-size:16; color:#EEEEEE;".
+                          " position:absolute; top:65px; right:25px\">".
+                          "Need a demo account? Click Here!</div>",
+               position=> 'center',
+               width=>'350px',
+               bgcolor => $IG::clr{bg_link},
+               fgcolor=>'#054266',
+               title   => 'IGSuite - Demo version',
+               body    => "<div style=\"width:340px\"></div>".
+                          TaskListMenu(['Login'],
+                  	               ['Password'],
+                  	               ['Language']).
+                          TaskListItem(['franco',
+                                        "$access_link=franco&amp;lang=it"],
+                                       ['guest'],
+                                       ['Italian']).
+                          TaskListItem(['sam',
+                                        "$access_link=sam&amp;lang=en"],
+                 	               ['guest'],
+                 	               ['English']).
+                          TaskListItem(['juan',
+                                        "$access_link=juan&amp;lang=es"],
+                           	       ['guest'],
+                 	               ['Spanish']).
+                          TaskListItem(['gerard',
+                                        "$access_link=gerard&amp;lang=fr"],
+                            	       ['guest'],
+                     	               ['French']).
+                          TaskListItem(['tulio',
+                                        "$access_link=tulio&amp;lang=pt"],
+                                       ['guest'],
+                                       ['Portuguese']).
+                          TaskListFoot(1)
+              );
+     }
+  
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub ajaxrequest
+ {
+  no strict 'refs';
+
+  $on{ajaxaction} =~ /^(ckdate|
+                        update_field_value|
+                        update_igforms_field|
+                        extoptions|
+                        textbeautify|
+                        docinfo|
+                        groupselector|
+                        copyright|
+                        upload_meter_update|
+                        binder|
+                        htmleditor)$/x
+                   ? &{$1}
+                   : die("Bad Ajax request.\n");
+ }
+
+#############################################################################
+#############################################################################
+sub binder
+ {
+  HttpHead( expires => 'now' );
+
+  if ($on{cleanbind})
+   {
+    IG::FileUnlink("$IG::user_dir${S}binder")
+      or die("Can't delete on '$IG::user_dir${S}binder'.\n");
+   }
+
+  ## Check text2link to bind
+  my $document_link;
+  $document_link = "$1.$3" if $on{text2link} =~ /(\d\d\d\d\d\d)(\.|\_)(\d\d)/;
+
+  if ($document_link)
+   {
+    open (TXT, '>>', "$IG::user_dir${S}binder")
+      or die("Can't write on '$IG::user_dir${S}binder'.\n");
+    print TXT "$document_link\n";
+    close (TXT);
+   }
+ 
+  my $html = Input( type    => 'text',
+                    style   => 'width:80px',
+                    onclick => 'this.focus()',
+                    id      => 'text2link').
+
+             Input( type    => 'submit',
+                    style   => 'width:80px',
+                    show    => $lang{add},
+                    onclick => "ajaxrequest(['NO_CACHE',".
+                                            "'ajaxaction__binder',".
+                                            "'text2link__' + getVal('text2link')],".
+                                           "['binder_body']); return true;",
+                    float   => 'left');
+
+  ## show binded docs  
+  if ( open(DAT, '<', "$IG::user_dir${S}binder") )
+   {
+    $html .= "<div style=\"float:left; clear:left; width:160px;".
+             " margin:3px 0px 3px 0px; border:1px solid black;".
+             " background:$IG::clr{bg_task}; padding:3px;\">";
+
+    while (<DAT>)
+     {
+      $html .= Img( src=>"$IG::img_url/mime_mini_document.png",
+                    style=>"align:top; margin: 0px 4px 0px 10px" ).
+	       IG::DirectLink($_)."<br>\n"; 
+     } 
+
+    $html .= "</div>".
+             Input( type    => 'button',
+                    style   => 'width:165px',
+                    onclick => "ajaxrequest(['NO_CACHE',".
+                                            "'ajaxaction__binder',".
+                                            "'cleanbind__1'],".
+                                          "['binder_body']); return true;",
+                    value   => $lang{delete}).
+
+             Input( type    => 'button',
+                    style   => 'width:165px',
+                    onclick => "window.location = 'binders?action=proto&amp;subaction=addspool';",
+                    value   => $lang{bind} ).
+
+             Input( type    => 'button',
+                    style   => 'width:165px',
+                    onclick => "window.location = 'webmail?action=sendigbox';",
+                    value   => $lang{send_by_email} );
+    close(DAT); 
+   }
+   
+  TaskMsg($html, 7, 180);
+ }
+
+#############################################################################
+#############################################################################
+sub update_field_value
+ {
+  HttpHead( expires => 'now' );
+  
+  IG::CGISession( action      => 'update',
+                  formid      => $on{fid},
+                  param_name  => $on{fnm},
+                  param_value => $on{fvl} );
+                  
+  ## response to fake_div
+  PrOut 1;
+ }
+  
+#############################################################################
+#############################################################################
+sub update_igforms_field
+ {
+  HttpHead( expires => 'now' );
+  if ( ! CheckPrivilege('igforms_edit') )
+   {
+    PrOut 1;
+    return;
+   }
+
+  QuoteParams();
+  my $value = $in{$on{fieldid}};
+  DbQuery( query=>[( "delete from form_records ".
+                     "where recordid='$in{recordid}'".
+                     " and fieldid='$in{fieldid}'",
+                     
+                     "insert into form_records values ('$in{recordid}',".
+                     " '$in{fieldid}', '$value')"
+                   )] );
+
+  PrOut '1';
+  return;
+ }
+
+############################################################################
+############################################################################
+sub upload_meter
+ {
+  sleep(1);
+  my $javascript = <<END;
+  <script language="JavaScript">
+   <!--
+    var myMeterInterval;
+    window.onload = refresh_meter;
+    function refresh_meter()
+     {
+      ajaxrequest(['NO_CACHE','ajaxaction__upload_meter_update'],[parse_monitor_info]);
+      myMeterInterval  = window.setInterval('ajaxrequest([\\'NO_CACHE\\',\\'ajaxaction__upload_meter_update\\'],[parse_monitor_info])', 3000);
+     }
+     
+    function parse_monitor_info()
+     {
+      var filename = arguments[0];
+      var totalsize = arguments[1];
+      var partialsize = arguments[2];
+
+      if ( filename == 'end' )
+       {
+        clearInterval(myMeterInterval);
+        window.close();
+       }
+      else
+       {
+        var perc = parseInt( (100 * partialsize) / totalsize );
+        var width_size = parseInt( (200 * perc) / 100 );
+        var myBarDiv = document.getElementById("meter_bar_div");
+        myBarDiv.style.width = width_size;
+        
+        document.getElementById('meter_info_div').innerHTML
+         = filename + '<br>' +
+           partialsize +'byte / '+ totalsize +'byte '+ perc +'%';
+       }
+     }
+   //-->
+  </script>
+END
+
+  HtmlHead( ajax_req   => { ajaxrequest=> "igsuite?action=ajaxrequest" },
+            title      => 'Upload Meter',
+            javascript => $javascript );
+  
+  TaskMsg( "<div style=\"text-align:center\"><strong>Upload Meter</strong>".
+           "<div style=\"border:0px; margin-bottom:10px;\" id=\"meter_info_div\">".
+           "&nbsp;</div>".
+           "<div style=\"padding:1px; margin: 0 auto; width:200px; border:1px solid #000000\">".
+           "<div style=\"text-align:left; width:1px; background:#333399\" id=\"meter_bar_div\">".
+           "&nbsp;</div></div>".
+        
+           Input( type    => 'submit',
+                  show    => $lang{close},
+                  style   => 'margin-top:15px',
+                  onclick => 'self.close();').
+           "</div>"
+           ,6, 220);
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub upload_meter_update
+ {
+  HttpHead( expires => 'now' );
+  my $monitor_file = $IG::temp_dir . $S . $IG::cookie{igsuiteid};
+  if (-e $monitor_file)
+   {
+    open( FH, '<', $monitor_file) or die("Can't read from '$monitor_file'.\n");
+    my ($filename, $totalsize, $partialsize) = <FH>;
+    close(FH);
+    PrOut "${filename}__pjx__${totalsize}__pjx__${partialsize}";
+
+    if ( $totalsize == $partialsize )
+     {
+      unlink $monitor_file or die("Can't delete '$monitor_file'.\n");
+     }
+   }
+  else
+   {
+    PrOut 'end__pjx__0__pjx__0';
+   }
+ }
+ 
+############################################################################
+############################################################################
+sub extoptions
+ {
+  HttpHead( expires => '+30s' );
+
+  Input( type      => 'select',
+         value     => '',
+         override  => 1,
+         name      => 'lang',
+         labelstyle=> 'font-size:10px; width:110px;',
+         style     => 'width:140px',
+         zerovalue => 'true',
+         show      => $lang{language},
+         data      => IG::GetAvailableResource('languages') );
+
+  Input( type      => 'select',
+         value     => '',
+         override  => 1,
+         name      => 'tema',
+         style     => 'width:140px',
+         labelstyle=> 'font-size:10px; width:110px;',
+         zerovalue => 'true',
+         show      => $lang{skin},
+         data      => IG::GetAvailableResource('tema') );
+
+  Input( show      => $lang{screen_size},
+         type      => 'select',
+         zerovalue => 'true',
+         style     => 'font-size:10px; width:140px',
+         labelstyle=> 'font-size:10px; width:110px;',
+         name      => 'screen_size',
+         data      => [( ['noframe','No Frames Fixed Menu (320x200)'],
+                         ['noframe2','No Frames No MenuDiv (320x200)'],
+                         ['medium', 'No Shortcuts with Frames (800x600)',],
+                         ['large',  'All features with Frames (1024x768)'])]);
+
+  Br(2);
+ }
+ 
+############################################################################
+############################################################################
+sub htmleditor
+ {
+  HttpHead( expires => 'now' );
+  
+  my $width  = $on{width}  || 130;
+  my $height = $on{height} || 300;
+
+  Input( type      => 'textarea',
+         value     => '<html><body>' . MkLink( $on{text} ) . '</body></html>',
+	 fieldstyle=> 'width:${width}px; height:${height}px;',
+	 output    => 'onlyfield',
+         style     => 'visibility:hidden;',
+         rows      => 12,
+	 wrap      => 'soft',
+         name      => $on{fieldname} );
+ }
+
+############################################################################
+############################################################################
+sub groupselector
+ {
+  my $style = MkUrl($on{style});
+  HttpHead( expires => 'now' );
+
+  if ($on{gs_subact} eq 'selectgroup')
+   {
+    my $users_link = "javascript:ajaxrequest([".
+                                         "'NO_CACHE',".
+                                         "'ajaxaction__groupselector',". 
+				         "'gs_groupid',".
+				         "'fid__$on{fid}',".
+				         "'fvl__". MkUrl($on{fvl}) ."',".
+                                         "'fnm__$on{fnm}',".
+				         "'style__$style',".
+                                         "'zerovalue__$on{zerovalue}',".
+                                         "'allvalue__$on{allvalue}',".
+                                         "'guestvalue__$on{guestvalue}'".
+				         "],['$on{fnm}_fieldpart'],'GET');";
+
+    HLayer(bottom_space=>0,
+	   layers=>[( Input( type     => 'select',	
+			     allvalue => 'true',
+			     data     => "select groupid, name ".
+					 "from users_groups ".
+					 "order by name",
+			     name     => 'gs_groupid',
+			     output   => 'onlyfield',
+			     onchange => $users_link,
+			     style    => "color:#FFFFFF; background:#F7B531;".
+			                 $on{style} ),
+
+		      Img( src   => "$IG::img_url/group.gif",
+			   title => $lang{show_group_users},
+			   style => 'margin-left:3px',
+                           href  => $users_link )
+		    )]
+	  );
+   }
+  else
+   {
+    IG::CGISession( action      => 'update',
+                    formid      => $on{fid},
+                    param_name  => 'gs_groupid',
+                    param_value => $on{gs_groupid} );
+
+    Input(  type	=> 'groupselector',
+	    output	=> 'onlyfield',
+	    name	=> $on{fnm},
+	    style	=> $on{style},
+	    groupid	=> $on{gs_groupid},
+	    zerovalue	=> $on{zerovalue},
+	    allvalue	=> $on{allvalue},
+	    onchange    => "ajaxrequest([".
+                                      "'NO_CACHE',".
+                                      "'ajaxaction__update_field_value',". 
+				      "'gs_groupid__$on{gs_groupid}',".
+                                      "'fid__$on{fid}',".
+                                      "'fnm__$on{fnm}',".
+				      "'fvl__' + getVal('$on{fnm}'),".
+				      "'style__$style',".
+                                      "'zerovalue__$on{zerovalue}',".
+                                      "'allvalue__$on{allvalue}',".
+                                      "'guestvalue__$on{guestvalue}'".
+				    "],['fake_div'],'GET');",
+	    guestvalue	=> $on{guestvalue} );
+   }
+ }
+
+############################################################################
+############################################################################
+sub documentupload
+ {
+  $on{id} =~ /^(\d)(\d\d\d\d\d)(\.|\_)(\d\d)$/;
+  my $idcode = $1;
+  my $idnum  = $1.$2;
+  my $idyear = $4;
+
+  die("No ID number specified.\n") if !$idnum;
+
+  my $doc_type = (qw(	undef           contracts       offers
+                        nc_int          nc_ext          letters
+                        fax_sent        fax_received    archive
+                        orders))[$idcode];
+
+  if ($on{upfile} && !$on{abort})
+   {
+    my ($ext) = $on{upfile} =~ /^.+(\.[^\.]+)$/;
+    die("You have to specify an extension in your file.\n") if !$ext;
+
+    if (CheckPrivilege($doc_type.'_edit'))
+     {
+      ## Check document protocol directory
+      IG::CkProtocolDir($doc_type, $idyear);
+
+      ## Trash old document
+      IG::TrashDoc($on{id});
+
+      my $status = IG::FileUpload
+                    ( param_name   => 'upfile',
+		      target_dir   => $IG::htdocs_dir . $IG::S .
+				      $IG::default_lang{$doc_type} . $IG::S .
+				      $idyear . $IG::S,
+		      target_file  => IG::Crypt($idnum .'.'. $idyear) . $ext,
+		      can_overwrite=> 'true' );
+
+      LogD('upload a file into protocol', 'upload', $doc_type, $on{id});
+      $on{errmsg} = MkUrl( $status );
+     }
+    else
+     {
+      $on{errmsg} = MkUrl($lang{Err_privileges});
+     }
+   }
+
+  IG::Redirect( "$doc_type?".
+		"action=docview&amp;".
+		"id=$on{id}&amp;".
+		"errmsg=$on{errmsg}" );  
+ }
+
+############################################################################
+############################################################################
+sub zipdocument
+ {
+  my $errmsg;
+  my ( $doc_file, $doc_path, $doc_type ) = IG::ProtocolToFile( $on{id} );
+
+  if ( !$doc_file )
+   {
+    ## it's an empty protocolid ?
+    $errmsg = "No ID number specified or this is not a valid protocol file.";
+   }
+  elsif ( $doc_file =~ /\.zip$/i )
+   {
+    ## this file is already zipped
+    $errmsg = "This file is already zipped!";
+   }
+  else
+   {
+    ## Check Privileges
+    if ( CheckPrivilege( $doc_type.'_edit' ) )
+     {
+      ## Check Archive::Zip module
+      eval( "require Archive::Zip;" );
+
+      if ( $@ )
+       {
+        ## we can't zip the document without Archive::Zip
+        $errmsg = $lang{Err_module_zip};
+       }
+      else
+       {
+        ## ok let's zip
+        my $original_file = $doc_path . $IG::S . $doc_file;
+        my $zipped_file   = $doc_path . $IG::S . IG::Crypt( $on{id} ) . '.zip';
+
+        my $zip = Archive::Zip->new();
+        $zip->addFile( $original_file, $doc_file )
+          or die "Can't zip file '$original_file'\n";
+
+        ## Write new one
+        my $status = $zip->writeToFileNamed( $zipped_file . '.tmp' );
+
+        ## Trash original document
+        IG::TrashDoc( $on{id} );
+
+        ## Move temporary zipped file to protocol file
+        rename ( $zipped_file . '.tmp',
+                 $zipped_file
+               ) or die("Can't move temporary zipped file '$zipped_file'.\n");
+      
+        LogD('zip file', 'compress', $doc_type, $on{id});
+        $errmsg = $lang{file_zip_ok};
+       }
+     }
+    else
+     {
+      ## user can't zip this document
+      $errmsg = $lang{Err_privileges};
+     }
+   }
+
+  ## back to document view
+  IG::Redirect( "$doc_type?".
+		"action=docview&amp;".
+		"id=$on{id}&amp;".
+		"errmsg=" . MkUrl($errmsg) );  
+ }
+
+############################################################################
+############################################################################
+sub unzipdocument
+ {
+  my ( $doc_file, $doc_path, $doc_type ) = IG::ProtocolToFile( $on{id} );
+  my $ext           = '';
+  my $errmsg        = '';
+  my $zipped_file   = $doc_path . $IG::S . $doc_file;
+  my $unzipped_name = IG::Crypt( $on{id} );
+  my $unzipped_file = $IG::temp_dir . $IG::S . $unzipped_name;
+
+  if ( !$doc_file )
+   {
+    ## it's an empty protocolid ?
+    $errmsg = "No ID number specified or this is not a valid protocol file.";
+   }
+  elsif ( $doc_file !~ /\.zip$/i )
+   {
+    ## it's not a zipped file
+    $errmsg = "This file is not zipped!";
+   }
+  else
+   {
+    ## Check Privileges
+    if ( CheckPrivilege( $doc_type.'_edit' ) )
+     {
+      ## Check Archive::Zip module
+      eval( "require Archive::Zip;" );
+
+      if ( $@ )
+       {
+        ## we can't zip the document
+        $errmsg = $lang{Err_module_zip};
+       }
+      else
+       {
+        ## ok let's unzip
+        my $zip = Archive::Zip->new();
+
+        unless ( $zip->read( $zipped_file ) == 0 )
+         { die "Read error reading zipped file '$zipped_file'\n"; }
+
+        foreach my $member ( $zip->members() )
+         {
+          my $memberName = $member->fileName();
+          next if $memberName !~ /^$unzipped_name/i;
+          ($ext) = $memberName =~ /(\....)$/;
+          die("No extension inside zipped file!\n") if !$ext;
+
+          $zip->extractMemberWithoutPaths( $memberName,
+                                           "$unzipped_file$ext" );
+          last;
+         }
+
+        if ( $ext && -e "$unzipped_file$ext" )
+         {
+          ## Trash original document
+          IG::TrashDoc( $on{id} );
+
+          ## Move temporary zipped file to protocol file
+          rename ( "$unzipped_file$ext",
+                   $doc_path . $IG::S . $unzipped_name . $ext )
+            or die("Can't rename temporary file '$unzipped_file$ext' ".
+                   "check file privileges.\n");
+      
+          LogD('unzip file', 'deflate', $doc_type, $on{id});
+          $errmsg = $lang{file_unzip_ok};
+         }
+        else
+         {
+          $errmsg = "Something wrong in deflating '$zipped_file'\n";
+         }
+       }
+     }
+    else
+     {
+      ## user can't zip this document
+      $errmsg = $lang{Err_privileges};
+     }
+   }
+
+  ## back to document view
+  IG::Redirect( "$doc_type?".
+		"action=docview&amp;".
+		"id=$on{id}&amp;".
+		"errmsg=" . MkUrl($errmsg) );  
+ }
+
+#############################################################################
+#############################################################################
+sub docinfo
+ {
+  my ($file_name, $file_dir, $file_proc);
+
+  my $view_icon = Img( src   => "$IG::img_url/igdocview.png",
+                       width => 16,
+                       style => 'float:right',
+                       href  => "docview?action=show_doc&amp;id=$on{id}");
+
+  my $isms_icon = Img( src   => "$IG::img_url/comment_edit.gif",
+                       width => 16,
+                       style => 'float:right',
+                       href  => "javascript:winPopUp('".
+                                "isms?action=composemessage&amp;".
+                                     "onsend=close&amp;".
+                                     "text_msg=$on{id}".
+                                     "',500,220,'composemessage');");
+
+  ## Find resource info
+  my $resource_cgi;
+  my $resource_dbtable;
+  my $resource_id = $on{id};
+  
+  if ( $on{id} =~ /^E\d\d\d\d\d\.\d\d/i )
+   {
+    ## it's an email protocol pid we need a id
+    require IG::WebMail;
+    ($resource_id, undef) = IG::WebMail::PidToId( pid => $on{id} );
+    $resource_cgi     = 'webmail';
+    $resource_dbtable = 'email_msgs';
+   }
+
+  ( $resource_cgi,
+    $resource_dbtable ) = ( IG::ProtocolToDocType( $on{id} ) )[1,2]
+                        if     ! $resource_cgi
+                            || ! $resource_dbtable;
+
+  ## Check document accessibility
+  my $_w =  ( IG::CheckResourcePrivileges( id               => $resource_id,
+                                           mode             => 'w',
+                                           resource_cgi     => $resource_cgi,
+                                           resource_dbtable => $resource_dbtable )
+            )[0]; ## we need splice to force ! wantarray
+  my $_r =  $_w
+         || ( IG::CheckResourcePrivileges( id               => $resource_id,
+                                           mode             => 'r',
+                                           resource_cgi     => $resource_cgi,
+                                           resource_dbtable => $resource_dbtable )
+            )[0]; ## we need splice to force ! wantarray
+
+  my $privileges = $_w
+                 ? $lang{privilege_w}
+                 : $_r
+                   ? $lang{privilege_r}
+                   : undef;
+
+  HttpHead( expires => '+30s' );
+  PrOut "<table style=\"width:300px; font-size:10px;\"><tr><td>";
+
+  if ( !$privileges )
+   {
+    PrOut Blush( $lang{Err_privileges} );
+   }
+  elsif ($on{id} =~ /^E/ && CheckPrivilege('webmail_view'))
+   {
+    require IG::Utils;
+    DbQuery("select pid, issue, subject, sender, sharemode, owner, body ".
+	    "from email_msgs ".
+	    "where pid='".DbQuote($on{id})."'");
+    my @row = FetchRow();
+
+    if (!$row[0])
+     {
+      PrOut "$on{id} - $lang{Err_nodocument}\n";
+     }
+    else
+     {
+      if ($row[4] == 2 && $row[5] ne $auth_user)
+       {
+        PrOut "$lang{email} $on{id}\n"
+       }
+      else
+       {
+        PrOut "<strong>$lang{email}:</strong> $on{id}".
+              "<br><strong>$lang{issue}:</strong> $row[1]\n".
+              "<br><strong>$lang{sender}:</strong> ".MkLink($row[3]).
+              "<br><strong>$lang{subject}:</strong> ".MkLink($row[2]).
+              "<br><strong>$lang{privileges}:</strong> ".$privileges.
+              "<br><strong>$lang{message}:</strong> ".
+              "<span style=\"font-size:10px;\">".
+              IG::TextElide( string => IG::HtmlUntag($row[6]),
+                             length => 200 ).
+              '...</span>';
+       }
+     }
+   }
+  elsif ($on{id} =~ /^F/ && CheckPrivilege('binders_view'))
+   {
+    require IG::Utils;
+    DbQuery("select id, issue, name, note, owner, category ".
+	    "from binders ".
+	    "where id='".DbQuote($on{id})."'");
+    my @row = FetchRow();
+
+    if (!$row[0])
+     {
+      PrOut "$on{id} - $lang{Err_nodocument}\n";
+     }
+    else
+     {
+      PrOut "<strong>$lang{binder}:</strong> $on{id}".
+            "<br><strong>$lang{name}:</strong> $row[2]\n".
+            "<br><strong>$lang{issue}:</strong> $row[1]".
+            "<br><strong>$lang{owner}:</strong> ".IG::UsrInf('name',$row[4]).
+            "<br><strong>$lang{category}:</strong> ".$row[5].
+            "<br><strong>$lang{notes}:</strong> $row[3] ";
+     }
+   }
+  elsif ( $on{id} =~ /^[0-9]/
+	  && ( ($file_name,
+	        $file_dir,
+	        $file_proc ) = IG::ProtocolToFile( $on{id} ) )
+ 	  && CheckPrivilege($file_proc.'_view')
+        )
+   {
+    my ($lasttime, $lastdate, @file_info);
+    if ($file_name)
+     {
+      @file_info = stat("$file_dir$S$file_name");
+
+      ## Adjust last update date
+      my ($s1,$m1,$h1,$g1,$me1,$a1,$w1,$y1,$i1) = localtime($file_info[9]);
+      $lasttime = sprintf("%02d:%02d:%02d", $h1, $m1, $s1);
+      $lastdate = IG::GetDateByFormat( $g1, ($me1+1), (1900+$a1) );
+     }
+
+    DbQuery("select contactname, note, issue from $file_proc ".
+ 	    "where id='".DbQuote($on{id})."'");
+    my ($contactname, $note, $issue) = FetchRow();
+    if (!$contactname)
+     {
+      PrOut "$on{id} - $lang{Err_nodocument}\n";
+     }
+    else
+     {
+      PrOut $view_icon . $isms_icon .
+            "<strong>$lang{contact_name}:</strong> ".MkEntities($contactname).
+	    "<br><strong>$lang{issue}:</strong> $issue\n". 
+	    "<br><strong>$lang{document_integrity}</strong> ".IG::CkSign(id=>$on{id}).
+	    "<br><strong>$lang{notes}:</strong> ".($note ? MkEntities($note) : '').
+	    "<br><strong>$lang{privileges}:</strong> ".$privileges.
+	    "<div style=\"font-size:10px; border-top: 1px gray solid; margin-top: 15px; color: gray\">$lang{last_change} ".
+	    "$lastdate $lasttime - $lang{size} ".
+	    IG::MkByte($file_info[7]) . "</div>";
+     }
+   } 
+  else
+   {
+    PrOut "$on{id} - $lang{Err_nodocument}\n";
+   }
+
+  PrOut "</td></tr></table>\n"; 
+ } 
+
+#############################################################################
+#############################################################################
+sub textbeautify
+ {
+  HttpHead( expires => 'now' );
+  my $text = $on{text};
+  require IG::TextBeautify;
+  Text::Beautify::enable_all();
+  $text = Text::Beautify::beautify($text);
+  PrOut $text;
+ }
+
+#############################################################################
+#############################################################################
+sub ckdate
+ {
+  HttpHead( expires => 'now' );
+  my $date = CkDate( $on{date} );
+  PrOut $date;
+ }
+
+#############################################################################
+#############################################################################
+sub logout
+ {
+  if ( ($on{user} || $on{sid}) && CheckPrivilege('sys_user_admin') )
+   {
+    IG::Logout( $on{user}, $on{sid} );
+    IG::Redirect("igsuite?action=showsessions");
+   }
+  else
+   {
+    IG::Logout( $auth_user, $IG::cookie{igsuiteid} );
+    IG::Redirect('igsuite');
+   }
+
+  LogD('', 'logout', 'users', $on{user})
+ }
+
+#############################################################################
+#############################################################################
+sub showsessions
+ {
+  require IG::HTTPBrowserDetect;
+
+  IG::CleanSessions();
+  HtmlHead( title => $lang{active_sessions} );
+  TaskHead( title => $lang{active_sessions} );
+
+  opendir (DIR,$IG::logs_dir)
+    or die("Can't open '$IG::logs_dir' to look how many session are open.\n");
+
+  TaskListMenu (
+		['Login'],
+		[$lang{user}],
+		['Host'],
+		['Browser'],
+		['OS'],
+		['Session start'],
+		['Inactive from'],
+		[],
+		);
+
+  for ( sort { my($a1)=$a=~/\-(\d+)\-/; my($b1)=$b=~/\-(\d+)\-/; $a1<=>$b1; }
+        grep ( /^[A-Za-z\_][A-Za-z0-9\_\.\-]{1,31}\-session\-\d+\-\w+$/,
+               readdir(DIR) )
+      )
+   {
+    my ($user) = $_ =~ /^([A-Za-z\_][A-Za-z0-9\_\.\-]{1,31})\-session\-\d+\-\w+$/;
+    DbQuery( $user ne 'guest'
+             ? "select * from system_log ".
+	       "where".
+	       " level='login' and".
+	       " targettable='users' and".
+	       " targetid='$user' ".
+ 	       "order by date desc, time desc limit 1"
+ 	       
+             : "select * from system_log ".
+               "where".
+               " level='login' and".
+               " targetid='$user' and".
+               " text~*'$_' ".
+               "order by date desc, time desc limit 1" );
+
+    my @row = FetchRow();
+
+    my ($id, $user_agent_string) = split /\,/,$row[8];
+    my $browser = new HTTP::BrowserDetect($user_agent_string);
+
+    my $who_is_link = $row[7] =~ /^\d+\.\d+\.\d+\.\d+$/
+                    ? "http://www.dnsstuff.com/tools/ipall.ch?ip=$row[7]"
+                    : "http://www.dnsstuff.com/tools/ptr.ch?ip=$row[7]";
+
+    TaskListItem (
+		[$row[3]],
+		[IG::UsrInf('name',$row[3])],
+		[$row[7], $who_is_link],
+		[lc $browser->browser_string()],
+		[lc $browser->os_string()],
+		["$row[4] - $row[5]","","nowrap"],
+		[int((-M "$IG::logs_dir${S}$_")*24*60) . ' min',
+		 '', 'align="right"'],
+		[Img(	src=>"$IG::img_url/disconnect.gif",
+			title=>$lang{logout} ),
+		 CheckPrivilege("sys_user_admin")
+		 ? "igsuite?action=logout&amp;".
+		           "user=$row[3]".
+		           ( $row[3] eq 'guest' ? "&amp;sid=$_" : '')
+		 : ''],
+		);
+   }
+
+  TaskListFoot();
+  close(DIR);
+
+  Input( type    => 'button',
+         show    => $lang{update},
+         onclick => "document.location='igsuite?action=showsessions';" );
+
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub writecomments
+ { 
+  my $id = MkId();
+
+  ## IG user can't be guests
+  if ($auth_user ne 'guest')
+   {
+    $on{commentauthorname}  = IG::UsrInf('name');
+    $on{commentauthoremail} = IG::UsrInf('email');
+   }
+  else
+   {
+    $on{notifyowner} = 'N'; ## no notification for guests
+   }
+
+  $on{commentbackurl} &&= "?$on{commentbackurl}";
+
+  if ( $auth_user ne 'guest' || $on{captcha} )
+   {
+    ## Allow only short comments
+    if (length($on{commenttext}) > 1000)
+     {
+      IG::Redirect("$on{commentproc}$on{commentbackurl}&amp;errmsg=".
+		   MkUrl("Comment too long, please rewrite it!") );
+      return;
+     }
+
+    if ($on{commentproc} && $on{commentauthorname} && $on{commenttext})
+     {
+      QuoteParams();
+      DbQuery( "select commentowner, notifyowner ".
+               "from comments ".
+	       "where referenceproc = '$in{commentproc}'".
+	       "  and referenceid = '$in{commentid}' ".
+	       "order by date, time" );
+      my %usersToNofify; ## memo of users to be notified for new comments
+      while( my ($owner, $notify) = FetchRow() )
+       {
+        next if $owner eq 'guest';
+        $usersToNofify{$owner} = $notify eq 'S';
+       }
+
+      DbWrite( table  => 'comments',
+               action => 'insert',
+	       values => [ $id,
+	                   $on{commentid},
+		  	   $on{commentproc},
+			   $tv{today},
+			   $tv{time},
+			   $on{commentauthorname},
+			   $on{commentauthoremail},
+			   $on{commentauthorurl},
+			   $on{commenttext},
+			   $auth_user,
+			   ($on{notifyowner} ? 'S' : 'N') ] );
+
+      ## change notification request for all user comments
+      ## if he changed the previous choice 
+      DbQuery( "update comments ".
+               "set notifyowner='".($on{notifyowner} ? 'S' : 'N')."' ".
+	       "where referenceproc = '$in{commentproc}'".
+	       "  and referenceid = '$in{commentid}' ".
+	       "  and commentowner = '$auth_user'" )
+	  if $on{notifyowner} ne $usersToNofify{$auth_user};
+
+      LogD("attached to $on{commentid} of $on{commentproc}",
+	   'insert',
+	   'comments',
+	   $id);
+
+      my $commentproc = $on{commentproc}.
+                        ( $on{commentbackurl} ? $on{commentbackurl} : '?a=1');
+ 
+         $commentproc .= '&amp;ig=1&amp;disableautolang=1'
+			 if    $on{commentproc} eq 'igwiki'
+			    && $commentproc !~ /ig\=1/;
+
+      ## always notify the comment owner
+      $usersToNofify{$on{commentowner}} = 1 if $on{commentowner};
+      
+      ## notify all user that have requested the notification
+      for my $user (keys %usersToNofify)
+       {
+        next if $user eq $auth_user || !$usersToNofify{$user};
+        IG::SendIsms( receiver => $user,
+		      body     => "$on{commentproc}: [$IG::cgi_url/$commentproc|".
+				  "$lang{new_comments} $on{commentauthorname}]");
+       }
+     }
+   }
+
+  IG::Redirect("$on{commentproc}$on{commentbackurl}");
+ }
+
+#############################################################################
+#############################################################################
+sub deletecomments
+ { 
+  $on{commentproc} .= "?$on{commentbackurl}" if $on{commentbackurl};
+
+  if ((CheckPrivilege('sys_delete_comments') ||
+       $on{commentowner} eq $auth_user) && $on{commentid}
+     )
+   {
+    DbQuery("delete from comments where id='".DbQuote($on{commentid})."'");
+    LogD('', 'delete', 'comments', $on{commentid});
+   }
+  elsif ($auth_user ne 'guest' && $on{commentid})
+   {
+    DbQuery("delete from comments ".
+	    "where id='".DbQuote($on{commentid})."' and commentowner='$auth_user'");
+
+    LogD('', 'delete', 'comments', $on{commentid});
+   }
+
+  IG::Redirect( $on{commentproc} );
+ }
+
+#############################################################################
+#############################################################################
+sub summary
+ {
+  IG::CleanSessions(); 
+  
+  ## Cookie per la gestione dell'apertura e chiusura dei tasks
+  $IG::set_cookie{tasks}{expires} = '+1M';
+  if ($IG::cookie{tasks})
+   {
+    for (0..12)
+     {
+      $taskstatus[$_] = substr($IG::cookie{tasks},$_,1);
+      $taskstatus[$_] = not($taskstatus[$_]) if $on{$_};
+      $IG::set_cookie{tasks}{value} .= ($taskstatus[$_]+0);
+     }
+   }
+  else
+   { @taskstatus = (1,1,1,1,1,1,1,1,1,1,1,1,1);}
+  $IG::set_cookie{tasks}{value} ||= 1111111111111;
+
+  if (!$auth_user || $auth_user eq 'guest' || $on{errmsg})
+   { $IG::clr{bg} = $IG::clr{bg_barra}; }
+
+  ## Check first use of IG to create the first user
+  DbQuery("SELECT COUNT(*) FROM users ".
+          "where (login<>'' and status<>'2') or login='$IG::login_admin'");
+  $cnt_users = FetchRow();
+
+  ## Print Html header and check cookies availability 
+  HtmlHead( align     => 'center',
+            javascript=> CheckPrivilege()
+                      ## Rss ticker
+                      ?  "<script src=\"rssticker?action=rssticker_js\"".
+                         " type=\"text/javascript\"></script>"
+                      ## Open the script on _top automatically
+                      :  '<script type="text/javascript">'.
+                         'if (window.top != window)'.
+                         ' window.top.location = window.location;</script>',
+            onevent   => "onload=\"if (!ckCookie())".
+                         " { alert('".IG::JsQuote($lang{Err_disabled_cookies})."') }\"" );
+
+  if ($cnt_users==0 && $auth_user ne 'guest')
+   {
+    sleep(1);
+    ## Insert user admin and give him default privileges
+    DbQuery("INSERT INTO users VALUES ('Administrator', 'admin', '', '',".
+	    " '', '', '', '', '$IG::soc_name', '', '', '$tv{empty_date}',".
+	    " '','','','','','','$tv{empty_date}','','','$tv{empty_date}',".
+	    " '$tv{empty_date}', '', '', '', '1', '$tv{empty_date}', '',".
+	    " '$IG::login_admin', '$IG::pwd_admin', '', '',".
+            " '01000000111110101101110100001111111111111111111011111100011111111111011011111111011110101111101100011111111111111111111000011111011111',".
+	    " '','','','$tv{empty_date}','','','','$tv{empty_date}',0,'',".
+	    " '','$tv{today}','$tv{today}', '', '$tv{empty_date}', '', '')");
+
+    ## Insert over the desktop a link to IG official site and wiki local site
+    DbQuery("delete from postit ".
+	    "where id='igofficialsite' or id='igwikilocalsite' or id='igwikiwizard'");
+
+    DbQuery("insert into postit values ('http://www.igsuite.org',".
+	    " 'Official Site','http','$IG::login_admin','igofficialsite',".
+	    " '_blank','','0','',0)");
+
+    DbQuery("insert into postit values".
+	    " ('$IG::cgi_url/igwiki',".
+	    " 'Your IGWiki Portal','http','$IG::login_admin','igwikilocalsite',".
+	    " '_blank','','0','',0)");
+
+    DbQuery("insert into postit values".
+	    " ('$IG::cgi_url/igwiki_wizard',".
+	    " 'IGWiki Wizard','http','$IG::login_admin','igwikiwizard',".
+	    " '_blank','','0','',0)");
+
+    ## Print a wellcome message
+    PrOut MkTable( style     => 'width:70%; margin-top:100px; '.
+                                'border:1px solid #00000',
+                   style_c_r => 'padding:5px; background:#FFFFFF; '.
+                                'color:#000000;',
+                   values    => [( [ HTitle( level => 2,
+                                             style => 'margin-bottom:15px',
+                                             title => "IGSuite $IG::VERSION" ).
+                                     "$lang{wellcome_message}<br><br>".
+                                     "<strong>IGSuite Staff</strong><br>".
+                                     "staff\@igsuite.org" ] )] );
+
+    HtmlFoot();
+    return;
+   }
+
+  ## In case of any authenticated user or wrong password
+  if (!$auth_user || $auth_user eq 'guest' || $on{errmsg})
+   {
+    _login_form();
+    return;
+   }
+
+
+  if ( !$on{print} )
+   {
+    ## summary header
+    PrOut "<table border=0 cellspacing=4 cellpadding=0 width=\"100%\">
+	   <td colspan=2>
+	   <table cellspacing=0 cellpadding=0 style=\"width:100%; background-color:$IG::clr{bg_barra}\">
+	   <td $IG::imgbgbarra><span onclick=\"goOver(0,'menu')\">";
+
+    IG::ToolTip(title	=> $lang{binder},
+		onclick	=> "ajaxrequest(['NO_CACHE','ajaxaction__binder','a__1'],['binder_body']);",
+		id	=> 'binder', 
+		body	=> '<br><br><br>',
+		show	=> Img( title => 'IG',
+		                width => 23,
+		                src   => "$IG::img_url/$IG::tema{task}{favicon}" ),
+		width	=> 190 );
+
+    PrOut "</span></td>
+	   <td width=\"100%\" class=\"littlebar\" $IG::imgbgbarra>
+                <a href=\"javascript:winPopUp('igsuite?action=copyright',600,580,'copyright')\" style=\"color: $IG::clr{font_barra}\">
+		IGSuite $IG::VERSION &copy; Licence</a>
+		&nbsp;-&nbsp;$IG::soc_name - 
+		$auth_user\@$IG::remote_host</td>
+	   <td align=\"right\" class=\"littlebar\" nowrap $IG::imgbgbarra>
+		<a href=\"igsuite?action=logout\" target=\"_top\">
+		$lang{logout}
+		<img src=\"$IG::img_url/disconnect.gif\" align=\"absmiddle\">
+		</a>&nbsp;&nbsp;
+		<a href=\"preferences\">$lang{settings}
+		<img src=\"$IG::img_url/prefs.png\" align=\"absmiddle\"
+		 width=16 height=16>
+		</a>&nbsp;&nbsp;
+		<a href=\"javascript:winPopUp('help?action=get_help&amp;script=igsuite&amp;scriptaction=default_action',680,580,'Help');\">Help
+		<img src=\"$IG::img_url/microview_help.gif\" align=\"absmiddle\"
+		 width=16 height=16>
+		</a>&nbsp;&nbsp;</td>
+	   </tr></table></td></tr>\n\n";
+
+    if ($IG::screen_size =~ /^noframe/)
+     {
+      personal_info();
+      internal_news();
+      personal_events();
+      todo_items();
+      opportunities();
+      personal_link();
+      show_polls();
+      show_news(); 
+      show_weather();
+      personal_documents();
+     }
+    else
+     {
+      ## left column
+      PrOut "<td valign=\"top\" align=\"center\" width=\"100%\">\n\n";
+      PrOut "\n\n<table border=0 cellspacing=0 cellpadding=4 width=\"100%\">\n";
+      personal_events();
+      opportunities();
+      personal_link();
+      todo_items();
+      PrOut "</table>\n";  
+
+      ## right column
+      PrOut "</td>\n\n<td valign=\"top\" align=\"center\">";
+      PrOut "<table border=0 cellspacing=0 cellpadding=4 width=280>\n";
+      quickaccess();
+      personal_info();
+      opportunities_chart();
+      show_polls();
+      internal_news();
+      show_news();
+      show_weather();
+      personal_documents();
+      PrOut "</table>\n\n\n</td></tr>\n";
+     }
+
+    ## summary header
+    PrOut "<td colspan=2 align=center $IG::imgbgbarra>".
+	  "<table width=\"99%\" cellspacing=0 cellpadding=0 bgcolor=\"$IG::clr{bg_menu}\"><td $IG::imgbgbarra>\n";
+
+    for (0..12)
+     {
+      if (!$taskstatus[$_]) 
+       {
+        PrOut "&nbsp;<a href=\"igsuite?action=summary&amp;$_=1\"".
+              " style=\"color: $IG::clr{font_barra}\">".
+              Img(src=>"$IG::img_url/up_inline.gif", align=>'top').
+              "$tasks[$_] |</a>\n";
+       }
+     }
+
+    PrOut "</td><td align=right $IG::imgbgbarra>".
+	  Img( href  => "igsuite?action=summary&amp;print=on",
+	       src   => "$IG::img_url/printable_stampa.gif",
+	       title => $lang{print},
+	       width => 16 ).
+	  "</td></tr></table></td></tr>\n\n";
+
+    PrOut "</table>";
+   }
+  else
+   {
+    ## summary table
+    PrOut "<table border=0 cellspacing=20 cellpadding=4 bgcolor=\"$IG::clr{bg}\">\n";
+
+    ## summary header
+    PrOut "<td align=\"center\">
+	   <table cellspacing=0 cellpadding=0 width=\"99%\" bgcolor=$IG::clr{bg_barra}>
+	   <td bgcolor=$IG::clr{bg_menu}>
+		<span style=\"color:$IG::clr{font_menu}; font-weight:bold\">
+		$IG::soc_name<br>".
+		IG::UsrInf('name').
+		"<br>$IG::soc_address<br>$IG::soc_cap $IG::soc_city
+		</span>
+	   </td>
+	   <td bgcolor=$IG::clr{bg_menu} valign=\"top\" align=\"right\">
+		<span style=\"font-size:28px\">IGSuite 3.2</span><br>
+		Your Office in a Box
+	   </td>
+	   </tr></table><hr><br></td></tr>\n\n";
+
+    personal_events();
+    todo_items();
+    internal_news();
+    PrOut "<td align=\"right\"><hr>$IG::soc_city $tv{today}</td></tr>";
+    PrOut "</table>";
+   }
+  HtmlFoot();
+ }
+
+##############################################################################
+##############################################################################
+sub _event_icons
+ {
+  my ($event_reservation, $event_sharemode, $event) = @_;
+
+  if ( $event_reservation == 1 )
+   {
+    $event = Img( src   => "$IG::img_url/group_red.gif",
+                  align => 'absmiddle',
+                  width => 16,
+                  style => 'margin-right:2px',
+                  title => $lang{private} ).
+             $event;
+   }
+  elsif( $event_sharemode eq 'all' )
+   {
+    ## it's a public event
+    $event = Img( src   => "$IG::img_url/group_green.gif",
+                  align => 'absmiddle',
+                  width => 16,
+                  style => 'margin-right:2px' ).
+             "<span style=\"color:green;\">$event</span>";
+   }
+
+  return $event;
+ }
+
+#############################################################################
+#############################################################################
+sub personal_events
+ {
+  my $html;
+  my %memo_dejavu;
+  return 0 if !$taskstatus[0];
+
+  my %onquestion_events;
+  my %toconfirm_events;
+  my $invitationinquestion_button;
+  my $invitationtoconfirm_button;
+  
+  IG::CalendarEventsToConfirm( $auth_user,
+                               \%onquestion_events,
+                               \%toconfirm_events );
+
+  $invitationinquestion_button = 
+		         Img( href => "calendar?".
+                                      "right_pane=invitationinquestion",
+			      src=>"$IG::img_url/alert_inline.gif",
+			      title=>$lang{invitationinquestion})
+         if %onquestion_events;
+
+  $invitationtoconfirm_button =
+		         Img( href => "calendar?".
+                                      "right_pane=invitationtoconfirm",
+			      src=>"$IG::img_url/alert_blink_inline.gif",
+			      title=>$lang{invitationstoconfirm})
+         if %toconfirm_events;
+
+  $html = "<td>\n".
+	  TaskHead( width=>'100%',
+		    title=> "$lang{calendar} - $IG::days[$tv{wday}] $tv{day} $IG::months{$tv{month}}[0] $tv{year}",
+		    icons=> $invitationinquestion_button.
+		            $invitationtoconfirm_button.
+		            Img( href => 'calendar',
+				 src=>"$IG::img_url/add_inline.gif",
+				 title=>$lang{add}).
+                            Img( href => 'calendar',
+				 src=>"$IG::img_url/open_inline.gif",
+				 title=>$lang{maximize}).
+			    Img( href=>"igsuite?action=summary&amp;0=1",
+				 src=>"$IG::img_url/close_inline.gif",
+				 title=>$lang{close}),
+		    icon=>2).
+	  '<table width="100%">';
+
+  my $dayStyle = 'align="right" style="font-weight:bold"';
+
+  my $totRow = 0;
+  for my $nday (0..6)
+   {
+    my $date = IG::SumDate( $tv{day}, $tv{month}, $tv{year}, $nday);
+    my ($calendarday, $calendarmonth, $calendaryear ) = IG::GetValuesByDate($date);
+    my $week_day = IG::GetDayByDate($calendarday, $calendarmonth, $calendaryear);
+
+    my $dayLink = "calendar?user=$IG::auth_user&amp;".
+                           "right_pane=daily&amp;".
+			   "calendarmonth=$calendarmonth&amp;".
+			   "calendaryear=$calendaryear&amp;".
+			   "calendarday=$calendarday";
+
+    DbQuery("SELECT calendar.reserved, calendar.starttime, calendar.endtime,".
+	    " calendar.eventtext, calendar.eventid, calendar.fromuser,".
+	    " calendar.touser, calendar.contactid, contacts.contactname,".
+	    " calendar.eventtype, calendar.parent, calendar.confirmation,".
+	    " equipments.description, bookings.claimed, bookings.approvedby,".
+	    " contacts.tel1 ".
+	    "FROM calendar left join contacts ".
+	    "ON calendar.contactid = contacts.contactid ".
+            "left join bookings".
+            " on (calendar.parent='' and bookings.eventid=calendar.eventid)".
+            " or (calendar.parent<>'' and bookings.eventid=calendar.parent) ".
+	    "left join equipments on equipments.id = bookings.equipmentid ".
+	    "WHERE calendar.startdate<='$date' and ". 
+            " (calendar.repeatend>='$date' or calendar.repeatend is null) and".
+	    " (calendar.touser='$IG::auth_user' or calendar.touser='all') and".
+	    " (calendar.day=$calendarday or calendar.day=0) and".
+	    " (calendar.month=$calendarmonth or calendar.month=0) and".
+	    " (calendar.year=$calendaryear or calendar.year=0) and".
+	    " (calendar.weekday=$week_day or calendar.weekday=8) ".
+	    "ORDER BY CASE WHEN calendar.eventtype=5 THEN 2500 else calendar.starttime end");
+
+    my $events_cnt = 0;
+    while (my @row = IG::FetchGroupedRows( group_by_indexes  => 4, 
+                                           to_concat_indexes => [12,13,14] ))
+     {
+      ($memo_dejavu{$row[4]}++ && next) if $row[9] == 5;
+      $row[3] = MkLink($row[3]);
+      $row[3] .= " - $lang{phone_number} $row[15]" if $on{print} || $row[9]==2;
+      $row[3] = _event_icons( $row[0], $row[6], $row[3] );
+
+      my $invitation_icon;
+      if( $row[10] ) 
+       {
+        $invitation_icon = 
+             Img( src   => "$IG::img_url/questionmark-blue-blink.gif",
+                  align => 'absmiddle',
+                  width => 16,
+                  style => 'margin-right:2px',
+                  title => $lang{invitation_toconfirm} )
+             if $row[11] == 0;
+
+        $invitation_icon = 
+             Img( src   => "$IG::img_url/rejected.png",
+                  align => 'absmiddle',
+                  width => 16,
+                  style => 'margin-right:2px',
+                  title => $lang{invitation_rejected} )
+             if $row[11] == 2;
+       }
+      
+      ## this assignment may happen only for parent event to be confirmed
+      $invitation_icon = 
+             Img( src   => "$IG::img_url/questionmark-blue-blink.gif",
+                  align => 'absmiddle',
+                  width => 16,
+                  style => 'margin-right:2px',
+                  title => $lang{invitation_toconfirm} )
+             if !$invitation_icon && $toconfirm_events{$row[4]};
+
+      $invitation_icon = 
+             Img( src   => "$IG::img_url/questionmark-blue.png",
+                  align => 'absmiddle',
+                  width => 16,
+                  style => 'margin-right:2px',
+                  title => $lang{invitationinquestion} )
+             if !$invitation_icon && $onquestion_events{$row[4]};
+
+      $row[3] = $invitation_icon . $row[3];
+
+      $row[3] = IG::BookingNotes( description   => $row[3],
+                                  touser        => $row[6],
+			          equipmentlist => $row[12],
+			          claimed       => $row[13],
+			          approvedby    => $row[14] );
+ 
+
+      ## show contact linked to the event
+      if ($row[7])
+       { 
+        $row[3] = "<a href=\"contacts?".
+                            "action=showrecord&amp;".
+                            "contactid=$row[7]\"".
+                  " target=\"mainf\">$row[8]</a> ".
+                  $row[3]; 
+       }
+
+      my $bold = $nday == 0 ? ' style="font-weight: bold"' : '';
+
+      my $eventLink = "calendar?".
+                      "eventid=$row[4]&amp;".
+                      "user=$auth_user&amp;".
+                      "calendarday=$calendarday&amp;".
+                      "calendarmonth=$calendarmonth&amp;".
+                      "calendaryear=$calendaryear";
+
+      my @array;
+      push @array, [( $nday == 0 ? $lang{today}
+                          : $nday == 1 ? $lang{tomorrow}
+                          : "$IG::days[$week_day]&nbsp;$calendarday"),
+                      $dayLink,
+                      "$dayStyle %%ROWSPAN%%"]
+
+	   if $events_cnt == 0; ## %%ROWSPAN%% will be replaced out of while()
+
+      $row[1] = substr("0".$row[1],-4,2).":".substr($row[1],-2,2);
+      $row[2] = substr("0".$row[2],-4,2).":".substr($row[2],-2,2);
+      push @array,
+	     [$row[9] == 5 ? "Memo" : "$row[1] - $row[2]",
+	      $eventLink,
+	      'style="font-size:10px; white-space:nowrap;'.
+	              ($nday == 0 ? ' font-weight:bold':'').'"',
+              'link'],
+	     [$row[3], '', 'width="100%"'.$bold];
+
+      $html .= IG::TaskListItem( @array );
+      $events_cnt++;
+     }
+    $html .= IG::TaskListItem( [$lang{today}, $dayLink, $dayStyle, 'link'],
+                               ['', '', '', 'link'], 
+		     	       [$lang{no_event}] ) 
+	     if $nday == 0 && $events_cnt == 0;
+	     
+    $html =~ s/\%\%ROWSPAN\%\%/rowspan=$events_cnt/;
+    last if $totRow++ >= 10;
+   }
+
+  $html .= TaskListFoot(1).
+           TaskFoot().
+           "</td></tr>\n";
+
+  ## remove row under mouse underline: bad effect with rowspan
+  my $quotedTR = '\<tr onmouseover\=\"setRowBorder\(this\,\'1px \#[0-9a-fA-F]+ solid\'\)\;\" onmouseout\=\"setRowBorder\(this\,\'1px \#[0-9a-fA-F]+ solid\'\)\;\"\>';
+  $html =~ s/$quotedTR/\<tr\>/g;
+
+  PrOut $html;
+  return(1);
+}
+
+#############################################################################
+#############################################################################
+sub personal_link
+ {
+  return 0 if !$taskstatus[1];
+  PrOut "<td>\n";
+
+  TaskHead(	width=> '100%',
+	 	title=> $lang{personal_links},
+		icons=> Img( href=>"postit?action=proto",
+			     src=>"$IG::img_url/add_inline.gif",
+			     title=>$lang{add}).
+                        Img( href=>"postit",
+			     src=>"$IG::img_url/open_inline.gif",
+			     title=>$lang{maximize}).
+			Img( href=>"igsuite?action=summary&amp;1=1",
+			     src=>"$IG::img_url/close_inline.gif",
+			     title=>$lang{close}),
+		icon=> 2);
+
+  DbQuery("SELECT * FROM postit ".
+	  "WHERE (owner = '$auth_user' or sharemode='0') and category='' ".
+	  "ORDER BY title");
+
+  ## IG Basket
+  PrOut "<div class=\"fileicon\">".
+	IG::QuickHelp( alt    => "$lang{basket}<br>IGSuite",
+		       width  => '150px',
+		       href   => "filemanager?".
+		                 "dir=".MkUrl("/$IG::default_lang{basket}").
+		                 "&amp;order=date",
+		       anchor => Img( width  => 32,
+		                      height => 32,
+				      src    => "$IG::img_url/trashcan.gif").
+                                 "<br>$lang{basket}<br>IGSuite" ).
+	"</div>\n";
+
+  ## User Home
+  if (CheckPrivilege('filemanager_view'))
+   {
+    $lang{personal_documents} =~ s/ /<br>/g;
+    PrOut "<div class=\"fileicon\">".
+	  IG::QuickHelp( alt    => $lang{personal_documents},
+		         width  => '150px',
+		         href   => "filemanager?".
+		                   "action=mkframes&amp;dir=".
+		                   MkUrl("/$IG::default_lang{home}/$auth_user"),
+		         anchor => Img( width => 32,
+				        height=> 32,
+			  	        src   => "$IG::img_url/mime_folder.gif").
+                                   "<br>$lang{personal_documents}" ).
+	  "</div>\n";
+   }
+
+  while (my @row = FetchRow() )
+   {
+    $row[1] ||= '&nbsp;';
+    $row[0]   = MkLink($row[0]);
+    $row[0]   =~ s/(target=\")([^\"]+)(\")/$1$row[5]$3/gi;
+ 
+    PrOut "<div class=\"fileicon\">".
+	  IG::QuickHelp( alt    => "$row[0]<br>$row[1]",
+		         width  => '150px',
+		         anchor => Img( width => 32,
+				        height=> 32,
+				        src   => "$IG::img_url/mime_$row[2].gif").
+                                   "<br>$row[0]<br>".
+                                   IG::TextElide( string => $row[1],
+                                                  length => 30 ) ).
+          "</div>\n";
+   }
+
+  TaskFoot();
+  PrOut "</td></tr>\n";
+ }
+
+#############################################################################
+#############################################################################
+sub todo_items
+ {
+  return 0 if !$taskstatus[2] || !CheckPrivilege('todo_view');
+  my ($bg_color, $start_date, $end_date, $counter);
+  PrOut "<td>\n";
+  TaskHead(	width=>'100%',
+		title=> $lang{todo},
+		icons=> Img( href=>"todo?action=protomaster",
+			     src=>"$IG::img_url/add_inline.gif",
+			     title=>$lang{add}).
+                        Img( href=>"todo",
+			     src=>"$IG::img_url/open_inline.gif",
+			     title=>$lang{maximize}).
+			Img( href=>"igsuite?action=summary&amp;2=1",
+			     src=>"$IG::img_url/close_inline.gif",
+			     title=>$lang{close}),
+		icon=>2);
+
+  PrOut "<table width=100% border=0 cellspacing=1 cellpadding=0>\n";
+  $start_date = $tv{start_year};
+  $end_date = $tv{end_year};
+
+  DbQuery("SELECT todo.todoid, todo.startdate, todo.todotext, todo.duedate,".
+	  " todo.contactid, contacts.contactname ,todo.duedate-current_date,".
+	  " todo.master, todo.status, todo.sharemode ".
+	  "FROM todo ".
+	  "LEFT JOIN contacts ON todo.contactid = contacts.contactid ".
+	  "WHERE ((todo.login='$auth_user' ".
+		  "and (todo.owner<>'$auth_user' or todo.owner is null))".
+                " or".
+	        " (todo.master='' and todo.owner='$auth_user'))".
+               " and todo.status<>1 and todo.startdate<='$tv{today}' ".
+	  "ORDER BY todo.enddate desc, todo.priority desc, todo.duedate,".
+	  " todo.todoid desc");
+
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+    $row[3] = CkDate($row[3]);
+    $row[3] = Blush($row[3]) if $row[6]<1;
+    $row[2] = MkLink($row[2]);
+    $row[2] = "$row[5] $row[2]" if $row[4];
+    my $edit_link = $row[7]
+                  ? "todo?action=protoslave&amp;todoid=$row[0]"
+                  : "todo?action=protomaster&amp;todoid=$row[0]";
+
+    TaskListItem( [ Img( src   => $row[9]
+                                  ? "$IG::img_url/group_red.gif"
+                                  : $row[7] || $row[8]==2
+                                    ? "$IG::img_url/group.gif"
+                                    : "$IG::img_url/user.gif",
+                         title => $lang{edit},
+                         width => 16,
+                         href  => $edit_link ),
+                    $edit_link ],
+                  [ $row[1].
+		    Img( src   => "$IG::img_url/right.gif",
+		         width => 16,
+		         align => 'absmiddle').
+		    $row[3],
+		    $edit_link,
+		    'style="width:20%;font-size:10px; white-space:nowrap;',
+		    'link' ],
+                  [ $row[2] ] );
+   }
+
+  if ( $counter<4 )
+   {
+    TaskListItem( ['','','width="16pt"'        ],
+                  ['','','width="20%"', 'link' ],
+                  [''                          ] ) for $counter .. 3;
+   }
+  TaskListFoot(4,3);
+
+  TaskFoot();
+  PrOut "</td></tr>\n";
+ }
+
+#############################################################################
+#############################################################################
+sub opportunities
+ {
+  return 0 if !$taskstatus[10] || !CheckPrivilege('opportunities_view');
+  my $counter;
+  PrOut "<td>\n";
+  TaskHead(	width=>'100%',
+		title=> $lang{top_open_opportunities},
+		icons=> Img( href=>"opportunities?action=proto",
+			     src=>"$IG::img_url/add_inline.gif",
+			     title=>$lang{add}).
+                        Img( href=>"opportunities",
+			     src=>"$IG::img_url/open_inline.gif",
+			     title=>$lang{maximize}).
+			Img( href=>"igsuite?action=summary&amp;10=1",
+			     src=>"$IG::img_url/close_inline.gif",
+			     title=>$lang{close}),
+		icon=>2);
+
+  TaskListMenu(	[$lang{name}],
+		[$lang{amount}],
+		[$lang{closing}] );
+
+  DbQuery("SELECT name, contactname, amount, enddate, id ".
+	  "from opportunities ".
+	  "where enddate>'$tv{today}' and owner='$auth_user' and status<>'2' ".
+	  "order by amount desc limit 5");
+
+  while ( my @row = FetchRow() )
+   {
+    ++$counter;
+    TaskListItem ( ["$row[0]<br>".
+                    "<span style=\"font-size:10px;".
+                    " color:$IG::clr{font_low_evidence};\">$row[1]</span>",
+                    "opportunities?action=protoview&amp;id=$row[4]"],
+		   [IG::Currency($row[2]),'','align="center" nowrap'],
+		   [$row[3]] );
+   }
+
+  TaskListItem(['','','width="20%"'],[],[]) if !$counter;
+  TaskListFoot(4,3,1);
+  TaskFoot();
+  PrOut "</td></tr>\n";
+ }
+
+#############################################################################
+#############################################################################
+sub opportunities_chart
+ {
+  return 0 if !$taskstatus[11] || !CheckPrivilege('opportunities_view');
+
+  DbQuery("select count(*) from basic_tables ".
+	  "where tablename='opportunities_sales_stage'");
+  my $opp_num = FetchRow();
+
+  PrOut "<td>\n";
+  TaskHead(	width=>'100%',
+		title=> $lang{my_pipeline},
+		icons=>Img( href=>"igsuite?action=summary&amp;11=1",
+			    src=>"$IG::img_url/close_inline.gif"),
+		icon=>2);
+  
+  IG::MkChart(	width=>250,
+		height=>$opp_num * 31,
+		source=>"opportunities?action=chart1",
+		bgcolor=>$IG::clr{bg_task});
+
+  TaskFoot();
+  PrOut "</td></tr>\n";
+ }
+
+#############################################################################
+#############################################################################
+sub quickaccess
+ {
+  return if !$taskstatus[12];
+  if (!$on{print})
+   {
+    PrOut "<td>\n";
+
+    TaskHead(  title=>$lang{create_quickly},
+               icon=>2,
+	       icons=> Img( href=>"igsuite?action=summary&amp;12=1",
+			    src=>"$IG::img_url/close_inline.gif"),
+               width=>'100%' );
+    Input(     type=>'quickcreator',
+               fieldstyle=>'width:100%',
+               style=>'width:100%');
+    TaskFoot();
+
+    PrOut "</td></tr>\n";
+    return(1);
+   }
+  else
+   { return(0) }
+ }
+
+############################################################################
+############################################################################
+sub personal_info
+ {
+  return if !$taskstatus[4];
+  my $connected_users = 0;
+  my $connected_guest = 0;
+  my @fales;
+  my $unread_msgs;
+
+  my $html = "<td><span id=\"personalinfo\">\n".
+             TaskHead( width => '100%',
+                       title => $lang{personal_info},
+                       icons => Img( href =>"igsuite?action=summary&amp;4=1",
+                                     src  =>"$IG::img_url/close_inline.gif"),
+                       icon  => 2);
+
+  DbQuery("SELECT COUNT(*) FROM isms ".
+	  "where receiver='$auth_user' and status=''");
+  $unread_msgs = FetchRow();
+
+  opendir(DIR, $IG::logs_dir)
+    or die("Can't open '$IG::logs_dir' to look how many session are open.\n");
+
+  ## counts how many users are connected
+  for ( grep( /^[A-Za-z\_][A-Za-z0-9\_\.\-]{1,31}\-session\-\d+\-\w+$/,
+              readdir(DIR) ) )
+   { /^guest/ ? $connected_guest++ : $connected_users++; }
+  close (DIR);
+
+  ## Build an info table
+  my $table = MkTable
+               ( style      => 'width:100%',
+                 cellspacing=> 1,
+                 cellpadding=> 0,
+                 class_c1_r => 'list',
+                 values     => [( ["$lang{user}: ".
+                                   "<a href=\"preferences?".
+                                             "action=prefs_profile_modi\">".
+                                   "$auth_user</a>"],
+
+                                  ["$lang{registered_users}: ".
+                                   "<a href=\"users\">$cnt_users</a>"],
+
+                                  ["$lang{unread_msgs}: ".
+                                   "<a href=\"isms\">$unread_msgs</a>"],
+
+                                  ["$lang{connected_users}: ".
+                                   "<a href=\"igsuite?action=showsessions\">".
+                                   "$connected_users</a>"],
+
+                                  ["$lang{connected_guest}: ".
+                                   "<a href=\"igsuite?action=showsessions\">".
+                                   "$connected_guest</a>"]
+                                )] );
+
+  ## Build a javascript analogic clock
+  my $clock = "<div style=\"width:102px; height:102px; ".
+                           "background-image:url($IG::img_url/clock_bg.gif)\">".
+              "<script".
+              " type=\"text/javascript\"".
+              " src=\"$IG::img_url/standardclock.js\"></script>".
+              "</div>";
+
+  $html .= MkTable( style       => 'width:100%',
+                    cellspacing => 3,
+                    cellpadding => 0,
+                    style_c1_r  => 'width:100%',
+                    values      => [( [ $table, $clock ] )] );
+
+  $html .= TaskFoot().
+	   "</span></td></tr>\n";
+
+  defined wantarray ? return $html : PrOut $html;
+ }
+
+############################################################################
+############################################################################
+sub show_polls
+ {
+  return if !$taskstatus[8];
+  my $polls_counter;
+  my (%votes, $val_perc, $val_px, $html);
+
+  $html = "<td>\n".
+          TaskHead(	width=> '100%',
+		        title=> $lang{poll},
+	        	icons=> Img( href=>"igsuite?action=summary&amp;8=1",
+		        	     src=>"$IG::img_url/close_inline.gif"),
+		        icon => 2 );
+
+  DbQuery( "select * from polls ".
+           "left join users_groups_link ".
+           "on users_groups_link.groupid = polls.groupid ".
+	   "where (polls.groupid='' or users_groups_link.userid='$auth_user')".
+	   " and polls.issue<='$tv{today}' and polls.expire>'$tv{today}'");
+
+  while (my @row = FetchRow())
+   {
+    $polls_counter++;
+    undef %votes;
+
+    $html .= "<table width=100%><td colspan=2><strong>".
+	     IG::UsrInf('name',$row[1]).
+	     ": $row[4]</strong></td></tr>";
+
+    if ($row[5]=~ /$auth_user\:/)
+     {
+      $votes{$_}++ for split /\:/, $row[5];
+      $html .= '<td>';
+
+      my $html_taskmsg = "<table cellspacing=2 cellpadding=0>";
+
+      for (1..20)
+       {
+        if ($row[5+$_])
+         {
+          $val_perc = int(($votes{$_}*100)/$cnt_users);
+          $html_taskmsg .=
+           "<td class=\"list\">$row[5+$_]</td>
+	    <td style=\"vertical-align:top; font-size:10px; white-space:nowrap\">
+	     $val_perc %</td>
+	    <td style=\"vertical-align:top;\">".
+	     IG::StatusBar(perc=>$val_perc).
+	    "</td></tr>";
+         }
+       }
+
+      $html_taskmsg .= '</table>';
+
+      $html .= TaskMsg($html_taskmsg, 4).
+               "</td></tr><td class=\"minilist\" align=\"right\">".
+               "Create on $row[2] Expire Date $row[3]</td></tr>";
+     }
+    else
+     {
+      $html .= FormHead(	formaction=>'polls',
+	                	target=>'mainf',
+                		float=>'left',
+	                	cgiaction=>'replypoll').
+
+               Input(		type=>'hidden',
+	                	name=>'id',
+                		value=>$row[0]);
+
+      for (1..20)
+       {
+        if ($row[5+$_])
+         {
+          $html .= "<td width=10></td><td class=\"list\">".
+                   Input (	type=>'radio',
+          			name=>'answer',
+	        		value=>$_).
+                   $row[5+$_] .
+                   '</td></tr>';
+         }
+       }
+       
+      $html .= '<td></td><td align="center">'.
+               Input (	type=>'submit',
+		        show=>$lang{vote} ).
+               FormFoot().
+               '</td>';
+     }
+    $html .= '</table>';
+   }
+
+  $html .= TaskFoot().
+           "</td></tr>\n";
+
+  return (0) if !$polls_counter;
+  PrOut $html;
+ }
+
+############################################################################
+############################################################################
+sub show_news
+ {
+  return if !$taskstatus[5];
+ 
+  PrOut "<td>\n";
+  TaskHead(	width => '100%',
+		title => $lang{news},
+		icons => Img( href=>"igsuite?action=summary&amp;5=1",
+			      src=>"$IG::img_url/close_inline.gif"),
+		icon  => 2);
+
+  my $rssUrlList = IG::ConfigParam('igsuite.news_rss_url');
+
+  if ( $rssUrlList ) 
+   {
+    my $index = 0;
+    for (split( /\:\:/, $rssUrlList )) 
+     {
+      TaskMsg( '<script type="text/javascript">
+                new rss_ticker("'.$_.'", 120, "newsbox'.$index++.'", "newsclass", 4000); //, "showdescription");
+                </script>', 8,undef, 60);
+      
+     }
+   }
+  else 
+   {
+    TaskMsg( '<script type="text/javascript">
+              new rss_ticker("", 120, "newsbox", "newsclass", 4000); //, "showdescription");
+              </script>', 8,undef, 60);
+   }
+  TaskFoot();
+  PrOut "</td></tr>\n";
+  return(1);
+ }
+
+############################################################################
+############################################################################
+sub show_weather
+ {
+  return if !$taskstatus[9] || !$IG::plugin_conf{weather}{code};
+
+  ## Update weather info
+  update_weather();
+
+  my $weather;
+  my @panels;
+
+  if (      $IG::plugin_conf{weather}{code} eq 'none'
+       || ! $IG::plugin_conf{weather}{code} )
+   {
+    $weather = "Set a rigth \$IG::plugin_conf{weather}{code} value in your ".
+               "'$IG::cgi_dir${S}conf${S}igsuite.conf' configuration file. Read more on ".
+               "<a href=\"http://www.igsuite.org\">IGSuite Site</a>";
+   }
+  else
+   {   
+    my $_flag;
+    my @codes = ref($IG::plugin_conf{weather}{code}) eq 'ARRAY'
+                ? @{$IG::plugin_conf{weather}{code}}
+                : ($IG::plugin_conf{weather}{code});
+
+    for my $city_code ( @codes )
+     {
+      if (open (DET, '<', "$IG::temp_dir${S}weather_$city_code.txt") )
+       { 
+        $_flag++;
+        $weather = '';
+        my $city_name = <DET>;
+        $weather .= $_ while <DET>;
+        close (DET);
+        push (@panels, [( $city_name, $weather )]) if $weather;
+       }
+     }
+
+    $weather ||= $_flag
+               ? "Can't retrieve all weather info! Try again later."
+               : "Is 'igsuited' daemon running on your server ?";
+   }
+
+  PrOut "<td>\n";
+  TaskHead(	width => '100%',
+		title => $lang{weather},
+		icons => Img( href=>"igsuite?action=summary&amp;9=1",
+			      src=>"$IG::img_url/close_inline.gif"),
+		icon  => 2);
+
+  $weather = IG::TabPane( data   => \@panels,
+                          width  => 260,
+                          height => 110 ) if $panels[1];
+  
+  PrOut "<div style=\"padding:3px; overflow:auto;\">$weather</div>\n";
+   
+  TaskFoot();
+  PrOut "</td></tr>\n";
+  return(1);
+ }
+
+#############################################################################
+#############################################################################
+sub update_weather
+ {
+  ## this sub is a clone of update_weather() in igsuited
+  eval ('require LWP::UserAgent;');
+  return if $@ || !$IG::plugin_conf{weather}{code};
+  require IG::Utils;
+  my $ua = LWP::UserAgent->new;
+  $ua->agent("IGSuite/$IG::VERSION");
+  $ua->timeout(3);
+
+  my @codes = ref($IG::plugin_conf{weather}{code}) eq 'ARRAY'
+            ? @{$IG::plugin_conf{weather}{code}}
+            : ($IG::plugin_conf{weather}{code});
+
+  for my $city_code ( @codes )
+   {
+    my $cnt;
+    my $icon_url;
+    my $city_name;
+    my $weather;
+    my $weather_filename = "$IG::temp_dir${S}weather_$city_code.txt";
+    next if    (-M $weather_filename) < (1.0/24) ## younger than 1 hour
+            &&  -e $weather_filename;             ## exists
+
+    my $req = HTTP::Request->new(GET=>"http://www.weather.com".
+                                      "/outlook/travel/businesstraveler/local/".
+                                      $city_code.
+                                      "?from=search_current");
+    my $r = $ua->request($req);
+    if ( ! $r->is_success )
+     {
+      ## we will try again in 1 hour
+      IG::FileUnlink( $weather_filename );
+      IG::FileTouch( $weather_filename );
+      next;
+     }
+
+    for (split /\n/, $r->content)
+     {
+      $city_name ||= $1 if /<strong>Right Now for<\/strong><BR\/>([^<]+)<BR\/>/i;
+      next if ! /obsText|crow|cImage/;
+      $icon_url  ||= $1 if /\"(http[^\"]+\.png\?[^\"]+)\"/;
+      $weather .= IG::HtmlUntag($_) . "\n- ";
+     }
+
+    $icon_url =~ /\/([^\/]+\.png)/i;
+    my $image = "weather_$1";
+
+    open( DET, '>', $weather_filename)
+      or die("Can't write on '$weather_filename'.\n");
+
+    ## Convert units to SI metric system
+    if ( $IG::plugin_conf{weather}{metric_system} eq 'true' )
+     {
+      $weather =~ s/([\d\.]+)(\&deg\;|\Â°|°)F/int(0.555555555556*($1-32)) . '&deg;C'/megi;
+      $weather =~ s/([\d\.]+) miles/int(0.62136994949495 * $1) . ' km'/megi;
+      $weather =~ s/([\d\.]+) mph/int(0.62136994949495 * $1) . ' km\/h'/megi;
+     }
+      
+    print DET "$city_name\n".
+              "<div style=\"width:100%; background-color:#EEEEEE; font-weight:bold; float:left; font-size:11px;\">".
+              "$lang{weather}: $city_name".
+              "</div>".
+	      "<img alt=\"weather.com\" style=\"width:52px; height:52px; float:right;\" src=\"${IG::webpath}/images/$image\">".
+	      "<div style=\"clear:left; font-size:10px;\">".
+	      $weather.
+	      "<div style=\"width:100%; border-top:1px solid #EEEEEE; color:#CCCCCC; font-weight:bold; font-size:10px\">".
+	      "Last update: $tv{today} - $tv{time}\n".
+	      "</div></div>\n";
+    close(DET);
+    chmod 0644, $weather_filename;
+
+    ## get weather icon and put it in images directory
+    my $icon_filename = "$IG::htdocs_dir${S}images${S}$image";
+    if (! -e $icon_filename )
+     {
+      my $req = HTTP::Request->new(GET => $icon_url );
+      my $r = $ua->request($req);
+      return if ! $r->is_success;
+      open (IMG, '>', $icon_filename)
+        or die("Can't write on '$icon_filename'.\n");
+      binmode(IMG);
+      print IMG $r->content;
+      close (IMG);
+      chmod 0664, $icon_filename;
+     }
+   }
+ }
+
+###########################################################################
+###########################################################################
+sub internal_news
+ {
+  return if !$taskstatus[6];
+  my $counter;
+
+  DbQuery("SELECT * FROM isms ".
+	  "WHERE date='$tv{today}' and receiver='$auth_user' and type='T' ".
+	  "ORDER BY id desc");
+
+  while (my @row = FetchRow())
+   {
+    if (!$counter)
+     {
+      PrOut "<td>\n";
+      TaskHead(	width => '100%',
+		title => $lang{internal_news},
+		icons => Img( href=>"igsuite?action=summary&amp;6=1",
+			      src=>"$IG::img_url/close_inline.gif"),
+		icon  => 2);
+      PrOut "<table border=0 cellspacing=1 cellpadding=0 width=100%>\n";
+     }
+    ++$counter;
+    last if $counter == 4;
+    $row[4] = MkLink($row[4]);
+    PrOut "<td class=\"list\" nowrap><strong><u>$row[6]</u></strong></td>\n".
+          "<td class=\"list\">".IG::UsrInf('name',$row[2]).
+          " - $row[4]</td></tr>\n";
+   }
+  return 0 if $counter == 0;
+  PrOut "</table>\n";
+  TaskFoot();
+  PrOut "</td></tr>\n";
+  return(1);
+ }
+
+###########################################################################
+###########################################################################
+sub personal_documents
+ {
+  return if !$taskstatus[7];
+
+  PrOut "<td>\n";
+  TaskHead(	width => '100%',
+		title => $lang{my_documents},
+		icons => Img( href=>"igsuite?action=summary&amp;7=1",
+			      src=>"$IG::img_url/close_inline.gif"),
+		icon  => 2);
+  PrOut "<table border=0 cellspacing=0 cellpadding=0><td class=\"link\">\n";
+
+  for (qw(	letters opportunities offers orders
+		archive contracts fax_sent fax_received ))
+   {
+    CheckPrivilege($_."_view")
+      && PrOut "<a href=\"$_?view=limited_list\">",
+		($lang{'my_'.$_} || $lang{$_}),
+		" - </a>\n";
+   }
+  PrOut "<a href=\"igwiki?action=summary&amp;ig=1\">My WiKi</a>\n";
+  PrOut "</td></tr></table>";
+  TaskFoot();
+  PrOut "</td></tr>\n";
+ }
+
+#############################################################################
+#############################################################################
+sub debug
+ {
+  $IG::debug='';
+  require IG::Utils;
+  HtmlHead(align=>'left');
+  PrOut IG::Debug();
+  HtmlFoot();
+ }
+ 
+############################################################################
+############################################################################
+sub main
+ {
+  $IG::debug = 0;
+  $IG::clr{bg}        = $IG::clr{bg_menu};
+  $IG::clr{font}      = $IG::clr{font_menu_title};
+  $IG::clr{font_link} = $IG::clr{font_menu_title};
+
+  my $javascripts = "<script src=\"$IG::img_url/effects.js\"".
+                    " type=\"text/javascript\"></script>\n".
+                    "<script src=\"$IG::img_url/accordion.js\"".
+                    " type=\"text/javascript\"></script>\n";
+
+  HtmlHead( javascript => $javascripts );
+  IG::MkMenu();
+
+  IG::JsExec( position => 'footer',
+              code     => "
+Event.observe(window, 'load', loadAccordions, false);
+function loadAccordions()
+ {
+  var topAccordion = new accordion('menu_content',
+                                   {
+                                    classNames : { toggle : 'menu_title',
+                                                   toggleActive : 'menu_title_active',
+                                                   content : 'menu_title_content'
+                                                 },
+                                    direction : 'vertical'
+                                   });
+
+  var allAccordions = \$\$('.menu_title');
+  allAccordions.each(function(accordion)
+   {
+    \$(accordion.next(0)).setStyle({ height: '0px' });
+   });
+                
+  topAccordion.activate(\$\$('#menu_content .menu_title')[0]);
+ }
+                      ") if IG::ConfigParam('igsuite.accordion_menu');
+
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub setsessionyear
+ {
+  $IG::clr{bg}        = $IG::clr{bg_menu};
+  $IG::clr{font}      = $IG::clr{font_menu};
+  $IG::clr{font_link} = $IG::clr{font_menu};
+
+  ## Search db start year
+  DbQuery("select date from system_log where date > '".
+          IG::GetDateByFormat(1,1,1970).
+          "' order by date limit 1" );
+  my $db_start_year = FetchRow();
+  $db_start_year = (IG::GetValuesByDate($db_start_year))[2];
+  $db_start_year = $tv{year} if $db_start_year == 0;
+
+  HtmlHead();
+  PrOut "<div style=\"border:2px double $IG::clr{font}; padding:4px; text-align:center\">".
+        "$lang{select_year}<br><br>";
+  for ( reverse $db_start_year .. $tv{year} )
+   {
+    PrOut "<div style=\"font-weight:bold;\">".
+           "<a href=\"igsuite?formid=\"".
+             " onclick=\"document.cookie='session_year=$_'\"".
+             " target=\"_top\">$_</a>".
+          "</div>\n";
+   }
+  PrOut "</div>\n";
+  HtmlFoot();
+ }
+
+###########################################################################
+###########################################################################
+sub login
+ {
+  IG::CleanSessions();
+  my $login = DbQuote( $on{login} );
+     $login = 'Wrong_Login' if $login !~ /^[A-Za-z\_][A-Za-z0-9\_\.\-]{1,31}$/;
+
+  ## Retrieve some user informations
+  DbQuery("select current_date-lastpwdchange, lastpwdchange,".
+          " statusdate, hostsallow, status, passwd ".
+          "from users where login='$login'");
+
+  my ( $pwdexpire,
+       $lastpwdchange,
+       $accountexpirationdate,
+       $accounthostsallow,
+       $accountstatus,
+       $accountpwd ) = FetchRow();
+
+  ## check user login and password
+  if ( _ck_user_login( $login, $accountpwd, $accountstatus ) )
+   {
+    ## check if the user is disabled and inform him (admin can't be disabled)
+    if ( $accountstatus == 2 && $login ne $IG::login_admin )
+     {
+      ## it's a disabled user
+      LogD('Disabled User', 'badlogin', 'users', $login);
+      $on{errmsg} = $lang{Err_disabled_user};
+     }
+    else
+     {
+      ## Ok, it's a valid user make other checks...
+      my $old_remote_host;
+
+      ## check other active sessions of the same user
+      chdir $IG::logs_dir;
+      my ( $session ) = (<$login-session-*>);
+
+      if ($session && !$IG::demo_version)
+       {
+        open( SESSION, '<', "$IG::logs_dir${S}$session" );
+        chomp($old_remote_host = <SESSION>);
+        $old_remote_host =~ s/^\$remote_host \= \'([^\']+)\'\;$/$1/;
+        close(SESSION);
+       }
+
+      if (   $session
+          && $old_remote_host ne $IG::remote_host
+	  && !$on{warn}
+	  && !$IG::demo_version
+	  && !$on{caller}
+         )
+       {
+        ## alert user about other active sessions
+        $on{errmsg} = $lang{Err_session};
+       }
+      else
+       {
+        ## It's a valid user and is not already logged
+        ## but we have to perform other checks...
+
+        ## Check if the user can login from this host.
+        ## Remember per user configuration overwrite general preferences!
+        if ( _user_host_deny( $accounthostsallow || $IG::hosts_allow ) )
+         {
+          ## we can't login him!
+          $on{errmsg} = $lang{Err_host_deny};
+         }
+        else
+         {
+          ## LOGGED IN!
+          my $_first_connection = 0;
+
+          ## delete eventually previous user sessions
+          IG::Logout( $login ) if $login ne 'guest' && !$IG::demo_version;
+
+          ## delete eventually previous guest sessions opened by the same user
+          IG::Logout( 'guest', $IG::cookie{igsuiteid} ); 
+
+          ## now create a new user session
+          IG::MkUserSession( $login );
+
+          ## check and adjust user environement (just some directory)
+          my $fake_user_dir = IG::UserDir( $login );
+          for ( $fake_user_dir,
+  	        "$fake_user_dir${S}MailBox",
+	        "$fake_user_dir${S}MailBox${S}INBOX",
+	        "$fake_user_dir${S}MailBox${S}TRASH",
+	        "$fake_user_dir${S}MailBox${S}SENT"
+	      ) 
+           {
+            unless ( -d $_ )
+             {
+              mkdir( $_, 0755 ) or die("Can't create directory '$_'.\n");
+              $_first_connection++ if $login ne $IG::login_admin;
+             }
+           }
+
+          ## Check password expire after 90/180 days or in the first connection
+          my $day_after_expire = CheckPrivilege('sys_user_admin', $login)
+                               ? 90
+                               : 180;
+          if (    !$IG::demo_version
+               && (    $_first_connection
+                    || (    !$IG::ldap_conf{active}
+                         && (    $pwdexpire > $day_after_expire
+                              || !CkDate($lastpwdchange)
+                            )
+                       )
+                  )
+             )
+           {
+            IG::SendIsms( sender   => $IG::login_admin,
+	        	  receiver => $login,
+		          body	   => sprintf( $_first_connection
+		                               ? $lang{first_connection}
+		                               : $lang{password_expired},
+                                               ( '<noparse>'.
+                                                 "<a href=\"preferences?".
+                                                 "action=prefs_profile_modi\">".
+                                                 "[$lang{personal_profile}]</a>".
+                                                 '</noparse>' )
+                                             ) );
+           }
+
+          $auth_user = $login;
+         }
+       }
+     }
+   }
+  else
+   {
+    ## wrong login or password - can't login
+    LogD('Wrong Password', 'badlogin', 'users', $login);
+    $on{errmsg} = $lang{Err_password};
+    sleep(3); ## to prevent multirequest to guess password
+   }
+
+  if ($on{caller})
+   {
+    IG::Redirect( "$on{caller}?".
+                  "action=$on{caller_action}&amp;".
+		  "errmsg=" . MkUrl($on{errmsg}) .
+		  "&amp;igsuiteid=" . MkUrl($IG::set_cookie{igsuiteid}) );
+    return;
+   }
+  else
+   {
+    if (    ( $on{lang} || $on{tema} || $on{screen_size} )
+         && $auth_user ne 'guest')
+     {
+      ## in this case user has logged and has requested to change
+      ## some preferences
+      IG::Redirect( "preferences?".
+                    "action=prefs_global_agg&amp;".
+                    "lang=$on{lang}&amp;".
+                    "tema=$on{tema}&amp;".
+                    "screen_size=$on{screen_size}&amp;".
+                    "igsuiteid=" . MkUrl($IG::set_cookie{igsuiteid}) );
+      return;
+     }
+    elsif ( $auth_user ne 'guest' )
+     {
+      ## In this case user has logged and we have to
+      ## reload its configuration file
+      for( IG::UserDir($auth_user) . "${S}$IG::remote_host.cf",
+           IG::UserDir($auth_user) . "${S}$auth_user.cf" )
+       { require $_ && last if -e $_; }
+     }
+   }
+
+  ## let's go to IG
+  default_action();
+ }
+
+############################################################################
+############################################################################
+sub _ck_user_login
+ {
+  my ( $login, $pwd, $status ) = @_;
+
+  ## First try to authenticate user admin
+  return 1 if    $IG::login_admin && $login   eq $IG::login_admin
+              && $IG::pwd_admin   && $on{pwd} eq $IG::pwd_admin;
+
+  ## Then try to authenticate user by LDAP if is active
+  if ( $IG::ldap_conf{active} )
+   {
+    require IG::AuthLDAP;
+    my $ldap = IG::AuthLDAP->new
+               ( hostname    => $IG::ldap_conf{hostname},
+                 port        => $IG::ldap_conf{port},
+                 version     => $IG::ldap_conf{version},
+                 usessl      => $IG::ldap_conf{usessl},
+                 admin_dn    => $IG::ldap_conf{admin_dn},
+                 admin_pwd   => $IG::ldap_conf{admin_pwd},
+                 search_base => $IG::ldap_conf{search_base},
+                 user_dn     => $IG::ldap_conf{user_dn} );  
+    
+    my ( $result, %user_info ) = $ldap->login( $login, $on{pwd} );
+    if ( $result )
+     {
+      ## User is Logged IN
+      if ( ! defined( $status ) )
+       {
+        ## user doesn't exist in IGSuite DB
+        if ( $IG::ldap_conf{auto_create_user} )
+         {
+          ## so create it by %user_info values
+          ## check values
+          for my $val ( qw( name login passwd ) )
+           {
+            die("Your LDAP server don't give me this information:$val. ".
+                "I need it to create user '$login' account"
+               ) if !$user_info{$val}; 
+           }
+
+          $user_info{name}         = substr( $user_info{name},   0, 70 );
+          $user_info{login}        = substr( $user_info{login},  0, 32 );
+          $user_info{passwd}       = substr( $user_info{passwd}, 0, 72 );
+          $user_info{userid}       = MkId(15);
+          $user_info{status}       = 1;
+          $user_info{igprivileges} = '0000000011111010110100010000111111'.
+                                     '1111111111111011111100011111111111'.
+                                     '0110011111110101101011111011000111'.
+                                     '11111111111111100000011111111111';
+
+          DbWrite( action           => 'insert',
+                   table            => 'users',
+                   overwrite_clause => "userid='$user_info{userid}'",
+                   values           => \%user_info );
+         }
+        else
+         {
+          die("I found your credentials in the LDAP server, but ".
+              "you can't access to IGSuite because first your system ".
+              "administrator, has to insert your account info inside ".
+              "the IGUser database.\n");
+         }
+       }
+      return 1;
+     }
+   }
+  else
+   {
+    ## Check if the password is correct
+    return 1 if $on{pwd} && $on{pwd} eq $pwd;
+   }
+
+  return 0;
+ }
+
+############################################################################
+############################################################################ 
+sub _user_host_deny
+ {
+  my $hosts_rules = shift;
+  my @ips;
+
+  ## clean rules
+  $hosts_rules =~ s/[^0-9a-z\.\/\*]/ /g;
+  1 while $hosts_rules =~ s/  / /g;
+
+  ## first case, empty rules
+  return 0 if $hosts_rules eq ' ' || !$hosts_rules;
+
+  ## split and check host and range IP
+  for my $rule ( split /\s/, $hosts_rules )
+   {
+    if ( $rule =~ /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/ )
+     {
+      ## it's an IP range store it
+      push @ips, $rule;
+     }
+    else
+     {
+      ## it's an host IP check it
+      return 0 if    $rule eq $IG::remote_host
+                  || $rule eq '*'
+                  || $rule eq ( $ENV{'REMOTE_ADDR'} || '127.0.0.1' );
+     }
+   }
+
+  ## check stored IP ranges
+  if ( @ips )
+   {
+    require IG::NetIPMatchRegexp;
+    Net::IP::Match::Regexp->import( qw( create_iprange_regexp match_ip ) );
+
+    my $regexp = create_iprange_regexp( @ips );
+    if ( match_ip( ($ENV{'REMOTE_ADDR'} || '127.0.0.1'), $regexp) )
+     {
+      ## can login
+      return 0;
+     }
+    else
+     {
+      ## can't login
+      return 1;
+     }
+   }
+  else
+   {
+    ## we have rules that are all single IPs
+    ## the IPs don't match this host IP
+    return 1;
+   }
+ }
+
+############################################################################
+############################################################################
+sub blank
+ {
+  HtmlHead();
+  HtmlFoot();
+ }
+ 
+############################################################################
+############################################################################
+sub default_action
+ {
+  $IG::set_cookie{igsuiteid} ||= $IG::cookie{igsuiteid};
+  if ($auth_user eq 'guest')
+   {
+    summary();
+    return;
+   } 
+  my $title = "$IG::soc_name - IG $IG::VERSION";
+   
+  my $noframes = "IGSuite $IG::VERSION<br>".
+		 "Attention! this application need a browser ".
+		 "that support multi frame!";
+
+  my $left_frame_width = $IG::screen_size eq 'large' ? 95 : 90;
+  
+  my $default_application = IG::ConfigParam('igsuite.default_application');
+     $default_application = ( "igsuite?".
+                              "action=summary&amp;".
+                              "login=$on{login}&amp;".
+                              "errmsg=" . MkUrl($on{errmsg})
+                            ) if    !$default_application
+                                 || $default_application eq 'igsuite';
+
+  my $findf_frame_link = -e "$IG::cgi_dir${S}contacts"
+                       ? "contacts?action=findshow"
+                       : "igsuite?action=blank";
+
+  IG::HttpHead( expires => 'now' );
+
+  if ($IG::screen_size !~ /^noframe/)
+   {
+    my $search_bar = IG::ConfigParam('igsuite.protocol_search')
+                   ? "<FRAMESET cols=\"110,*,100\" framespacing=0 frameborder=0>".
+                     "<FRAME name=\"chkmsg\" src=\"checkmsg?action=checkmsg\" scrolling=\"no\" marginheight=1 marginwidth=1>".
+                     "<FRAME name=\"findf\" src=\"$findf_frame_link\" scrolling=\"no\" marginheight=1 marginwidth=1>".
+                     "<FRAME name=\"quickf\" src=\"igsuite?action=quickfinder\" scrolling=\"no\" marginheight=1 marginwidth=1>".
+                     "</FRAMESET>"
+                   : "<FRAMESET cols=\"110,*\" framespacing=0 frameborder=0>".
+                     "<FRAME name=\"chkmsg\" src=\"checkmsg?action=checkmsg\" scrolling=\"no\" marginheight=1 marginwidth=1>".
+                     "<FRAME name=\"findf\" src=\"$findf_frame_link\" scrolling=\"no\" marginheight=1 marginwidth=1>".
+                     "</FRAMESET>";
+
+    PrOut <<FINE;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN"
+     "http://www.w3.org/TR/html4/frameset.dtd">
+<html><head><title>$title</title><META HTTP-EQUIV=Pragma CONTENT=no-cache>
+<LINK REL="icon" HREF="$IG::img_url/favicon.ico" TYPE="image/x-icon">
+<script type="text/javascript">
+var columntype=""
+var defaultsetting=""
+
+function getCurrentSetting()
+ {
+  if (document.body)
+   return (document.body.cols)? document.body.cols : document.body.rows
+ }
+
+function setframevalue(coltype, settingvalue)
+ {
+  if (coltype=="rows") document.body.rows=settingvalue
+  else if (coltype=="cols") document.body.cols=settingvalue
+ }
+
+function resizeFrame(contractsetting)
+ {
+  if (getCurrentSetting()!=defaultsetting)
+   setframevalue(columntype, defaultsetting)
+  else
+   setframevalue(columntype, contractsetting)
+ }
+
+function init()
+ {
+  if (!document.all && !document.getElementById) return
+  if (document.body!=null)
+   {
+    columntype=(document.body.cols)? "cols" : "rows"
+    defaultsetting=(document.body.cols)? document.body.cols : document.body.rows
+   }
+  else
+   setTimeout("init()",100)
+ }
+
+setTimeout("init()",100)
+
+</script>
+</head>
+<FRAMESET cols="$left_frame_width,*" framespacing=0 frameborder=0>
+ <FRAME name="leftf" src="igsuite?action=main" scrolling="no" marginheight=1 marginwidth=1>
+  <FRAMESET rows="*,40" framespacing=0 frameborder=0>
+   <FRAME name="mainf" src="$default_application" scrolling="auto" marginheight=1 marginwidth=1>
+   $search_bar
+  </FRAMESET>
+</FRAMESET>
+<NOFRAMES>
+$noframes
+</NOFRAMES>
+<BODY BGCOLOR="black" LINK="#669900" VLINK="#666666" topmargin=0 leftmargin=0>
+$noframes
+</BODY></HTML>
+FINE
+   }
+  else
+   {
+    PrOut <<FINE;
+<html><head><title>$title</title><META HTTP-EQUIV=Pragma CONTENT=no-cache>
+<LINK REL="icon" HREF="$IG::img_url/favicon.ico" TYPE="image/x-icon">
+</head>
+<FRAMESET rows="*" FRAMEBORDER=0 BORDER=0 MARGINHEIGHT=0 MARGINWIDTH=0>
+ <FRAME name="mainf" marginwidth=0 src="$default_application" SCROLLING="AUTO">
+</FRAMESET>
+<NOFRAMES>
+ $noframes
+</NOFRAMES>
+<BODY BGCOLOR="Black" LINK="#669900" VLINK="#666666" topmargin=0 leftmargin=0>
+$noframes
+</BODY></HTML>
+FINE
+   }
+ }
+
+############################################################################
+############################################################################
+sub colourmap
+ {
+  my $java_script = <<END;
+<script language="JavaScript">
+<!-- Begin
+var theColour = '';
+function showColor(val)
+ {
+  document.colorform.hexval.value = val;
+  document.all.HEX.style.backgroundColor = val;
+  theColour = val;
+ }
+
+function keepColor()
+ {
+  //document.colorform.keepcolour.value = theColour;
+  window.opener.document.$on{form}.$on{field}.value = theColour;
+  window.opener.document.$on{form}.$on{field}.style.background = theColour;
+  window.opener.document.$on{form}.$on{field}.style.color = theColour;
+  self.close();
+ }
+//  End -->
+</script>
+END
+
+  HtmlHead( javascript => $java_script,
+            title      => 'Colour keeper' );
+
+  TaskHead( width      => '100%',
+            title      => 'Colour keeper',
+            icon       => 2 );
+
+  my $cnt = 1;
+  my $x1 = 1;
+  my $x2 = 10;
+  my $hex_value = 65280;
+  my $start_hex = 65280;
+
+  PrOut "<map name=\"colmap\">\n";
+
+  for my $y ( 1..6 )
+   {
+    my $y1 = 1;
+    my $y2 = 7;
+
+    for my $x ( 1..36)
+     {
+      my $hex_color = sprintf ("%x", $hex_value);
+      $hex_color = '0' . $hex_color while length($hex_color) < 6;
+
+      PrOut "<area shape=\"rect\" coords=\"$y1,$x1,$y2,$x2\"".
+            " onMouseOut=\"showColor('')\"".
+            " onMouseOver=\"showColor('#$hex_color')\"".
+            " onClick=\"keepColor()\">\n";
+
+      if ( $cnt == 6 )
+       {
+        $cnt = 1;
+        $hex_value += 3342081;
+       }
+      else
+       {
+        $cnt += 1;
+        $hex_value += 51;
+       }
+
+      $y1 +=8;
+      $y2 +=8 ;
+     }
+
+    $x1 += 11;
+    $x2 += 11;
+    $hex_value = $start_hex - ( 13056 * $y );
+   }
+
+  FormHead( name => 'colorform');
+
+  PrOut "</map><br>\n".
+        Img(usemap => "#colmap",
+            src    => "$IG::img_url/colours.png",
+            width  => 289,
+            height => 67,
+            style  => 'text-align:center; margin-bottom:15px',
+            href   => ' ');
+
+  Input( type  => 'text',
+         name  => 'hexval',
+         show  => 'Hex Value',
+         style => 'width:170px; font-family:verdana; font-size:12pt; '.
+                  'font-weight:bold' );
+
+  Input( type  => 'text',
+         name  => 'style',
+         show  => 'Preview',
+         id    => 'HEX',
+         style => 'width:170px; height:50px' );
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+ 
+############################################################################
+############################################################################
+sub copyright
+ {
+  $IG::clr{bg} = "white";
+  $on{ajaxaction}
+  ? HttpHead( expires => '+24h' )
+  : HtmlHead( align   => 'left',
+              expires => '+24h' );
+  
+  PrOut <<FINE;
+<h1>IGSuite $IG::VERSION - Integrated Groupware Suite</h1>
+
+<h5>Description</h5>
+<a href="http://www.igsuite.org" target="_new" onClick='self.close()'>
+<img src="$IG::img_url/igbox.jpg" width=120 style="float:right; margin-left: 15px" alt=\"IGSuite $IG::VERSION\"></a>
+IGSuite is a web-based, groupware suite. It gives you a "Box" of
+applications, that includes: Wiki, Email, Documents, Calendar, Tasks, Fax,
+Contacts, Notes, Links and more. The power of collaboration comes in when
+these individual suite components are shared and used within a group. We
+believe that a true groupware, should provide location independence,
+platform independence, machine and browser independence. So, it's not
+important wherever you are, whichever OS or browser you use, you can access
+IGSuite from any PC and work the same way you do sitting on your home
+machine.
+
+<br><h5>License</h5>
+<span style="font-size:10px">IGSuite $IG::VERSION - Copyright (C) 1998-2009 <a href="mailto:lucas\@igsuite.org">
+Luca Dante Ortolani [LucaS] lucas\@igsuite.org</a><br>
+This program is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation; either version 2 of the License, or (at your
+option) any later version. 
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+more details. 
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc., 59
+Temple Place - Suite 330, Boston, MA  02111-1307, USA.</span>
+
+<br><h5>Links</h5>
+<table border=0 cellspacing=2 width="100%">
+<tr><td align=left>Project Home Page</td>
+<td align=left><a href="http://www.igsuite.org">http://www.igsuite.org</a></td></tr>
+<tr><td align=left>On-line demo to try IG</td>
+<td align=left><a href="http://demo.igsuite.org">http://demo.igsuite.org</a></td></tr>
+<tr><td align=left>Comunity Forum</td>
+<td align=left><a href="http://forum.igsuite.org">http://forum.igsuite.org</a></td></tr>
+<tr><td align=left>Dedicated mailing-list</td>
+<td align=left><a href="http://lists.sourceforge.net/mailman/listinfo/igsuite-project">
+http://lists.sourceforge.net/mailman/listinfo/igsuite-project</a></td></tr>
+</table>
+FINE
+  HtmlFoot() if !$on{ajaxaction};
+ }
+
+##########################################################################
+## Lang item not used
+# $lang{my_contracts}
+# $lang{my_fax_received}
+# $lang{my_letters}
+# $lang{my_offers}
+# $lang{my_orders}
+# $lang{my_archive}
+# $lang{no_event}
+# $lang{no_tasks}
+# $lang{change_user}

@@ -1,0 +1,18 @@
+## IGSuite 4.0.0
+## Language: vendors_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+valuation		=>'Valuation',
+supervision		=>'Supervision',
+first_valuation		=>'First valuation date',
+remark			=>'Remark',
+unqualified_vendors	=>'Unqualified suppliers',
+Err_start_qualify	=>'Error: invalid start qualification date',
+Err_end_qualify		=>'Error: invalid end qualification date',
+check_rules		=>'Check rules',
+vendors_report		=>'Report',
+  ));
+
+1;

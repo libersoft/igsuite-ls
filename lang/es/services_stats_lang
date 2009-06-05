@@ -1,0 +1,23 @@
+## IGSuite 4.0.0
+## Language: services_stats_lang
+## Last update: 25/05/2009
+
+%lang =  (%lang,
+   (
+total_services_num	=>'Total de viajes efectuados',
+total_services_month	=>'en el mes de',
+time_average		=>'Tiempo medio de planeamiento',
+week_charge		=>'Carga de trabajo durante días de la semana',
+services_requested	=>'Tendencia mensual de los servicios pedidos/efectuados',
+max_services		=>'Número máximo de servicios efectuados',
+min_services		=>'Número mínimo de viajes efectuados',
+day_average		=>'Como promedio al día resultan pedidos y efectuados',
+week_end_services	=>'En los días feriados y preferiados han sido efectuados en total',
+byequipment_services	=>'Viajes divididos por Equipos',
+total_services_months	=>'Viajes en total de los últimos 13 meses',
+average_services_months =>'Promedio diario de los Viajes de los últimos 13 meses',
+today_stats		=>'Estadísticas al día de hoy',
+months_stats		=>'Estadísticas del mes de',
+  ));
+
+1;

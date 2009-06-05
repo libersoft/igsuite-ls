@@ -1,0 +1,420 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="content-type" content="charset=UTF-8" />
+    <meta name="author" content="Christopher Ditto - www.dittoditto.com" />
+    <meta name="generator" content="Christopher Ditto - www.dittoditto.com"
+/>
+<title>%%PAGETITLE%%</title>
+</head>
+
+<STYLE type="text/css">
+<!--
+a {
+	color: #666666;
+	text-decoration: underline;
+}
+
+a:hover {
+	color: #888888;
+	text-decoration: none;
+}
+
+acronym{
+	border-bottom: 1px dotted #666666;
+	cursor: help;
+}
+
+body{
+	background-color: #FFFFFF;
+	font-family: Verdana, Geneva, Arial, Helvetica, sans-serif;
+	font-size: 10px;
+	color: #333333;
+	margin: 10px;
+	padding: 0px;
+}
+
+h1{
+	color:#666666;
+	font-family: Trebuchet MS, Verdana, Arial, Helvetica, sans-serif;
+	font-size: 18px;	
+	line-height: 13px;
+	margin: 0px 0px 0px 10px;
+	padding: 0px;
+}
+
+h2{
+	color:#666666;
+	font-family: Trebuchet MS, Verdana, Arial, Helvetica, sans-serif;
+	font-size: 18px;	
+	line-height: 13px;
+	margin: 10px 10px 0px 0px;
+	padding: 0px;
+	text-align:right;
+}
+
+h3{
+	color:#666666;
+	font-family: Trebuchet MS, Verdana, Arial, Helvetica, sans-serif;
+	font-size: 14px;	
+	line-height: 14px;
+	margin: 15px 0px 3px 0px;
+	padding: 0px;
+	text-align:left;
+}
+
+.contentleft{
+	width: 77%;
+}
+
+.contentmain{
+	background-color:#F9F8F7; 
+	padding:5px;
+}
+
+.contentright{
+	width: 23%;
+}
+
+.greybox{
+	background-color: #DEDEDE;
+	color:#666666;
+}
+
+.header{
+	background-color: #E6E6E6;
+	background: url(/images/tml5img8.jpg);
+	font-size: 36px;
+	font-family: Trebuchet MS, Verdana, Arial, Helvetica, sans-serif;
+	color: #903326;
+	line-height: 24px;
+	font-weight: bold;
+}
+
+.menubox{
+	background-color: #484848;
+	color:#F9F8F7;
+	font-family: Trebuchet MS, Verdana, Arial, Helvetica, sans-serif;
+}
+
+.menubox li,ul {
+	list-style-type: none;
+	padding: 0;
+}
+
+.menubox a{
+	color:#BDBDBD;
+	font-size: 16px;
+	white-space: nowrap;
+	line-height: 30px;
+	text-align: center;
+	text-decoration: none;
+	font-weight: bold;
+}
+
+.menubox a:hover{
+	color:#FFFFFF;
+	font-size: 20px;
+	line-height: 30px;
+	text-decoration: none;
+}
+
+.menubox a.selected{
+	color:#FFFFFF;
+}
+
+.searchbox {
+	font-size: 11px;
+	padding:1px 2px 1px 2px;
+	border:1px solid #999999;
+	color:#666666;
+	background:#F6F6F6;
+	text-align:right;
+}
+
+.subheader{
+	background-color: #903326; /*D6C43A;*/
+}
+
+.whitebox{
+	background-color: #FFFFFF;
+	color:#666666;
+}
+
+.whitebox_topleft{
+	background: url(/images/tml5img2.gif);
+	width:9px;
+}
+
+.whitebox_bottomright{
+	background: url(/images/tml5img1.gif);
+	width:9px;
+}
+
+.forminput
+ {              height: 20px;
+                padding: 0px;
+                margin: 0px;
+                visibility: visible;
+                border: 1px #999999 solid;
+                background-color: #f4f4f4; }
+
+.formbutton
+ {              height: 20px;
+                margin: 0px;
+                padding: 0px;
+                border: 1px #999999 solid;
+ }
+
+.formcheck
+ {              padding: 0;
+                margin: 0;
+                border: 0; }
+
+textarea
+ {              padding: 0px;
+                border: 1px #999999 solid;
+                margin: 0px;
+                background-color: #f4f4f4; }
+
+.field {        display: block;
+                float: left;
+                margin: 2px 2px 2px 0px;
+                background-color: transparent;
+                vertical-align: top;
+ }
+
+.label {        display: block;
+                float: left;
+                width: 100px;
+                margin: 2px 3px 2px 4px;
+                padding: 2px;
+                border: 0px;
+                vertical-align: top;
+       }
+-->
+</STYLE>
+
+<body>
+<table width="660" border="0" cellspacing="0" cellpadding="0"
+style="border:1px solid #000000" align="center">
+<tr>
+<td height="50" class="header" valign="bottom"
+align="right">IGLabs&nbsp;</td>
+</tr>
+<tr>
+<td height="12" class="subheader" valign="bottom" align="left"
+style="border-bottom: 1px solid #000000;"><img src="/images/tml5img7.gif"
+width="1" height="11" alt="" /></td>
+</tr>
+<tr>
+<td class="contentmain">
+<table cellpadding="10" align="center" width="100%" style="margin-top:0px;">
+<tr>
+<!-- Begin Content Left  -->
+<td valign="top" class="contentleft">
+
+<!-- Start Main Content Box -->
+<h1>main content</h1>
+<table border="0" cellspacing="0" cellpadding="0" width="100%">
+<tr><td class="whitebox_topleft"><img src="/images/tml5img7.gif" width="9"
+height="9" hspace="0" vspace="0" border="0" alt="" /></td><td
+class="whitebox" style="border-top: 1px solid #666666;"><img
+src="/images/tml5img7.gif" width="9" height="9" hspace="0" vspace="0" alt=""
+/></td><td class="whitebox" width="9" style="border-top: 1px solid #666666;
+border-right: 1px solid #666666;"><img src="/images/tml5img7.gif" width="9"
+height="9" hspace="0" vspace="0" alt="" /></td></tr><tr><td class="whitebox"
+width="9" style="border-left: 1px solid #666666;"><img
+src="/images/tml5img7.gif" width="9" height="9" hspace="0" vspace="0" alt=""
+/></td><td class="whitebox">
+
+%%PAGE%%
+<div style="padding: 15px 0 5px 0; font-size: 9px">%%PAGEACTION%%</div>
+
+</td><td class="whitebox" width="9" style="border-right: 1px solid
+#666666;"><img src="/images/tml5img7.gif" width="9" height="9" hspace="0"
+vspace="0" alt="" /></td></tr><tr><td width="9" class="whitebox"
+style="border-left:1px solid #666666;border-bottom:1px solid #666666"><img
+src="/images/tml5img7.gif" width="9" height="9" hspace="0" vspace="0" alt=""
+/></td><td class="whitebox" width="100%" style="border-bottom:1px solid
+#666666"><img src="/images/tml5img7.gif" width="9" height="9" hspace="0"
+vspace="0" alt="" /></td><td width="9" class="whitebox_bottomright"><img
+src="/images/tml5img7.gif" width="9" height="9" hspace="0" vspace="0"
+border="0" alt="" /></td></tr>
+</table>
+<!-- End Main Content Box -->
+
+<br clear="all" />
+
+<!-- Begin Bottom Content Boxes -->
+<table border="0" cellspacing="0" cellpadding="0" width="100%">
+<tr><td width="50%" valign="top">
+
+<!-- Begin Second Content Box -->
+<h1>page info</h1>
+<table border="0" cellspacing="0" cellpadding="0" width="100%">
+<tr><td width="9" class="whitebox_topleft"><img src="/images/tml5img7.gif"
+width="9" height="9" hspace="0" vspace="0" border="0" alt="" /></td><td
+class="whitebox" style="border-top: 1px solid #666666;"><img
+src="/images/tml5img7.gif" width="9" height="9" hspace="0" vspace="0" alt=""
+/></td><td class="whitebox" width="9" style="border-top: 1px solid #666666;
+border-right: 1px solid #666666;"><img src="/images/tml5img7.gif" width="9"
+height="9" hspace="0" vspace="0" alt="" /></td></tr><tr><td class="whitebox"
+width="9" style="border-left: 1px solid #666666;"><img
+src="/images/tml5img7.gif" width="9" height="9" hspace="0" vspace="0" alt=""
+/></td><td class="whitebox">
+
+%%PAGEINFO%%
+
+</td><td class="whitebox" width="9" style="border-right: 1px solid
+#666666;"><img src="/images/tml5img7.gif" width="9" height="9" hspace="0"
+vspace="0" alt="" /></td></tr><tr><td width="9" class="whitebox"
+style="border-left:1px solid #666666;border-bottom:1px solid #666666"><img
+src="/images/tml5img7.gif" width="9" height="9" hspace="0" vspace="0" alt=""
+/></td><td class="whitebox" width="100%" style="border-bottom:1px solid
+#666666"><img src="/images/tml5img7.gif" width="9" height="9" hspace="0"
+vspace="0" alt="" /></td><td width="9" class="whitebox_bottomright"><img
+src="/images/tml5img7.gif" width="9" height="9" alt="" hspace="0" vspace="0"
+border="0" /></td></tr>
+</table>
+<!-- End Second Content Box -->
+<br clear="all" />
+
+</td>
+<td width="10"><img src="/images/tml5img7.gif" width="20" height="1" alt=""
+/></td>
+<td width="50%" valign="top">
+
+<!-- Begin Third Content Box -->
+<h1>third content</h1>
+<table border="0" cellspacing="0" cellpadding="0" width="100%">
+<tr><td width="9" class="whitebox_topleft"><img src="/images/tml5img7.gif"
+width="9" height="9" hspace="0" vspace="0" border="0" alt="" /></td><td
+class="whitebox" style="border-top: 1px solid #666666;"><img
+src="/images/tml5img7.gif" width="9" height="9" hspace="0" vspace="0" alt=""
+/></td><td class="whitebox" width="9" style="border-top: 1px solid #666666;
+border-right: 1px solid #666666;"><img src="/images/tml5img7.gif" width="9"
+height="9" hspace="0" vspace="0" alt="" /></td></tr><tr><td class="whitebox"
+width="9" style="border-left: 1px solid #666666;"><img
+src="/images/tml5img7.gif" width="9" height="9" hspace="0" vspace="0" alt=""
+/></td><td class="whitebox" style="padding-left: 10px">
+
+%%LASTDOCS%%
+
+</td><td class="whitebox" width="9" style="border-right: 1px solid
+#666666;"><img src="img/tml5img7.gif" width="9" height="9" hspace="0"
+vspace="0" alt="" /></td></tr><tr><td width="9" class="whitebox"
+style="border-left:1px solid #666666;border-bottom:1px solid #666666"><img
+src="/images/tml5img7.gif" width="9" height="9" hspace="0" vspace="0" alt=""
+/></td><td class="whitebox" width="100%" style="border-bottom:1px solid
+#666666"><img src="/images/tml5img7.gif" width="9" height="9" hspace="0"
+vspace="0" alt="" /></td><td width="9" class="whitebox_bottomright"><img
+src="/images/tml5img7.gif" width="9" height="9" alt="" hspace="0" vspace="0"
+border="0" /></td></tr>
+</table>
+<!-- End Second Content Box -->
+<br clear="all" />
+
+
+</td></tr>
+</table>
+<!-- End Bottom Content Boxes -->
+
+</td>
+<!-- End Content Left  -->
+<!-- Begin Content Right -->
+<td valign="top" class="contentright">
+
+<!-- Begin Menu Box -->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" align="right"
+style="margin-top:13px">
+<tr><td class="menubox" width="10"></td><td class="menubox"
+width="100%"></td><td width="10"><img src="/images/tml5img4.gif" width="10"
+height="10" alt="" hspace="0" vspace="0" border="0" /></td></tr><tr><td
+class="menubox" width="10"></td><td class="menubox" width="100%"
+align="center">
+<!-- Floating Box Content -->
+%%SITEMAP%%
+<!-- End Floating Box Content -->
+</td><td class="menubox" width="10"></td></tr><tr><td width="10"><img
+src="/images/tml5img3.gif" width="10" height="10" alt="" hspace="0" vspace="0"
+border="0" /></td><td class="menubox" width="100%"></td><td class="menubox"
+width="10"></td></tr>
+</table>
+<!-- End Menu Box -->
+<br clear="all" /><br />
+
+<!-- Begin Latest News Box -->
+<h2>latest news</h2>
+<table border="0" cellspacing="0" cellpadding="0" width="100%">
+<tr><td class="greybox" width="9" style="border-left: 1px solid
+#666666;border-top: 1px solid #666666;"><img src="/images/tml5img7.gif"
+width="9" height="9" hspace="0" vspace="0" border="0" alt="" /></td><td
+class="greybox" style="border-top: 1px solid #666666;"><img
+src="/images/tml5img7.gif" width="9" height="9" hspace="0" vspace="0" alt=""
+/></td><td class="greybox" width="9" style="background:
+url(/images/tml5img6.gif)"><img src="img/tml5img7.gif" width="9" height="9"
+hspace="0" vspace="0" alt="" /></td></tr><tr><td class="greybox" width="9"
+style="border-left:1px solid #666666"><img src="/images/tml5img7.gif" width="9"
+height="9" hspace="0" vspace="0" alt="" /></td><td class="greybox">
+
+[latestnews]{text}
+
+</td><td class="greybox" width="9" style="border-right: 1px solid
+#666666;"><img src="/images/tml5img7.gif" width="9" height="9" hspace="0"
+vspace="0" alt="" /></td></tr><tr><td width="9" class="greybox"
+style="background:url(/images/tml5img5.gif)"><img src="/images/tml5img7.gif"
+width="9" height="9" hspace="0" vspace="0" alt="" /></td><td class="greybox"
+width="100%" style="border-bottom:1px solid #666666"><img
+src="/images/tml5img7.gif" width="9" height="9" hspace="0" vspace="0" alt=""
+/></td><td width="9" class="greybox" style="border-right:1px solid
+#666666;border-bottom:1px solid #666666"><img src="/images/tml5img7.gif"
+width="9" height="9" alt="" hspace="0" vspace="0" border="0" /></td></tr>
+</table>
+<!-- End Latest News Box -->
+<br clear="all" /><br />
+
+<!-- Begin Login Box -->
+<h2>login</h2>
+<table border="0" cellspacing="0" cellpadding="0" width="100%">
+<tr><td class="greybox" width="9" style="border-left: 1px solid
+#666666;border-top: 1px solid #666666;"><img src="/images/tml5img7.gif"
+width="9" height="9" hspace="0" vspace="0" border="0" alt="" /></td><td
+class="greybox" style="border-top: 1px solid #666666;"><img
+src="/images/tml5img7.gif" width="9" height="9" hspace="0" vspace="0" alt=""
+/></td><td class="greybox" width="9" style="background:
+url(/images/tml5img6.gif)"><img src="/images/tml5img7.gif" width="9" height="9"
+hspace="0" vspace="0" alt="" /></td></tr><tr><td class="greybox" width="9"
+style="border-left:1px solid #666666"><img src="/images/tml5img7.gif" width="9"
+height="9" hspace="0" vspace="0" alt="" /></td><td class="greybox">
+
+%%LOGIN%%
+
+</td><td class="greybox" width="9" style="border-right: 1px solid
+#666666;"><img src="img/tml5img7.gif" width="9" height="9" hspace="0"
+vspace="0" alt="" /></td></tr><tr><td width="9" class="greybox"
+style="background:url(/images/tml5img5.gif)"><img src="/images/tml5img7.gif"
+width="9" height="9" hspace="0" vspace="0" alt="" /></td><td class="greybox"
+width="100%" style="border-bottom:1px solid #666666"><img
+src="/images/tml5img7.gif" width="9" height="9" hspace="0" vspace="0" alt=""
+/></td><td width="9" class="greybox" style="border-right:1px solid
+#666666;border-bottom:1px solid #666666"><img src="/images/tml5img7.gif"
+width="9" height="9" alt="" hspace="0" vspace="0" border="0" /></td></tr>
+</table>
+<!-- End Login Box -->
+<a href="http://www.igsuite.org" style="float:right; border:0; margin: 30px
+10px 0px 10px"><img src="/images/poweredbyig.gif" style="border:0"></a>
+</td>
+<!-- End Content Right -->
+
+</tr>
+</table>
+
+<div align="center">&copy;all rights reserved, IGLabs</div>
+</td>
+</tr>
+</table>
+<!-- Template Design by Christopher Ditto: http://www.dittoditto.com -->
+</body>
+</html>

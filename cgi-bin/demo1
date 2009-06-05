@@ -1,0 +1,323 @@
+#!/usr/bin/perl
+# Procedure: demo1
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+##XXX2TRANSLATE This demo needs to be correctly translated
+
+use strict;
+use IG;
+use IG::Utils;
+IG::MkEnv(__PACKAGE__);
+
+## Only an IG user can access to this demo
+IG::DTable ( default_action => sub { $IG::demo_version || CheckPrivilege() } );
+
+#########################################################################
+#########################################################################
+sub default_action
+ {
+  HtmlHead();
+  TaskHead(	title => 'IGSuite FrameWork',
+		width => 700,
+		icon  => 0);
+
+  my $page_selector =  ( IG::MkTaskPaging( 8 * $IG::page_results,
+                                           "demo1?tema=$on{tema}" ) )[2];
+
+  HLayer( MkButton( text=>'Deep Blue', link=>'demo1?tema=deepblue' ),
+          MkButton( text=>'Virgilio',  link=>'demo1?tema=virgilio' ),
+          MkButton( text=>'WindowXP',  link=>'demo1?tema=windowxp' ),
+          MkButton( text=>'Dark',      link=>'demo1?tema=dark'     ),
+          MkButton( text=>'Bari',      link=>'demo1?tema=bari'     ),
+          MkButton( text=>'10 Years',  link=>'demo1?tema=10years'  ),
+          $page_selector );
+
+  TaskMsg("This application show you some IGSuite Framework features. By
+buttons above you can see different skins applied to the same gui. Switch
+into different tabs to view the features. If you want to see the code of this
+application click <a href=\"http://www.igsuite.org/live/$IG::VERSION/demo1\">Here</a>.
+<br>If you find a graphic problem with your browser, please let us know and
+send information about your browser and your operating system to
+staff\@igsuite.org. <span style=\"color:green; font-weight:bold;\">
+This Page Is Valid HTML 4.01 Transitional!</span>",4);
+
+
+  ############################################################################
+  ## PAN 0
+  my $panel0 =
+
+  TaskMsg("IGSuite can easily generate sofisticated forms. Put your mouse over
+the label of each field to show a short description of input type.",2).
+ 
+  FormHead(status=>'rw').
+
+  Input ( type=>'hidden', name=>'tema').
+
+  Input(type => 'text',
+	show => 'Text Field',
+	quickhelp =>   "Questo e' un comune campo per l'input del testo. in
+			esso e' possibile predisporre delle Regex (perl style)
+			per il controllo del contenuto").
+
+  Input(type =>'date',
+	show =>'Date Field',
+	name =>'data',
+	quickhelp =>   "Questo campo e' come uno di tipo text ma predisposto
+			appositamente per l'inserimento delle date. Apparte
+			il calendario Js che facilita il recupero di una
+			data, e' possibile inserire le date in numerosissimi
+			modi. Provate per esempio a inserire date del tipo:
+			1304; 13; 130404; 13042004 e premere su submit la
+			data sara' convertita automaticamente").
+
+  Input(type =>'colour',
+	show =>'Colour Map Field',
+	name =>'colour').
+ 
+  Input(type => 'textarea',
+        cols => 50,
+        rows => 4,
+        style=> 'width: 300px; height:40px',
+	show => 'TextArea Field',
+	quickhelp =>   "Questo campo e' un comune textarea. E' utile notare che
+			per ogni tipo di field e' possibile assegnare degli
+			attributi tipo size, value, pattern, name, show e
+			molti altri che ne definiscono il comportamento").
+
+  Input(type => 'combo', 
+	show => 'Combo Field',
+	data => [('red','blue','cyan')],
+	quickhelp =>   "Una delle mancanze dei form html e' proprio quella dei
+			campi combo. Cioe' la possibilita' di inserire un
+			valore o di sceglierne uno da un elenco predefinito.").
+
+  Input(type => 'select',
+	show => 'Select Field',
+	data => [('red','blue','cyan')],
+	quickhelp =>   "I campi select sono i piu' dinamici del framework. E'
+			possibile popolarli con array e hash e visualizzarne
+			i valori con ordini per valore o per chiave").
+
+  Input(type => 'groupselector',
+	style=>'width: 300px',
+	quickhelp =>   "Con questo tipo di campo e' facilissimo creare un campo
+			select popolato da tutti gli utenti definiti nel
+			sistema",
+	show => 'Logins Field').
+
+  Input(type => 'label',
+	show => 'Label Field', 
+	data => IG::ToolTip
+	              ( body=> Input(   type=> 'select',
+					data => [('red','blue','cyan')],
+					show=> 'Select field').
+					
+	                       Input(	type=> 'label',
+					show=> 'Checkbox Field',
+					data=>  Input ( label=> 1,
+							type => 'checkbox',
+							value=> 1).
+						Input ( label=> 2,
+							type => 'checkbox',
+							value=> 2).
+						Input ( label=> 3,
+							type => 'checkbox',
+							value=>3)),
+			show=>'Checkbox field inside a Tooltip, click here',
+			width=>'280px')
+      ).
+ 
+  Input(type => 'multiselect',
+	label1=> 'Label1',
+	label2=> 'Label2',
+	value=> 'red',
+	show => 'Multiselect field',
+	data => [('red','blue','cyan','yellow','black','green')] ).
+
+  Input(type => 'submit',
+	show => 'Submit Field',
+	quickhelp =>   "Inviando il form si ricarica lo stesso; questo da la
+			possibilita' di vedere come il framework mantiene i
+			dati e come nel caso della data ne converte il valore").
+
+  FormFoot();
+
+
+  ############################################################################
+  ## PAN 1
+  my $panel1 =
+
+  TaskMsg("L'interfaccia con i database e' gestita in IG da sole due
+funzioni: DbQuery e FetchRow. Con la prima e' possibile passare una query al
+database, che sara' parsata e a seconda del \$IG::db_driver impostato
+subira' delle conversioni nel corrispondente dialetto SQL, permettendo a
+IG l'uso del modulo appropriato da passare al database. FetchRow si
+occupa invece di recuperare la risposta del server che a seconda della query puo' essere un
+array o uno scalare. Da notare che le date sia nelle query passate che nei
+risultati sono convertite automaticamente secondo il valore che assume
+\$IG::date_format",2).
+
+  TaskListMenu(	['Login'],
+		['Cognome Nome'],
+		['Data di nascita']);
+
+  DbQuery("select login, name, birthday from users where login<>''");
+  my @row;
+  $panel1 .= TaskListItem([$row[0]],
+			[$row[1]],
+			[$row[2]] ) while @row = FetchRow();
+
+  $panel1 .= TaskListFoot(3);
+
+
+  ############################################################################
+  ## PAN 2
+  my $panel2 =
+
+  TaskMsg("Con la funzione TabPane() e' facile generare i tabs anche in modo
+	 annidato. Cliccate sulle labels per visualizzarne il contenuto.",2);
+
+  my @panels;
+  for (0..7)
+   {
+    $panels[$_] = [( "Tab" . ($_+ 1),
+		  TaskMsg("Quello che vedete racchiudere questo testo e'".
+			  " il risultato di TaskMsg una delle funzioni ".
+			  "che serve a visualizzare messaggi in vari modi. ".
+			  IG::QuickHelp( alt    => 'Prova di un quickhelp all\'interno di un Pan.',
+                                         anchor => 'Click me'),
+			  $_+1, 450,200) )];
+   }
+ 
+  $panel2 .= IG::TabPane (	data       => \@panels,
+				width      => 550,
+				height     => 240,
+                                label_type => 1,
+				name       => 'tab1');
+
+  
+  ############################################################################
+  ## PAN 3
+  my $sample_date  = IG::GetDateByFormat(13,4,1973);
+  my $sample_value = $sample_date;
+     $sample_value =~ s/[^\d]//g;
+  my $panel3 =
+
+  TaskListMenu(	["Function"],		["Value"],		["Result"]).
+  TaskListItem(	["MkUrl()"],		["a=l'acqua"],		[MkUrl("a=l'acqua")]).
+  TaskListItem(	["MkLink()"],		["'''link''' http://www.igsuite.org"],		[MkLink("'''link''' http://www.igsuite.org")]).
+  TaskListItem(	["GetDayByDate()"],	[$sample_date],		[$IG::days[IG::GetDayByDate($sample_date)]]).
+  TaskListItem(	["GetValuesByDate()"],	[$sample_date],		['@(13,4,1973)']).
+  TaskListItem(	["GetDateByFormat()"],	["13,4,73"],		[$sample_date]).
+  TaskListItem(	["GetDateExtended()"],	[""],		        [IG::GetDateExtended()]).
+  TaskListItem(	["GetDateFromTime()"],	["1234567890"],		[IG::GetDateFromTime('1234567890')]).
+  TaskListItem(	["GetDaysInMonth()"],	["2,2008"],		[IG::GetDaysInMonth(2,2008)]).
+  TaskListItem(	["SumDate()"],		["13,4,1973,-40"],	[IG::SumDate(13,4,1973,-40)]).
+  TaskListItem(	["CkDate()"],		[$sample_value],	[IG::CkDate($sample_value)]).
+  TaskListItem(	["MkByte()"],		["230000"],		[IG::MkByte(230000)]).
+  TaskListItem(	["MkEntities()"],       [IG::MkEntities('àèòùì')],[IG::MkEntities(IG::MkEntities('àèòùì'))]).
+  TaskListItem(	["WrapText()"],		["1234567890"],		[IG::WrapText(text=>'1234567890', columns=>6, separator=>'<br>')]).
+  TaskListFoot(2);
+
+
+  ############################################################################
+  ## PAN 4
+  my $panel4 =
+
+  TaskMsg("Con MkCalendar() e' possibile generare onthefly calendari che
+	  possono contenere anche gli eventi di uno specifico utente",2).
+
+  "<table cellspacing=8><tr>";
+
+  for ("01".."12")
+   {
+    $panel4 .= '<td valign="top">'.
+	     IG::MkCalendar(	user	 => 'lucas',
+				month	 => $_,
+				daylink	 => "javascript:alert('Your date: CALENDARDATE')",
+				showevent=> 'none').
+	    '</td>';
+    $panel4 .= "</tr><tr>" if $_ =~ /04|08/;
+   }
+  $panel4 .= "</tr></table>";
+
+
+  ############################################################################
+  ## PAN 5
+  my $panel5 =
+
+  TaskMsg("Ecco un esempio di un istogramma con 4 serie di valori. E'
+possibile rappresentare fino a 9 serie di valori. La scala e le proporzioni
+vengono generate in modo automatico. l'istogramma e' completamente
+realizzato in HTML",2).Br().
+
+  IG::MkGraph(	title	=> 'Histogram sample',
+		width	=> 400,
+		height	=> 250,
+		rows	=> "(100,230,50,54,160)".
+			   "(100,80,210,99,150)".
+			   "(10,180,21,29,120)".
+			   "(80,130,180,190,100)",
+		vars	=> "a,b,c,d,e");
+
+
+  ############################################################################
+  ## PAN 6
+  my $panel6 =
+
+  TaskMsg("Grazie ad una delle ultime features del framework di IG e'
+	  possibile collegare un repository di file ad ogni feature task di IG.
+	  Cliccare su Visualizza Allegati", 2).
+
+  IG::MkRepository( id           => 'framework',
+                    application  => 'igwiki',
+                    height       => 370 );
+
+
+  ############################################################################
+  ## PAN 7
+  my $panel7 = '&nbsp;';
+
+  ############################################################################
+  ## SHOW TABPANE
+
+  IG::TabPane(  data=>[(['Sample Form',		$panel0],
+			['IG TaskList',		$panel1],
+			['Tabs into Tabs',	$panel2],
+			['Some functions',	$panel3],
+			['Calendar',		$panel4],
+			['Html Histogram',	$panel5],
+			['File Repository',	$panel6],
+			['About',
+			 $panel7,
+			 "ajaxrequest(['NO_CACHE','ajaxaction__copyright'],['tab2_content7'])"])],
+		width  => 680,
+		height => 490,
+		nowrap => 'true',
+		default=> ($on{pos}-1),
+		name   => 'tab2');
+
+  TaskFoot(	comments     => 'yes',
+		commentid    => 1,
+		commentowner => $IG::login_admin);
+  HtmlFoot();
+ }
+ 

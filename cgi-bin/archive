@@ -1,0 +1,681 @@
+#! /usr/bin/perl
+# Procedure: archive
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	proto		=> sub { CheckPrivilege('archive_edit') },
+		protoagg	=> sub { CheckPrivilege('archive_edit') },
+		protomodi	=> sub { CheckPrivilege('archive_edit') },
+		views		=> sub { CheckPrivilege('archive_view') },
+		findshow	=> sub { CheckPrivilege('archive_view') },
+		findexec	=> sub { CheckPrivilege('archive_view') },
+		delshow		=> sub { CheckPrivilege('archive_edit') },
+		delexec		=> sub { CheckPrivilege('archive_edit') },
+		docview		=> sub { CheckPrivilege('archive_view') },
+		sign		=> sub { CheckPrivilege('archive_view') },
+		default_action	=> sub { CheckPrivilege('archive_view') });
+
+############################################################################
+############################################################################
+sub default_action
+ {
+  my (	$query,
+	$alphabet_selector,
+	$page_selector ) = IG::MkProtocolList(); 
+
+  Header( $page_selector, $alphabet_selector );
+
+  my $base_link = "alphabet=$on{alphabet}&amp;".
+		  "view=$on{view}";
+
+  TaskListMenu
+   (
+	[$lang{number},                    "order=id&amp;$base_link"],
+	[$lang{contact_name},              "order=contactname&amp;$base_link"],
+	[$lang{issue},	                   "order=issue&amp;$base_link"],
+	[Img(src=>"$IG::img_url/user.gif"),"action=views&amp;viewtype=owner"],
+	[$lang{document_type},             "action=views&amp;viewtype=type"],
+	[$lang{rif},	                   "order=docref&amp;$base_link"],
+	[$lang{document_date},	           "order=docdate&amp;$base_link"],
+	[$lang{document_expire},           "order=expire&amp;$base_link"],
+	[$lang{references},                "order=note&amp;$base_link"],
+   );
+
+  DbQuery("SELECT archive.id, archive.docref, archive.issue,".
+          " archive.contactname, archive.expire, archive.note,".
+          " archive.owner, archive.type, archive.days,".
+          " archive.contactid, archive.docdate, archive.npa, users.initial ".
+          "FROM archive ".
+          "LEFT JOIN users ON archive.owner=users.login ".
+          "WHERE $query");
+
+  while ( my @row = FetchRow() )
+   {
+    $row[4] = CkDate($row[4]);
+    $row[4] = Blush($row[4]) if IG::CompareDate($row[4]) <= 0;
+
+    TaskListItem (
+	[ParseLink($row[0])],
+	[$row[3]],
+	[$row[2],		'', 'nowrap'],
+	[$row[12]],
+	[$IG::docs_type{$row[7]}],
+	[MkLink($row[1])],
+	[$row[10],		'', 'nowrap'],
+	[$row[4],		'', 'nowrap'],
+	[MkLink($row[5])],
+		 );
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub docview
+ {
+  ## Change id if user request next or previous ID
+  $on{id} = IG::SearchProtocolId( direction => $on{change_id_to},
+                                  id        => $on{id} ) if $on{change_id_to};
+
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'r' ) || return;
+
+  ## retriew document info
+  DbQuery("SELECT *, expire-current_date ".
+	  "FROM archive WHERE id='".DbQuote($on{id})."'");
+  my @row = FetchRow();
+
+  IG::Warn( $lang{Err_nodocument} ) && return if !$row[0];
+  
+  ## adjust some values
+  $row[10] = CkDate($row[10]);
+  $row[4]  = CkDate($row[4]);
+  $row[4]  = Blush($row[4]) if $row[12]<1;
+  $row[5]  = MkLink($row[5]);
+  $row[1]  = MkLink($row[1]);
+
+  ## renders the page
+  Header();
+
+  IG::ShowProtocolInfo
+   ( id     => $row[0],
+     title  => $lang{archive_protocol},
+     fields => [( [ $lang{contact_name},
+                    "<a href=\"contacts?".
+			      "action=showrecord&amp;".
+			      "contactid=$row[9]\">".
+			      "$row[9] $row[3]</a>" ],
+                  [ $lang{referring},
+                    IG::UsrInf('name',$row[6]) ],
+	          [ $lang{document_date},
+	            $row[10] ],
+                  [ $lang{protocol_number},
+                    $row[0] ],
+                  [ $lang{document_expire},
+                    $row[4] ],
+	          [ $lang{issue},
+	            $row[2] ],
+                  [ $lang{document_reference},
+                    $row[1] ],
+	          [ $lang{document_type},
+	            $IG::docs_type{$row[7]} ],
+	          [ $lang{document_integrity},
+	            IG::CkSign( id=>$row[0], owner=>$row[6] ) ],
+                  [ $lang{days_before_alert},
+                    $row[8] ],
+                  [ $lang{archive_position},
+                    $row[11] ],
+                  [ '&nbsp;',
+                    '&nbsp;' ],
+	          [ $lang{notes},
+	       	    $row[5] ],
+                )] );
+
+  ## Related Documents
+  IG::RelatedTo( $on{id}, $row[9] );
+
+  TaskFoot(	comments	=> 'yes',
+		commentid	=> $on{id},
+		commentbackurl	=> "action=docview&amp;id=$on{id}");
+  HtmlFoot();
+  LogD($row[3], 'view', 'archive', $on{id});
+ }
+
+##############################################################################
+##############################################################################
+sub sign
+ {
+  my $sign;
+  ## find owner
+  DbQuery("select owner from archive where id='".DbQuote($on{id})."'");
+  my $owner = FetchRow();
+
+  $sign = IG::Sign( id     => $on{id},
+                    action => 'update' ) if $owner eq $auth_user;
+
+  LogD('sign', 'update', 'archive', $on{id}) if $sign;
+  docview();
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+
+         TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
+
+         IG::LastDocuments().
+         TaskFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub views
+ {
+  QuoteParams();
+  DbQuery("SELECT $in{viewtype}, count(*) ".
+	  "FROM archive where issue>='$tv{start_year}'".
+	  " and issue<='$tv{end_year}' group by $in{viewtype}");
+  Header();
+  TaskListMenu( [ucfirst($on{viewtype})], [$lang{number}] );
+
+  while (my @row = FetchRow())
+   {
+    if ($on{viewtype} eq 'type')
+     {
+      TaskListItem(	[$IG::docs_type{$row[0]}, "archive?filter=$row[0]"],
+			[$row[1],		  '', 'align=right'] );
+     }
+    else
+     {
+      TaskListItem(	[IG::UsrInf('name',$row[0]) , "archive?flpers=$row[0]"],
+			[$row[1],		  '', 'align=right'] );
+     }
+   }
+  TaskListFoot();     
+  Footer();
+ }
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  ## Check document accessibility
+  my $doc_status = IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' );
+  return if ! $doc_status;
+
+  HtmlHead();
+  TaskHead( title     => $lang{archive_protocol},
+	    minwidth  => 550);
+
+  FormHead( ckchanges => 'true',
+	    labelstyle=> 'width:150px',
+            name      => 'proto',
+            autofocus => 'false',
+            onsubmit  => "proto.submit.disabled = 'true';",
+	    cgiaction => 'protoagg');
+
+  Input(    name      => 'id',
+	    show      => $lang{protocol_number},
+            validate  => { pattern   => '^(8\d\d\d\d\d.\d\d)*$',
+                           onerror   => $lang{Err_protocol} },
+            style     => 'width:80px;',
+            readonly  => $doc_status == -1 ? 0 : 1,
+	    type      => 'text');
+
+  Input(    show      => $lang{issue},
+	    name      => 'issue',
+            validate  => { onerror   => $lang{Err_issue},
+                           mandatory => 'true' },
+            value     => $tv{today}, 
+            type      => 'date');
+
+  Input(    type      => 'label',
+            show      => 'File',
+            data      => IG::InputDocBox
+                          ( dir=> $IG::htdocs_dir . $IG::S .
+                                  $IG::default_lang{archive} . $IG::S .
+                                  $IG::default_lang{templates} . $IG::S )
+       ) if !$on{print};
+
+  Input(    show      => $lang{document_reference},
+            name      => 'docref',
+            type      => 'text',
+            size      => 25,
+            maxlen    => 25 );
+
+  Input(    show      => $lang{document_type},
+	    type      => 'select',
+            name      => 'type',
+            validate  => { mandatory => 'true' },
+            zerovalue => 'true',
+	    style     => 'width: 350px',
+	    data      => \%IG::docs_type);
+
+  Input(    name      => 'owner',
+	    show      => $lang{referring},
+            readonly  => $doc_status == -1 ? 0 : 1,
+	    type      => 'logins');
+
+  Input(    type      => 'contactfinder',
+            validate  => { mandatory => 'true' },
+	    show      => $lang{contact_name});
+
+  Input(    show      => $lang{document_date},
+            validate  => { onerror   => $lang{Err_issue},
+                           mandatory => 'false' },
+	    name      => 'docdate',
+	    type      => 'date');
+
+  Input(    show      => $lang{document_expire},
+            validate  => { onerror   => $lang{Err_due_date},
+                           mandatory => 'false' },
+	    name      => 'expire',
+	    type      => 'date');
+
+  Input(    show      => $lang{days_before_alert},
+            name      => 'days',
+            type      => 'text',
+            value     => 30,
+            validate  => { pattern => '^\d+$' },
+            size      => 3,
+            maxlen    => 3);
+
+  Input(    name      => 'npa',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 50,
+            show      => $lang{archive_position});
+
+  Input(    show      => $lang{notes},
+	    name      => 'note',
+	    style     => 'width:350px; height:60px;',
+	    type      => 'textarea');
+
+  Input(    show      => $lang{save_archive},
+	    type      => 'submit',
+            style     => 'margin-top:20px',
+	    name      => 'submit');
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  ## Validate Form values
+  push @IG::errmsg, IG::FormValidate();
+  proto() && return if @IG::errmsg;
+ 
+  ## Insert into DB
+  $on{id} ||= IG::MkLastNum('archive');
+ 
+  DbWrite( overwrite_clause => "id = '".DbQuote($on{id})."'",
+           action           => 'insert',
+           table            => 'archive',
+           values           => [ $on{id},
+                                 $on{docref},
+                                 $on{issue},
+                                 $on{contactname},
+                                 $on{expire},
+                                 $on{note},
+                                 $on{owner},
+                                 $on{type},
+                                 $on{days},
+                                 $on{contactid},
+                                 $on{docdate},
+                                 $on{npa} ]);
+
+  LogD('', 'insert', 'archive', $on{id});
+
+  IG::BuildDoc();
+ }
+
+############################################################################
+############################################################################
+sub protomodi
+ {
+  DbQuery("SELECT * FROM archive where id='".DbQuote($on{id})."'");
+    (	$on{id},
+	$on{docref},
+	$on{issue},
+	$on{contactname},
+	$on{expire},
+	$on{note},
+	$on{owner},
+	$on{type},
+	$on{days},
+	$on{contactid},
+	$on{docdate},
+	$on{npa}        ) = FetchRow();
+
+  proto();
+ }
+
+############################################################################
+############################################################################
+sub findshow
+ {
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer
+     ( bottom_space => 0,
+       right_layers
+        =>[(
+	    FormHead( name       => 'findnavi',
+		      method     => 'get',
+		      target     => 'mainf',
+		      labelstyle => 'border:0px; width: auto',
+		      cgiaction  => 'findexec',
+		      autofocus  => 'false',
+		      float      => 'left' ),
+
+	    Input(    type       => 'hidden',
+	              name       => 'qry').
+	
+	    Input(    type       => 'findable' ),
+
+	    Input(    type       => 'logins',
+	              style      => 'font-size:10px; width:120px',
+	              name       => 'owner',
+	              value      => 'all',
+	              allvalue   => 'true'),
+ 	
+	    Input(    type       => 'select',
+	              allvalue   => 'true',
+	              style      => 'font-size:10px; width:140px',
+	              value      => 'all',
+	              name       => 'type',
+	              data       => \%IG::docs_type),
+
+	    Input(    type       => 'select',
+	              value      => 'all',
+	              style      => 'font-size:10px; width: 140px',
+	              name       => 'fieldtofind',
+	              data       => [(['contact',  $lang{with_header}],
+	                              ['docref',   $lang{with_reference}],
+	                              ['id',       $lang{with_protocol}],
+	                              ['date',     $lang{with_date}],
+	                              ['note',     $lang{with_notes}],
+	                              ['npa',      $lang{with_npa}],
+	                              ['all',      $lang{all}])]),
+
+	    Input(    type       => 'text',
+	              name       => 'keytofind',
+                      focus      => 'true',
+      	              value      => $IG::cookie{lastsearch},
+	              style      => 'width:90px; margin-right: -5px;',
+	              onblur     => "document.cookie='lastsearch=' + escape(this.value)"),
+
+	    Input(    type       => 'image',
+	              name       => $lang{find},
+	              src        => "$IG::img_url/${IG::tema}search.gif",
+	              alt        => $lang{find}),
+			
+	    FormFoot())]
+	);
+   }
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub findexec
+ {
+  my ($type, $owner, $query);
+  my $counter = 0;
+
+  ## Build query
+  QuoteParams();
+
+  ## Set a document type and owner filter
+  if ($on{type} ne 'all')
+   { $type = " and archive.type='$in{type}'" }
+  if ($on{owner} ne 'all')
+   { $owner = " and archive.owner='$in{owner}'" }
+
+  if ( $on{ajax_request} )
+   {
+    $query = "archive.contactid = '$on{contactid}'";
+   }
+  elsif ( length($on{keytofind}) < 2 )
+   {
+    push @IG::errmsg, $lang{Err_find};
+    $query = '1=0';
+   }
+  elsif ($on{fieldtofind} eq 'all')
+   {
+    $query = "(archive.id ~* '$in{keytofind}'".
+             " or archive.contactname ~* '$in{keytofind}'".
+	     " or archive.note ~* '$in{keytofind}'".
+	     " or archive.docref ~* '$in{keytofind}')".
+	     " $type$owner";
+   }
+  elsif ($on{fieldtofind} eq 'contact')
+   { $query = "archive.contactname ~* '$in{keytofind}' $type$owner"; }
+  elsif ($on{fieldtofind} eq 'docref')
+   { $query = "archive.docref ~* '$in{keytofind}' $type$owner"; }
+  elsif ($on{fieldtofind} eq 'note')
+   { $query = "archive.note ~* '$in{keytofind}' $type$owner"; }
+  elsif ($on{fieldtofind} eq 'npa')
+   { $query = "archive.npa ~* '$in{keytofind}' $type$owner"; }
+  elsif ($on{fieldtofind} eq 'id')
+   { $query = "archive.id ~* '$in{keytofind}' $type$owner"; }
+  elsif ($on{fieldtofind} eq 'date')
+   { $query = "archive.issue = '".CkDate($in{keytofind})."' $type$owner"; }
+
+  if ( $on{ajax_request} )
+   {
+    HttpHead( expires => '+20s' );
+    TaskMsg( Input( type      => 'button',
+                    float     => 'right',
+                    onclick   => "document.location = '".
+                                  "archive?".
+                                          "action=proto&amp;".
+                                          "contactid=$on{contactid}&amp;".
+                                          "backtoreferer=1';",
+                    show      => $lang{new_item},
+                    fieldstyle=> 'margin:0px',
+                    style     => 'margin:0px;font-size:10px; height:15px' ).
+
+	     Img(   src       => "$IG::img_url/mime_mini_archive.png",
+                    style     => 'margin-right:2px',
+                    align     => 'absmiddle').
+
+             "<a href=\"archive\">$lang{archive}</a>"
+
+            ,7 );
+   }
+  else
+   {
+    $IG::set_cookie{lastsearch} = $on{keytofind};
+    HtmlHead( shortcuts => _short_cuts());
+    TaskHead( title     => $lang{archive_protocol},
+	      width     => '100%' );
+
+    HLayer( MkButton( text => $lang{new_protocol},
+	              link => "archive?action=proto"),
+
+            MkButton( text => $lang{back_to_protocol},
+                      link => 'archive')
+          );
+
+    TaskMsg("$lang{archive_protocol} - $lang{find}: <b>$on{keytofind}</b>",4);
+   }
+
+
+  TaskListMenu (
+	[$lang{number}],
+	[$on{ajax_request} ? '' : $lang{contact_name}],
+	[$lang{document_type}],
+	[$lang{issue}],
+	[$lang{rif}],
+	[$lang{due_date}],
+	[$lang{rif}],
+	[$lang{references}]
+               );
+
+  DbQuery("SELECT archive.id, archive.docref, archive.issue,".
+          " archive.contactname, archive.expire, archive.note,".
+          " archive.owner, archive.type, archive.days,".
+          " archive.contactid, archive.docdate, archive.npa,".
+          " expire-current_date, users.initial ".
+          "FROM archive ".
+          "LEFT JOIN users ON archive.owner=users.login ".
+          "WHERE $query ".
+          "ORDER BY archive.issue desc, archive.id desc");
+
+  while ( my @row = FetchRow() )
+   {
+    ++$counter;
+    $row[4] = CkDate($row[4]);
+    $row[4] = Blush($row[4]) if $row[12]<1;
+
+    TaskListItem (
+	[ParseLink($row[0])],
+	[$on{ajax_request} ? '' : $row[3]],
+	[$IG::docs_type{$row[7]}],
+	[$row[2],		'','nowrap'],
+	[MkLink($row[1])],
+	[$row[4],		'','nowrap'],
+	[$row[13]],
+	[MkLink($row[5])] );
+   }
+
+  if ($on{ajax_request})
+   {
+    TaskListFoot(7);
+   }
+  else
+   {
+    push @IG::errmsg, $lang{no_items} if !$counter && length($on{keytofind}) > 1;
+    TaskListFoot();
+    TaskFoot();
+    HtmlFoot();
+    LogD( $IG::query_string, 'search', 'search_archive', undef);
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub delshow
+ {
+  Header();
+  TaskMsg( $lang{warn_before_delete}.Br(2).
+  
+	   FormHead( cgiaction => 'delexec',
+		     float     => 'left',
+		     onsubmit  => IG::JsConfirm( $lang{are_you_sure} ) ).
+
+           Input(    type      => 'select',
+	             name      => 'id',
+	             zerovalue => 'true',
+                     style     => 'width: 350px',
+		     data      => "SELECT id, id, contactname FROM archive ".
+		                  "where issue>='$tv{start_year}'".
+		                  " and issue<='$tv{end_year}' ".
+			          "ORDER BY id desc",
+		     show      => $lang{protocol_number}).
+
+	   Input(    type      => 'submit',
+		     show      => $lang{delete}).
+
+           FormFoot(),
+           
+           2 );
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub delexec
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  IG::TrashDoc($on{id});
+  DbQuery("delete from archive where id='".DbQuote($on{id})."'");
+
+  LogD('', 'delete', 'archive', $on{id});
+  IG::Redirect("archive");
+ }
+
+#############################################################################
+#############################################################################
+sub Footer
+{
+ TaskFoot();
+ HtmlFoot();
+}
+
+
+sub Header 
+ {
+  my ( $page_selector, $alphabet_selector ) = @_;
+ 
+  HtmlHead( shortcuts => _short_cuts());
+  TaskHead( title     => $lang{archive_protocol},
+	    width     => '100%' );
+
+  HLayer (left_layers =>
+           [(
+               	  MkButton( text      => $lang{back_to_list},
+	               	    link      => "archive",
+	               	    privilege => $on{action} eq 'docview' ),
+	                  	    
+		  MkButton( text      => $lang{new_protocol},
+	                    link      => "archive?action=proto"),
+				    
+		  MkButton( text      => $lang{delete},
+			    link      => "archive?action=delshow"),
+
+		  MkButton( text      => $lang{reports},
+			    link      => "reports?table=archive",
+			    privilege => CheckPrivilege('archive_report')),
+
+		  MkButton( text      => $lang{model_mng},
+			    link      => "docmaker?category=archive",
+                            privilege => CheckPrivilege('archive_template') ),
+
+		  MkButton( text      => 'IGTiff',
+                            link      => "tiffedit?action=show",
+                            privilege => CheckPrivilege('archive_tiff') ),
+
+		  $page_selector)]
+			 ) if !$on{print};
+
+  PrOut $alphabet_selector;
+ }

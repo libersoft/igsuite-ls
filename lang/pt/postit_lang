@@ -1,0 +1,16 @@
+## IGSuite 4.0.0
+## Language: postit_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+web_site                =>'Web Site',
+personal_links		=>'Links pessoais',
+link_name		=>'Nome link',
+attachments		=>'Anexos',
+save_link		=>'Salvar como novo link',
+Err_nolink		=>'Erro: insira um nome de link válido',
+  ));
+
+1;

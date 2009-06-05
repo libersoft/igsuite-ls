@@ -1,0 +1,20 @@
+## IGSuite 4.0.0
+## Language: isms_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+alert_offer_notaccepted =>'The offer %1$s dated %2$s and related to %3$s wasn\'t accepted yet after more than %4$s days.',
+answer_to	=>'En reponse à',
+reply_isms	=>'Répondes au message',
+isms_arrived	=>'Isms arrivés',
+isms_sent	=>'Isms envoyés',
+isms_deleted	=>'Isms effacés',
+delete_isms	=>'Jeter à la corbeille le message reçu',
+to_time		=>'Aux heures',
+move_to_basket	=>'Dans la corbeille',
+move_to_todo	=>'Dans les choses à faire',
+   ));
+
+1;
+

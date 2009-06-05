@@ -1,0 +1,219 @@
+#! /usr/bin/perl
+# Procedure: articles
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+my $page_selector;
+
+IG::DTable( proto	   => sub{ CheckPrivilege('products_articles_new')  },
+	    protoagg	   => sub{ CheckPrivilege('products_articles_edit') },
+	    show	   => sub{ CheckPrivilege('products_articles_view') },
+	    protomodi	   => sub{ CheckPrivilege('products_articles_edit') },
+	    delshow	   => sub{ CheckPrivilege('products_articles_edit') },
+	    delexec	   => sub{ CheckPrivilege('products_articles_edit') },
+	    default_action => sub{ CheckPrivilege('products_articles_view') });
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  HtmlHead();
+  TaskHead( title=>$lang{articles_mng},
+            padding=>8  );
+
+  FormHead(cgiaction=>'protoagg');
+
+  Input (type=>'hidden',
+	 name=>'protomodi');
+
+  Input (type=>'text',
+	 name=>'id',
+	 size=>50,
+	 maxlen=>15,
+	 show=>$lang{code});
+
+  Input (type=>'text',
+	 name=>'description',
+	 size=>50,
+	 show=>$lang{description});
+
+  Input (type=>'submit',
+         style=>'margin-top:20px',
+	 show=>$lang{save});
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  if (!$on{description})
+   { push @IG::errmsg, $lang{Err_description}; }
+
+  $on{id} =~ s/ //g;
+
+  if (!$on{id})
+   {
+    push @IG::errmsg, $lang{Err_code};
+   }
+  elsif (!$on{protomodi})
+   {
+    QuoteParams();
+    DbQuery("SELECT id FROM articles where id='$in{id}'");
+    if (FetchRow())
+     { push @IG::errmsg, $lang{Err_code_exists}; }
+   }
+
+  proto() && return if @IG::errmsg;
+
+  QuoteParams();
+  DbQuery(query=>[("delete from articles where id='$in{id}'",
+
+		   "insert into articles values ('$in{id}','$in{description}')"
+		  )] );
+
+  LogD('', 'insert', 'articles', $on{id});
+  IG::Redirect("articles");  
+ }
+
+##############################################################################
+##############################################################################
+sub protomodi
+ {
+  QuoteParams();
+  DbQuery("SELECT * FROM articles where id='$in{id}'");  
+  ( $on{id}, $on{description} ) = FetchRow();
+  $on{protomodi}++; # Flag!
+  proto();
+ }
+
+#############################################################################
+#############################################################################
+sub delshow
+ {
+  Header();
+  TaskMsg($lang{warn_before_delete}.Br(2).
+	  FormHead( cgiaction => 'delexec',
+		    float     => 'left',
+		    onsubmit  => IG::JsConfirm( $lang{are_you_sure} ) ).
+
+	  Input (type=>'select',
+		 name=>'id',
+		 style=>'width: 500px',
+		 data=> "SELECT id, id, shortdescription ".
+			"FROM articles ORDER BY id",
+		 show=>$lang{protocol_number}).
+
+	  Input (type=>'submit',
+		 show=>$lang{delete}).
+
+	  FormFoot(),2);
+  Footer();
+ }
+
+
+############################################################################
+############################################################################
+sub delexec
+ {
+  if ($on{id})
+   {
+    QuoteParams();
+    DbQuery("delete from articles where id='$in{id}'");
+    LogD('', 'delete', 'articles', $on{id});
+   }
+
+  IG::Redirect("articles");
+ }
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  my ($limit, $offset);
+
+  ## Set per page view
+  my $base_query = "SELECT COUNT(*) FROM articles";
+  my $base_url = "articles?";
+  ($limit, $offset, $page_selector) = IG::MkTaskPaging($base_query, $base_url);
+
+  Header();
+
+  TaskListMenu([$lang{code}],[$lang{description}]);
+
+  DbQuery("SELECT * FROM articles ORDER BY id limit $limit offset $offset");
+  while (my @row = FetchRow())
+   {
+    TaskListItem (
+			[$row[0],
+			 "articles?action=protomodi&amp;id=".MkUrl($row[0])],
+			[$row[1]]
+		 );
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+         TaskHead( title=>$lang{last_documents},
+                   icon=>2,
+                   width=>180 ).
+         IG::LastDocuments().
+         TaskFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub Header 
+ {
+  HtmlHead( shortcuts=>_short_cuts() );
+  TaskHead(width=>'95%', title=>$lang{articles_mng});
+  HLayer( left_layers =>
+           [(
+             MkButton( text      => $lang{new_article},
+                       link      => "articles?action=proto",
+                       privilege => CheckPrivilege("products_articles_edit") ),
+
+             MkButton( text      => $lang{delete},
+                       link      => "articles?action=delshow",
+                       privilege => CheckPrivilege("products_articles_edit") ),
+
+             MkButton( text      => $lang{update_list},
+                       link      => "articles"),
+
+             $page_selector
+			)] );
+ }
+
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }

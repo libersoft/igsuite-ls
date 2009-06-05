@@ -1,0 +1,18 @@
+## IGSuite 4.0.0
+## Language: tiffedit_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+source_doc		=>'Documento origem',
+target_doc		=>'Documento destino',
+edit_doc		=>'Editar documento',
+Err_target_doc		=>'Atenção: insira uma referência docuemnto destino',
+Err_source_doc		=>'Atenção: insira uma referência documento origem',
+Err_nodoc		=>'Erro: Documento não encontrado',
+Err_pages_description	=>'Erro: verifique as descrições das páginas inseridas',
+ok_doc			=>'Documento criado com sucesso! Visualizar novo documento... ',
+  ));
+
+1;

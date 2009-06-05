@@ -1,0 +1,319 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta name="Author" content="Author" />
+<meta name="Robots" content="%%PAGEROBOTS%%" />
+<meta name="Description" content="IGLabs" />
+<meta name="Keywords" content="%%PAGEKEYS%%" />
+<title>%%PAGETITLE%%</title>
+<STYLE type="text/css">
+<!--
+
+body {
+	margin: 0 auto;
+	padding: 0;
+	font: 9pt Arial, Verdana, Sans-Serif;
+	background: #fff;
+}
+
+a {
+	text-decoration: none;
+	color: #2489DB;
+}
+
+a:hover {
+	color: #808080;
+}
+
+a img {
+	border: 0;
+}
+
+h3 {
+	font-size: 1.3em;
+	margin: 0 0 5px 0;
+	padding: 15px 0px 0px 0px;
+}
+
+#bg { 
+	width: 760px;
+	margin: 0 auto;
+	padding: 5px 10px 10px 10px;
+	background: url('/images/tml4img1.gif') top left no-repeat;
+}
+
+
+#sadrzaj {
+	padding-top: 9px;
+	color: #303030;
+	width: 736px;
+	padding-left: 2px;
+	
+}
+
+#toplinks {
+	height: 20px;
+	background: #2489DB;
+	text-align: right;
+        padding-right: 10px;
+	padding-top: 5px;
+}
+
+#toplinks a {
+	font-size: 8pt;
+	display: inline;
+	padding-bottom: 3px;
+	color: #fff;
+}
+
+#toplinks a:hover {
+	border-bottom: 2px solid #fff;	
+}
+
+#zaglavlje {
+	clear: both;
+	margin: 0px 0 5px 0;
+	height: 70px;
+	background: url(/images/tml4img3.gif) repeat-x;
+}
+
+#title {
+	float: left;
+	font-size: 20pt;
+	font-weight: bold;
+	padding-top: 25px;
+	padding-left: 5px;
+}
+
+#title_info {
+	float: right;
+	height: auto;
+	padding: 8px;
+	width: 310px;
+	margin: 10px 5px 0 0;
+	border: 2px solid #fff;	
+	background: #FFF5D9;
+	color: #808080;
+}
+
+#title_info p {
+	margin: 0;
+}
+
+#navigacija {
+	clear: left;
+	float: left;
+	width: 150px;
+	margin: 0 0 10px 0;
+	padding: 0;
+	font-size: 0.9em;
+}
+
+#navigacija ul {	
+	list-style: none;
+	width: 150px;
+	margin: 0 0 3px 0;
+	padding: 0;
+	font-size: 1.1em;
+}	
+
+#navigacija li {
+	margin-bottom: 4px;
+}
+
+#navigacija li a, #navigacija li a:visited {
+	text-align: right;
+	height: 20px;
+	text-decoration: none;
+	color: #fff;
+	display: block;
+	padding: 6px 8px 0 10px;
+	background: #2489DB;
+}	
+	
+#navigacija li a:hover {
+	background: #A9CAEB;
+	color: #286ea0;
+}
+
+.lijevo {
+	margin: 2px 0 10px 0;
+	padding: 3px 10px 5px 10px;
+	width: 130px;
+	border-top: 1px solid #DDD;
+	border-bottom: 1px solid #DDD;
+	color: #6B6B6B;
+	background: #eee url(/images/tml4img4.gif) repeat-x;
+}
+
+.lijevo a, .lijevo a:visited {
+	text-decoration: underline;
+}
+
+#desna_rubrika {
+	float: right;
+	width: 223px;
+	margin: 0 0 10px 0;
+	padding: 5px 13px 20px 10px;
+	border-top: 1px solid #DDD;
+	border-bottom: 1px solid #DDD;
+	background: #eee url(/images/tml4img4.gif) repeat-x;
+	color: #5D5D5D;
+	line-height: 1.5em;
+}
+
+#desna_rubrika p {
+	margin: 0px;
+	font-size: 90%;
+}
+
+#desna_rubrika h3 {
+	font-size: 9pt;	
+}
+
+#desna_rubrika a {
+	display: block;
+	height: 12px;
+	padding-bottom: 4px;
+	margin-bottom: 2px;
+	border-bottom: 1px solid #ccc;
+}
+
+#clanci {
+	margin:  0 0 5px 155px;
+	padding: 0 10px 5px 6px;
+	line-height: 1.4em;
+	background: url(/images/tml4img2.gif) repeat-x bottom left;
+}
+
+#clanci h2 {
+	margin: 0px;
+	padding: 4px 0 4px 0;
+	font-size: 12pt;
+}
+
+#clanci p {
+	margin: 0;
+}
+
+.datum {
+	padding-top: 2px;
+	height: 30px;
+	margin: 5px 0 6px 0;
+	border-top: 1px solid #eee;
+	font-size: 80%;
+	text-transform: uppercase;	
+	color: #808080;
+}
+
+#lijeva_rubrika {
+	margin: 0 250px 20px 155px;
+	border-top: 1px solid #AFCEED;
+	border-bottom: 1px solid #AFCEED;
+	background: #E5EFF9 url(/images/tml4img5.gif) repeat-x;
+	padding: 5px 6px 5px 6px;
+	line-height: 1.6em;
+	text-align: left;
+	color: #5D5D5D;
+}
+
+
+#lijeva_rubrika h2 {
+	font-size: 1.5em;
+	margin: 0 0 0.5em 0;
+	color: #808080;
+	padding-top: 3px;
+}
+
+#lijeva_rubrika p {
+	padding: 0;
+	margin: 0;
+}
+
+.forminput
+ {              height: 20px;
+                padding: 0px;
+                margin: 0px;
+                visibility: visible;
+                border: 1px #999999 solid;
+                background-color: #f4f4f4; }
+
+.formbutton
+ {              height: 20px;
+                margin: 0px;
+                padding: 0px;
+                border: 1px #999999 solid;
+ }
+
+.formcheck
+ {              padding: 0;
+                margin: 0;
+                border: 0; }
+
+textarea
+ {              padding: 0px;
+                border: 1px #999999 solid;
+                margin: 0px;
+                background-color: #f4f4f4; }
+
+.field {        display: block;
+                float: left;
+                margin: 2px 2px 2px 0px;
+                background-color: transparent;
+                vertical-align: top;
+ }
+
+.label {        display: block;
+                float: left;
+                width: 100px;
+                margin: 2px 3px 2px 4px;
+                padding: 2px;
+                border: 0px;
+                vertical-align: top;
+       }
+-->
+</STYLE>
+</head>
+<body>
+<div id="bg">
+<div id="sadrzaj">
+
+<div id="toplinks">%%PAGEACTION%%</div>
+
+<div id="zaglavlje">
+
+<div id="title"><a href="#">IGLabs</a></div>
+
+<div id="title_info">
+<p><i>Artice of the week:</i></p>
+<p><b><a href="#">Integrating designs into Content Management
+Systems</a></b></p>
+</div>
+
+</div>
+
+<div id="navigacija">
+%%SITEMAP%%
+<div class="lijevo">[latestnews]{text}</div>
+<div class="lijevo">%%LOGIN%%</div>
+</div>
+
+<div id="clanci">%%PAGE%%</div>
+
+<div id="desna_rubrika">
+<h3>Recent articles</h3>
+<div style="padding-left: 15px">%%LASTDOCS%%</div>
+</div>
+
+<div id="lijeva_rubrika">
+<p><b>Wiki Info</b><br />
+<a href="http://www.igsuite.org" style="border:0; display:inline; float:
+right;"><img src="/images/poweredbyig.gif" style="border:0"></a>
+%%PAGEINFO%%
+</p>
+</div>
+
+</div>
+</div></body></html>

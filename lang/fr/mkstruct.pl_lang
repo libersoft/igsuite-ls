@@ -1,0 +1,13 @@
+## IGSuite 4.0.0
+## Language: mkstruct_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+error_alert_msg =>'Questa procedura deve essere avviata solo nei seguenti casi:<br><br>1) Al primo avvio di IGSuite<br> 2) Per ricostruire la struttura del database<br> 3) Per aggiornare la versione di IGSuite<br> 4) Nel caso di errori imprevisti<br><br><br> Clicca su "Continua" per avviare la procedura e attendi...<br><br> Nel caso non si è sicuri sul da farsi contattare l\'amministratore di sistema',
+next		=>'Continua',
+procedure_ended	=>'Procedura terminata',
+error_logs	=>'Log degli errori',
+   ));
+
+1;

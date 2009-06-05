@@ -1,0 +1,58 @@
+#! /usr/bin/perl
+# Procedure: demo4
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+## Only an IG user can access to this demo
+IG::DTable ( default_action => sub { $IG::demo_version || CheckPrivilege() } );
+
+###########################################################################
+###########################################################################
+
+sub default_action
+ {
+  my $html;
+  HtmlHead();
+  TaskHead(	title	=> 'IG Framework Demo - Draggable ToolTips');
+
+  for (1..5)
+   { 
+    $html .= IG::ToolTip( width	  => '300px',
+			  id	  => "task$_",
+			  title	  => "My Task $_",
+			  visible => 'false',
+			  hpos    => 400 + (20*$_),
+			  vpos    => 200 + (20*$_),
+			  show	  => "Sample Task $_;",
+			  body	  => 'This is an example of a'.
+				     ' draggable tooltip task');
+   }
+
+  TaskMsg("In IGSuite framework there are many little features able to show
+data in different ways. One of these is ToolTip() which can show a box after
+a mouse event and make it draggable.<br><br>Try these examples: $html",5 ,400, 300 );
+
+  TaskFoot();
+  HtmlFoot();
+ }

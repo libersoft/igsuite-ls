@@ -1,0 +1,16 @@
+## IGSuite 4.0.0
+## Language: binders_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+binders_protocol        => 'Protocollo Fascicoli',
+Err_protocol_number     => 'Attenzione: il numero di protocollo inserito non è valido',
+edit_binder             => 'Modifica il fascicolo',
+add_binders_spool       => 'Aggiungi documenti da IGBox',
+unlink_from_binder      => 'Toglie il documento dal fasciolo',
+binder_name             => 'Nome fascicolo',
+binded_docs             => 'Documenti collegati',
+   ));
+
+1;

@@ -1,0 +1,32 @@
+## IGSuite 4.0.0
+## Language: tables_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+table           =>'Table',
+tables_1	=>'Gamme de chiffre d\'affaires dans les contacts',
+tables_2	=>'Catégorie commerciale',
+tables_3	=>'Origine contact',
+tables_4	=>'Niveau de confidence',
+tables_5	=>'Division des contacts pour importance',
+tables_6	=>'Division zones pour activité commercial',
+tables_7	=>'Qualification des fournisseurs',
+tables_8	=>'Catégorie des fournisseurs',
+tables_9	=>'Méthode de vérification des fournisseurs',
+tables_10	=>'Bien objet des services',
+tables_11	=>'Typologies dei services',
+tables_12	=>'Priorité des services',
+tables_13	=>'Typologies des contrats',
+tables_14	=>'Typologie des équipements',
+tables_15	=>'Modalité de transport',
+tables_16	=>'Temps de livraison',
+tables_17	=>'Emballage produits',
+tables_18	=>'Catégorie \'Todo\'',
+tables_19	=>'Opportunité Source',
+tables_20       =>'Opportunité Stage',
+tables_21       =>'Calendar event categories',
+tables_22       =>'Operative functions of contacts personnel',
+  ));
+
+1;

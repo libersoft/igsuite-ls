@@ -1,0 +1,266 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<meta name="description" content="IGLabs" />
+<meta name="keywords" content="%%PAGEKEYS%%" />
+<meta name="author" content="IGWiki / Original design: Andreas Viklund -
+http://andreasviklund.com/" />
+<title>%%PAGETITLE%%</title>
+
+<STYLE type="text/css">
+<!--
+body {
+margin: 0 auto;
+padding: 0;
+font: 76% Verdana,Tahoma,Arial,sans-serif;
+background: #f4f4f4 url(/images/tml2img1.gif) top center repeat-y;
+}
+
+.forminput {
+height: 20px;
+padding: 0px;
+margin: 0px;
+visibility: visible;
+border: 1px #999999 solid;
+background-color: #f4f4f4;
+}
+
+.formbutton {
+height: 20px;
+margin: 0px;
+padding: 0px;
+border: 1px #999999 solid;
+}
+
+.formcheck {
+padding: 0;
+margin: 0;
+border: 0; }
+
+textarea {
+padding: 0px;
+border: 1px #999999 solid;
+margin: 0px;
+background-color: #f4f4f4;
+}
+
+.field {
+display: block;
+float: left;
+margin: 2px 2px 2px 0px;
+background-color: transparent;
+vertical-align: top;
+}
+
+.label {
+display: block;
+float: left;
+width: 100px;
+margin: 2px 3px 2px 4px;
+padding: 2px;
+border: 0px;
+vertical-align: top;
+}
+
+#wrap {
+background: #ffffff;
+color: #303030;
+margin: 0 auto;
+width: 760px;
+}
+
+#header {
+clear: both;
+margin: 20px 0 0 0;
+padding: 0;
+height: 45px;
+}
+
+#header h1 {
+width: 250px;
+margin: 0 0 10px 0;
+float: left;
+}
+
+#header p {
+width: 500px;
+float: right;
+text-align: center;
+color: #a0a0a0;
+margin: 0 0 10px 0;
+font-size: 0.8em;
+line-height: 1.2em;
+}
+
+#frontphoto {
+margin: 0 0 10px 0;
+border: 0;
+}
+
+#avmenu {
+clear: left;
+float: left;
+width: 180px;
+margin: 0 0 10px 0;
+padding: 0;
+font-size: 0.9em;
+}
+
+#avmenu ul {	
+list-style: none;
+width: 180px;
+margin: 0 0 20px 0;
+padding: 0;
+font-size: 1.1em;
+}	
+
+#avmenu li {
+margin-bottom: 4px;
+}
+
+#avmenu li a {
+font-weight: bold;
+height: 20px;
+text-decoration: none;
+color: #505050;
+display: block;
+padding: 6px 0 0 10px;
+background: #f4f4f4;
+border-left: 4px solid #cccccc;
+}	
+	
+#avmenu li a:hover {
+background: #eaeaea;
+color: #286ea0;
+border-left: 4px solid #286ea0;
+}
+
+.announce {
+margin: 10px 0 10px 0;
+padding: 10px;
+width: 160px;
+color: #505050;
+background-color: #f4f4f4;
+line-height: 1.3em;
+white-space: wrap;
+}
+
+#content {
+margin: 0 0px 20px 190px;
+border-left: 1px solid #f0f0f0;
+border-right: 1px solid #f0f0f0;
+padding: 0 10px 0 10px;
+line-height: 1.6em;
+text-align: left;
+}
+
+h2 {
+font-size: 1.8em;
+margin: 20px 0 0.5em 0;
+}
+
+h3 {
+font-size: 1.4em;
+margin: 20px 0 10px 0;
+}
+
+a {
+text-decoration: none;
+color: #286ea0;
+}
+
+h3 a, h2 a { color: #303030; }
+
+img { border: 0; }
+
+#footer {
+clear: both;
+margin: 0 auto;
+padding: 10px 0 20px 0;
+border-top: 4px solid #f0f0f0;
+width: 760px;
+text-align: center;
+color: #808080;
+font-size: 0.9em;
+}
+
+.left {
+margin: 10px 10px 5px 0;
+float: left;
+}
+
+.right {
+margin: 10px 0 5px 10px;
+float: right;
+}
+
+.textright {
+text-align: right;
+}
+
+.center {
+text-align: center;
+}
+
+.small {
+font-size: 0.8em;
+}
+
+.bold {
+font-weight: bold;
+}
+
+.hide {
+display: none;
+}
+
+-->
+</STYLE>
+</head>
+
+<body><div id="wrap">
+
+<div id="header">
+<h1>IGLabs World</h1>
+<p><strong>"I can see you fly. You are an angel with wings, high above the
+ground!"</strong><br />(traditional haiku poem)</p>
+</div>
+
+<img id="frontphoto" src="/images/tml2img2.jpg" width="760" height="140" alt=""
+/>
+
+<div id="avmenu">
+
+<h2 class="hide">Menu:</h2>
+%%SITEMAP%%
+
+<div class="announce">
+<h3>Latest news:</h3>
+[latestnews]{text}
+</div>
+
+<div class="announce">%%LOGIN%%</div>
+
+<div class="announce"><a href="http://www.igsuite.org" style="border:0;
+margin: 0px 20px 0px 20px"><img src="/images/poweredbyig.gif"
+style="border:0"></a></div>
+
+</div>
+
+<div id="content">
+%%PAGE%%
+<div style="margin: 20px 0 20px 0; border: 1px solid gray; padding: 2px;
+color: gray; line-height: 1.2em">
+%%PAGEINFO%%<br/>
+%%PAGEACTION%%
+</div>
+</div>
+
+<div id="footer">
+Copyright &copy; 2005 IGLabs. Design by <a
+href="http://andreasviklund.com">Andreas Viklund</a>.
+
+</div>
+</div></body></html>

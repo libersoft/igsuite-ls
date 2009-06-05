@@ -1,0 +1,54 @@
+#! /usr/bin/perl
+# Procedure: demo6
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+
+$IG::debug = 1;
+IG::MkEnv(__PACKAGE__);
+
+## Only an IG user can access to this demo
+IG::DTable ( default_action => sub { $IG::demo_version || CheckPrivilege() } );
+
+###########################################################################
+###########################################################################
+sub default_action
+ {
+  HtmlHead();
+
+  TaskHead( title => 'IG Framework Demo - Extended Debug Info',
+            width=>550);
+
+  TaskMsg(MkEntities("Nel framework di IGSuite è presente da non molto tempo la
+  possibilità attraverso una impostazione nel file di configurazione
+  ( \$debug=1; ) di attivare un sistema per ottenere numerose informazioni
+  sulla richiesta effettuata. Provare a cliccare in alto a sinistra
+  per visualizzare le informazioni inerenti l'esecuzione di questa demo.
+  
+  Il sistema di debug sfrutta Develope::DProf un modulo del Perl per
+  effetturare un'analisi durante l'esecuzione dello script. Successivamente
+  grazie a TabPane e Ajax cliccando sulla label del Pannello si richiama
+  dprofpp l'applicazione che elabora i dati generati a DProf."), 2);
+
+  TaskFoot();
+  HtmlFoot();
+ }

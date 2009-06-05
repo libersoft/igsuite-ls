@@ -1,0 +1,47 @@
+## IGSuite 4.0.0
+## Language: docmaker_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+update_document         =>'Update document',
+build                   =>'Build',
+import_template		=>'Import template',
+template_format		=>'Template format',
+Err_template_name	=>'Nom modèle invalide',
+Err_incomplete_parsing	=>'Impossible substituer quelque champ de modèle, tu as besoin de procéder manuellement',
+fields_legend		=>'Légende champs',
+new_template		=>'Créâtes une nouveau modèle',
+delete_template		=>'Effaces modèle',
+template_name		=>'Nom modèle',
+table_vars		=>'Table champs disponibles',
+regards			=>'Salutations distinguées',
+field_logo		=>'Logo entreprise',
+field_contactid		=>'Code contact',
+field_contactname	=>'Contact nome entreprise',
+field_email		=>'Contact adresse courriel',
+field_address		=>'Contact adresse',
+field_city		=>'Contact ville',
+field_zip		=>'Contact code postal',
+field_prov		=>'Contact province',
+field_header1		=>'Adresse complète center opératif',
+field_header2		=>'Adresse complète legal site',
+field_header3		=>'Adresse complète operations_headquarters',
+field_sendmode		=>'Mode envoi document',
+field_tel		=>'Contact téléphone numéro',
+field_fax		=>'Contact fax numéro',
+field_docid		=>'Document protocole numéro',
+field_docowner		=>'Document propriétaire',
+field_docissue		=>'date envoi document',
+field_docexpire		=>'Date expiration document',
+field_startyear		=>'Date début an',
+field_endyear		=>'Date fin an',
+field_today		=>'Date aujourd\'hui',
+field_function		=>'Fonction ton entreprise',
+field_priceshtable	=>'Table prix horizontal',
+field_pricesvtable	=>'Table prix vertical',
+field_employer		=>'Contact employer entreprise',
+   ));
+
+1;
+

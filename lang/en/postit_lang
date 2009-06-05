@@ -1,0 +1,15 @@
+## IGSuite 4.0.0
+## Language: postit_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+web_site		=>'Web Site',
+personal_links		=>'Personal Links',
+link_name		=>'Link Name',
+attachments		=>'Attachments',
+save_link		=>'Save as new link',
+Err_nolink		=>'Error: insert a valid link name',
+  ));
+
+1;

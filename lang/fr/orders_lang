@@ -1,0 +1,13 @@
+## IGSuite 4.0.0
+## Language: orders_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+days_to_expire          =>'Days to expire',
+processed_order         =>'Commande traitée',
+unprocessed_order       =>'Commande pas traitée',
+in_process_order        =>'Commande en traitement',
+   ));
+
+1;

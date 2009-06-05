@@ -1,0 +1,13 @@
+## IGSuite 4.0.0
+## Language: mkstruct.pl_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+error_alert_msg =>'Este procedimiento es lanzado por IGSuite en los siguientes casos:<br><br>1) Cuando se inicia IGSuite por primera vez<br> 2) Para actualizar la versión de IGSuite<br> 3) En caso de errores imprevistos<br><br><br> Haz clic en "Continúa" para iniciar el procedimiento y espera...<br><br> En el caso en que no estés seguro de que hacer contacta el administrador del sistema',
+next		=>'Continúa',
+procedure_ended	=>'Procedimiento terminado',
+error_logs	=>'Log de los errores',
+  ));
+
+1;

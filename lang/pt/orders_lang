@@ -1,0 +1,14 @@
+## IGSuite 4.0.0
+## Language: orders_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+days_to_expire          =>'Days to expire',
+processed_order         =>'Pedido processado',
+unprocessed_order       =>'Pedido não processado',
+in_process_order        =>'Pedido em processo',
+  ));
+
+1;

@@ -1,0 +1,44 @@
+## IGSuite 4.0.0
+## Language: igfax_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+arrived_byfax		=>'Arrived by fax',
+attempt_time		=>'Number of attempts',
+ca			=>'For the attention of',
+cc			=>'Carbon Copy',
+cover_page		=>'Cover Page',
+delete_attach		=>'Delete attachment',
+direction               =>'Direction',
+document_exist		=>'Existing document',
+document_tosend		=>'Document to send',
+edit_fax_notes          =>'Edit notes',
+Err_no_document_cover   =>'No document or cover page to send',
+Err_no_fax_number	=>'You have to insert a fax number in your contact info before send the fax',
+events_report		=>'Events report',
+inner_fax		=>'Arriving Fax',
+insert_tospool		=>'Insert to outgoing fax',
+max_5rows		=>'You can insert max 5 rows',
+multi_receivers		=>'Multi Receiver',
+no_preview		=>'No preview available! check convert path in IGSuite configuration file',
+normal_view		=>'Normal view',
+notify1			=>'Notification when shipment is done',
+notify2			=>'Don\'t notify',
+notify3			=>'Notification if respooled',
+notify_byemail		=>'Notify by E-Mail',
+outer_fax		=>'Outgoing Fax',
+pages_without_cover	=>'Pages, without cover',
+placed_call		=>'Placed calls',
+probable_receiver	=>'Probable receiver',
+rotate_view		=>'Rotate view',
+sendfax_ok		=>'This fax is correctly put in the queue of the outboud faxes',
+sendfax			=>'Send Fax',
+send_it_this_night      =>'Send it this night',
+single_receiver		=>'Single Receiver',
+to_be_seen		=>'and to be seen by',
+view_fax		=>'View Fax',
+without_paper_fax	=>'This fax has been sent without paper support',
+   ));
+
+1;

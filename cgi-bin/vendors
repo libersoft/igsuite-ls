@@ -1,0 +1,365 @@
+#! /usr/bin/perl
+# Procedure: vendors
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+my $page_selector;
+
+IG::DTable (	proto		=> sub { CheckPrivilege('vendors_edit') },
+		protoagg	=> sub { CheckPrivilege('vendors_edit') },
+		report		=> sub { CheckPrivilege('vendors_report') },
+		reportagg	=> sub { CheckPrivilege('vendors_report') },
+		daqualif	=> sub { CheckPrivilege('vendors_view') },
+		default_action	=> sub { CheckPrivilege('vendors_view') }
+           );
+
+############################################################################
+############################################################################
+sub default_action
+ {
+  ## Set a per page view
+  my ($limit, $offset);
+  my $data2 = IG::SumDate(0,0,0,-340);
+  my $base_query = "SELECT COUNT(*) FROM contacts ".
+	           "where data2<'$data2'".
+		   " and vendorslistflag='s'".
+		   " and category<>'0'".
+		   " and contacttype<>8".
+		   " and master='0'";
+
+  my $base_url = "vendors?action=default_action";
+  ( $limit,
+    $offset,
+    $page_selector ) = IG::MkTaskPaging( $base_query, $base_url );
+
+  Header();
+  TaskListMenu
+   (
+    [$lang{contact_name}],
+    [$lang{category}],
+    [$lang{qualify}],
+    [$lang{valuation}],
+    [$lang{supervision}],
+    ["$lang{products} - $lang{services}"]
+   );
+
+  DbQuery("SELECT contactname, city1, category, qualification, data1, data2,".
+	  " activity, contactid, master FROM contacts ".
+	  "where data2<'$data2'".
+	  " and vendorslistflag='s'".
+	  " and category<>'0'".
+	  " and contacttype<>8".
+	  " and master='0' ".
+	  "ORDER BY contactname ".
+	  "limit $limit offset $offset");
+
+  while (my @row = FetchRow())
+   {
+    TaskListItem (
+	["$row[0]<br>$row[1]",
+	 "vendors?action=proto&amp;contactid=$row[7]&amp;pos=$on{pos}"],
+	[GetTableVal("vendors_category",$row[2])],
+	[GetTableVal("vendors_qualification",$row[3])],
+	[$row[4]],
+	[$row[5]],
+	[MkLink($row[6])]
+		 );
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub daqualif
+ {
+  Header();
+  TaskListMenu
+   (
+    [$lang{contact_name}],
+    [$lang{category}],
+    [$lang{qualify}],
+    [$lang{valuation}],
+    [$lang{supervision}],
+    ["$lang{products} - $lang{services}"]
+   );
+
+  DbQuery("SELECT contactname, contactid, category, qualification,".
+	  " data1, data2, activity, contactid, master ".
+	  "FROM contacts where vendorslistflag='s'".
+	  " and (qualification='0' or category='0')".
+	  " and contacttype<>8 and master='0' ".
+	  "ORDER BY contactname");
+
+  while (my @row = FetchRow())
+   {
+    TaskListItem (
+	[$row[0],
+	 "vendors?action=proto&amp;contactid=$row[7]&amp;pos=$on{pos}"],
+	[GetTableVal("vendors_category",
+	 $row[2])],
+	[GetTableVal("vendors_qualification",
+	 $row[3])],
+	[$row[4]],
+	[$row[5]],
+	[MkLink($row[6])]
+		 );
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  DbQuery("SELECT contactid, category, qualification, data1, data2,".
+	  " note1, activity, qualifmethod ".
+	  "FROM contacts ".
+	  "WHERE contactid = ".DbQuote($on{contactid})." and master='0'");
+
+  (	$on{contactid},
+	$on{category}, 
+	$on{qualification}, 
+	$on{data1},
+	$on{data2}, 
+	$on{note1}, 
+	$on{merci}, 
+	$on{qualifmethod} ) = FetchRow();
+
+  HtmlHead();
+  TaskHead(title=>$lang{vendors_mng}, width=>'500px');
+  IG::MkRepository(id=>$on{contactid});
+
+  FormHead(	cgiaction=>'protoagg');
+  Input (	type=>'hidden', name=>'pos');
+
+  Input (	show=>$lang{vendor},
+		type=>'contactfinder');
+
+  Input (	show=>$lang{qualify},
+		type=>'basictable',
+		zerovalue=>'true',
+		table=>'vendors_qualification',
+		name=>'qualification');
+
+  Input (	show=>$lang{category},
+		type=>'basictable',
+		zerovalue=>'true',
+		table=>'vendors_category',
+		name=>'category');
+
+  Input (	show=>$lang{check_rules},
+		type=>'basictable',
+		zerovalue=>'true',
+		table=>'vendors_qualify_method',
+		name=>'qualifmethod');
+
+  Input (	show=>$lang{first_valuation},
+		type=>'date',
+		name=>'data1');
+
+  Input (	show=>$lang{last_supervision},
+		type=>'date',
+		name=>'data2');
+
+  Input (	show=>"$lang{products} - $lang{services}",
+		type=>'textarea',
+		name=>'merci',
+		rows=>4,
+		cols=>40);
+
+  Input (	show=>$lang{remark},
+		type=>'textarea',
+		wrap=>'soft',
+		name=>'note1',
+		rows=>4,
+		cols=>40);
+
+  Input (	type=>'submit',
+		value=>$lang{save});
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  if (!($on{data1} = CkDate($on{data1})))
+   { push @IG::errmsg, $lang{Err_start_qualify}; }
+
+  if (!($on{data2} = CkDate($on{data2})))
+   { push @IG::errmsg, $lang{Err_end_qualify}; }
+
+  push @IG::errmsg, IG::ContactFinder('vendor');
+
+  proto() && return if @IG::errmsg;
+
+  ## Insert into DB
+  QuoteParams();
+  DbQuery("update contacts set note1='$in{note1}', vendorslistflag='s',".
+	  " qualifmethod='$in{qualifmethod}', category='$in{category}',".
+	  " qualification='$in{qualification}', data1='$in{data1}',".
+	  " data2='$in{data2}', activity='$in{merci}' ".
+	  "where contactid=$in{contactid}");
+
+  LogD("Update Vendors List, contact number $on{contactid}");
+  IG::Redirect("vendors?pos=$on{pos}");
+ }
+
+##############################################################################
+##############################################################################
+sub report
+ {
+  HtmlHead();
+  TaskHead(title=>$lang{vendors_mng});
+
+  FormHead(	cgiaction=>'reportagg');
+
+  Input (	show=>$lang{category},
+		type=>'basictable',
+		zerovalue=>'true',
+		table=>'vendors_category',
+		name=>'category');
+
+  Input (	show=>$lang{class},
+		name=>'qualification',
+		type=>'basictable',
+		zerovalue=>'true',
+		table=>'contactvalue');
+
+  Input (	show=>"$lang{products} - $lang{services}",
+		type=>'text',
+		size=>40,
+		name=>'merci');
+
+  Input (	show=>$lang{from_date},
+		type=>'date',
+		name=>'data1',
+		value=>$tv{start_year});
+
+  Input (	show=>$lang{to_date},
+		type=>'date',
+		name=>'data2',
+		value=>$tv{end_year});
+
+  Input (	type=>'submit',
+		value=>$lang{print});
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub reportagg
+ {
+  if (!($on{data1}=CkDate($on{data1})))
+   { push @IG::errmsg, $lang{Err_start_qualify}; }
+  if (!($on{data2}=CkDate($on{data2})))
+   { push @IG::errmsg, $lang{Err_end_qualify}; }
+
+  report() && return if @IG::errmsg;
+
+  QuoteParams();
+  $in{merci} &&= "and activity ~*'$in{merci}' ";
+  $in{qualification} = $in{qualification}
+		     ? "and contactvalue = $in{qualification} "
+		     : "";
+  $in{category} = $in{category}
+		? "and category = '$in{category}' "
+		: "";
+
+  DbQuery("SELECT contactname, contactid, category, qualification,".
+	  " data1, data2, note1, contactid, address1, city1, prov1, zip1,".
+	  " activity, contactvalue, master ".
+	  "FROM contacts ".
+	  "WHERE data2 >= '$in{data1}' and data2 <= '$in{data2}'".
+	  " and vendorslistflag = 's'".
+	  " and qualification <> '0'".
+	  " and master='0'".
+	  " and contacttype<>8".
+	  " $in{category}$in{merci}$in{qualification}".
+	  "ORDER BY contactname");
+
+  Header();
+  TaskListMenu (
+	[$lang{vendor}],
+	[$lang{code}],
+	[$lang{category}],
+	[$lang{qualify}],
+	[$lang{valuation}],
+	[$lang{supervision}],
+	[$lang{remark}]
+		);
+
+  while (my @row = FetchRow())
+   {
+    $row[6]=~ s/(\r|\n)//g;
+
+    TaskListItem (
+	[$row[0],
+	 "vendors?action=proto&amp;contactid=$row[7]&amp;pos=$on{pos}"],
+	[$row[1]],
+	[GetTableVal("vendors_category",$row[2])],
+	[GetTableVal("vendors_qualification",$row[3])],
+	[$row[4]],
+	[$row[5]],
+	[$row[12]]
+		 );
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub Header
+ {
+  HtmlHead();
+  TaskHead(title=>$lang{vendors_mng});
+  HLayer(
+	 MkButton( text => $lang{vendors_report},
+	           link => "vendors?action=report"),
+
+         MkButton( text => $lang{update_list},
+                   link => "vendors"),
+
+         MkButton( text => $lang{unqualified_vendors},
+                   link => "vendors?action=daqualif"),
+
+	 $page_selector,
+	);
+ }
+
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }

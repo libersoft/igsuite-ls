@@ -1,0 +1,22 @@
+## IGSuite 4.0.0
+## Language: offers_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+offer_not_accepted      =>'Offer not accepted',
+new_revision		=>'Nieuwe Revisie',
+accepted		=>'Geaccepteerd',
+not_accepted		=>'Niet Geaccepteerd',
+offers_protocol		=>'Offerte Protocol',
+save_offer		=>'Opslaan als een nieuw Offerte Protocol',
+offers_stats		=>'Status van Offertes',
+stat_0			=>'Totaal type offertes en resultaten',
+stat_1			=>'Progressie van Offertes binnen de afgelopen 12 maanden',
+stat_2			=>'Progressie binnen de afgelopen 12 maanden',
+find_offers		=>'Lokaliseer Offertes',
+  ));
+
+1;
+
+

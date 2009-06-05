@@ -1,0 +1,12 @@
+## IGSuite 4.0.0
+## Language: letters_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+letters_protocol	=>'Brieven Protocol',
+save_letter		=>'Bewaar in brieven protocol',
+  ));
+
+1;
+

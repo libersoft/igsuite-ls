@@ -1,0 +1,17 @@
+## IGSuite 4.0.0
+## Language: tiffedit_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+source_doc		=>'Documento Origen',
+target_doc		=>'Documento de destino',
+edit_doc		=>'Modifica el documento',
+Err_target_doc		=>'Atención: falta el documento de destino',
+Err_source_doc		=>'Atención: falta el documento origen',
+Err_nodoc		=>'Error: no puedo encontrar el documento',
+Err_pages_description	=>'Error: controlar la descripción de las páginas',
+ok_doc			=>'Documento generado con éxito! muestra el resultado...',
+  ));
+
+1;

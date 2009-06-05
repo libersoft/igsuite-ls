@@ -1,0 +1,4570 @@
+#! /usr/bin/perl
+# Procedure: igwiki
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+use IG::WikiFormat;
+IG::MkEnv(__PACKAGE__);
+
+###### Some global and local value ##############################
+##                                                              #
+my $lock_file      = "$IG::cgi_dir${S}data${S}igwiki${S}.lock"; #
+my $wiki_status    = ! -e $lock_file;                           #
+my $robots_default = 'index, follow';                           #
+my $igwiki_path    = "$IG::cgi_url/igwiki";                     #
+my %translations;                                               #
+                                                                #
+my %perm = (	'P', $lang{only_owner},                         #
+		'S', $lang{all_users},                          #
+		'F', $lang{same_group},                         #
+		'A', $lang{all_world});                         #
+                                                                #
+## set 'ig' a flag for context                                  #
+my $igcontext = '';                                             #
+if ( !$on{ig} && $on{action} ne 'findshow' )                    #
+ {                                                              #
+  $IG::clr{bg} = $IG::clr{bg_task};                             #
+  $IG::tema{task}{corner_image} = '';                           #
+ }                                                              #
+else                                                            #
+ {                                                              #
+  $igcontext = "&amp;ig=$on{ig}";                               #
+ }                                                              #
+                                                                #
+my $order = $on{action} eq 'proto'                              #
+            || IG::ConfigParam('igwiki.show_drafts')            #
+          ? 'status desc, revision desc'                        #
+          : 'status, revision desc';                            #
+##                                                              #
+#################################################################
+
+
+## Check Wiki availability
+if ( $auth_user eq 'guest' && ! $wiki_status )
+ {
+  ## Unavailable wiki
+  print STDOUT IG::Warn( $lang{wiki_unavailable} );
+ }
+else
+ {
+  ## Available wiki
+  IG::DTable (	proto		   => 1,
+                linkautocomplete   => 1,
+		protoagg	   => 1,
+		property	   => 1,
+		propertyagg	   => 1,
+		delexec		   => 1,
+		findshow	   => sub { CheckPrivilege('igwiki_view'); },
+		findexec	   => 1,
+		formmail	   => sub { $on{formid} ? 1 : 0 },
+		showhistory	   => 1,
+		showdiff	   => 1,
+		showhelp	   => 1,
+		getrss		   => 1,
+		getpdf		   => 1,
+		gettext		   => 1,
+		getraw		   => 1,
+		getbook		   => 1,
+		getbookagg	   => 1,
+		showpage	   => 1,
+		autocompletion	   => 1,
+		autocompletionname => 1,
+                summary            => sub { CheckPrivilege(); },
+		setexpiredate      => sub { CheckPrivilege('igwiki_writer'); },
+                change_wiki_status => sub { CheckPrivilege('sys_user_admin') },
+		default_action	   => 1 );
+ }
+
+
+############################################################################
+############################################################################
+sub default_action { PrOut showpage( $on{name}, $on{id} ) }
+
+#############################################################################
+#############################################################################
+sub change_wiki_status
+ {
+  if ( $wiki_status )
+   {
+    ## Deactivate Wiki
+    IG::FileTouch( $lock_file );
+   }
+  else
+   {
+    ## Activate Wiki
+    IG::FileUnlink( $lock_file );
+   }
+
+  $wiki_status = not $wiki_status;
+  summary();
+ }
+
+#############################################################################
+#############################################################################
+sub summary
+ {
+  my (%drafts, %approved, %expired, %public, %mandatories);
+  my (%categories, %categories_drafts, %categories_appr, %categories_expired, %categories_public);
+  my (%name, @words, %unique_word);
+
+  my $user = $on{user} || $auth_user;
+  my $base_link = "action=summary&amp;".
+                  "user=$on{user}$igcontext&amp;".
+                  "category=" . MkUrl($on{category});
+
+  require IG::HTMLTagCloud;
+  require IG::TextParseWords;
+  require IG::Utils;
+
+  my $cloud = HTML::TagCloud->new;
+  $robots_default = "noindex, nofollow";
+
+  ## Set order view
+  $on{order}		||= 'lastedit';
+  $on{sortdirection}	||= 'asc';
+
+  DbQuery("select name, id, title, lastedit, revision,".
+          " category, status, expire, showperm ".
+	  "from pages ".
+	  "where owner='".DbQuote($user)."' or name='main' or name='sitemap'");
+
+  while ( my @row = FetchRow() )
+   {
+    ## Store title words to build a cloud
+    if ( (!$on{category} || $row[5] eq $on{category}) && ! $name{$row[0]}++ )
+     {  
+      push @words, Text::ParseWords::quotewords('\s+', 0, $row[2]);
+     }
+
+    if ( $row[6] eq 'B' )
+     {
+      ## It's a draft
+      if ( !$approved{$row[0]} || $row[4] > $approved{$row[0]}{revision} )
+       {
+        delete $approved{$row[0]};
+        $drafts{$row[0]} = { name     => $row[0],
+                             id       => $row[1],
+                             title    => $row[2],
+                             lastedit => $row[3],
+                             revision => $row[4],
+                             expire   => $row[7],
+			     showperm => $row[8],
+                             category => $row[5] }
+          if !$drafts{$row[0]} || $row[4] > $drafts{$row[0]}{revision};
+       }
+     }
+    else
+     {
+      ## It's approved
+      if ( !$drafts{$row[0]} || $row[4] > $drafts{$row[0]}{revision} )
+       {
+        delete $drafts{$row[0]};
+        $approved{$row[0]} = { name     => $row[0],
+                               id       => $row[1],
+                               title    => $row[2],
+                               lastedit => $row[3],
+                               revision => $row[4],
+                               expire   => $row[7],
+			       showperm => $row[8],
+                               category => $row[5] }
+          if !$approved{$row[0]} || $row[4] > $approved{$row[0]}{revision};
+       }
+     }
+     
+    if ( $row[8] eq 'A' ) 
+     {
+      ## It's a public page
+      if ( !$public{$row[0]} || $row[4] > $public{$row[0]}{revision} )
+       {
+        $public{$row[0]} = { name     => $row[0],
+                             id       => $row[1],
+                             title    => $row[2],
+                             lastedit => $row[3],
+                             revision => $row[4],
+                             expire   => $row[7],
+			     showperm => $row[8],
+                             category => $row[5] };
+       }
+     }
+    else
+     {
+      delete $public{$row[0]}
+	if $public{$row[0]} && $row[4] > $public{$row[0]}{revision};
+     }
+   }
+   
+  ## look for mandatories pages (main sitemap)
+  $mandatories{main}    = $drafts{main}    || $approved{main};
+  $mandatories{sitemap} = $drafts{sitemap} || $approved{sitemap};
+
+  if ( !$mandatories{main} || !$mandatories{sitemap} )
+   {
+    push @IG::errmsg, $lang{no_sitemap};
+    delete $drafts{main};
+    delete $approved{main};
+    delete $drafts{sitemap};
+    delete $approved{sitemap};
+   }
+
+  ## Set a wiki title
+  my $wiki_title = $mandatories{main} && $mandatories{main}{title}
+                 ? $mandatories{main}{title}
+                 : $IG::soc_name;
+
+  ## Render Expired Pages list
+  my $update_expire_dates = $user eq $auth_user;
+  my $html_expired = $update_expire_dates
+                   ? FormHead( name      => 'setexpiredatefrom',
+                               cgiaction => 'setexpiredate' )
+		   : '';
+  $html_expired .= TaskListMenu
+                      ( [$lang{name},
+                         "$base_link&amp;default_pane=2&amp;order=name"],
+                        [$lang{title},
+                         "$base_link&amp;default_pane=2&amp;order=title"],
+                        [substr($lang{revision},0,3),
+                         "$base_link&amp;default_pane=2&amp;order=revision"],
+                        [$lang{last_edit},
+                         "$base_link&amp;default_pane=2&amp;order=lastedit"],
+                        [$lang{due_date},
+                         "$base_link&amp;default_pane=2&amp;order=expire"],
+                        [0 && $update_expire_dates
+			 ? Input( name       => 'allbox',
+                                  type       => 'checkbox',
+                                  value      => '',
+                                  fieldstyle => 'margin:0;padding:0;',
+                                  override   => 1,
+                                  onclick    => 'CheckAll();')
+			 : ''],
+                        [$lang{category},
+                         "$base_link&amp;default_pane=2&amp;order=category"],
+                        ['Sh',
+                         "$base_link&amp;default_pane=2&amp;order=showperm"],
+                        [] );
+
+  for my $i (sort _sort keys %approved)
+   {
+    next if IG::CompareDate($approved{$i}{expire}) >= 0;
+    $categories_expired{$approved{$i}{category}}++;
+    next if $on{category} && $approved{$i}{category} ne $on{category};
+    $html_expired .= TaskListItem
+                       (
+                        [$approved{$i}{name},
+                         "$igwiki_path?".
+                         "disableautolang=1&amp;".
+                         "id=$approved{$i}{id}$igcontext"],
+                        [$approved{$i}{title}],                         
+                        [$approved{$i}{revision}],
+                        [$approved{$i}{lastedit}],
+                        [Blush($approved{$i}{expire})],
+			[$update_expire_dates
+			 ? Input( type       => 'checkbox',
+		                  fieldstyle => 'margin:0;padding:0;',
+		                  name       => 'expiredpages_ids',
+		                  value      => $approved{$i}{id} )
+			 : ''],
+                        [$approved{$i}{category}],
+                        [$approved{$i}{showperm}],
+                        [ Img( src  => "$IG::img_url/edit.gif",
+                               title=> $lang{edit},
+                               width=>16,
+                               href => "igwiki?action=proto&amp;".
+                                              "id=$approved{$i}{id}$igcontext" ).
+                          Img( src  => "$IG::img_url/clock.gif",
+                               title=> $lang{page_history},
+                               width=>16,
+                               href => "igwiki?action=showhistory&amp;".
+                                              "id=$approved{$i}{id}$igcontext" ).
+                          Img( src  => "$IG::img_url/prefs.gif",
+                               title=> $lang{property},
+                               width=>16,
+                               href => "igwiki?action=property&amp;".
+                                              "id=$approved{$i}{id}$igcontext" ).
+			  ( $on{ig}
+			    ? Img( src    => "$IG::img_url/mime_mini_http.png",
+			           href   => "$igwiki_path?".
+				             "disableautolang=1&amp;".
+				             "id=$approved{$i}{id}",
+                                   target => 'wiki',
+                                   width  => 16,
+                                   title  =>'Wiki View' )
+                            : ''),
+                          '',
+                          'nowrap'
+		        ]
+                       );
+   }
+
+  $html_expired .= TaskListFoot( undef, undef, 1 );
+  $html_expired .= Input( type     => 'date',
+                          label    => $lang{due_date},
+	                  style    => 'width:75px;',
+	                  value    => $tv{end_year},
+                          name     => 'expiredate' ).
+	           Input( type	   => 'submit',
+		          float	   => 'left',
+	 	          label	   => 'Update expire date' ).
+		   FormFoot() 
+	  if $update_expire_dates;
+	  
+  undef %expired;
+
+  ## Render Approved Pages list
+  my $html_approved = TaskListMenu
+                      ( [$lang{name},
+                         "$base_link&amp;order=name"],
+                        [$lang{title},
+                         "$base_link&amp;order=title"],
+                        [substr($lang{revision},0,3),
+                         "$base_link&amp;order=revision"],
+                        [$lang{last_edit},
+                         "$base_link&amp;order=lastedit"],
+                        [$lang{due_date},
+                         "$base_link&amp;order=expire"],
+                        [$lang{category},
+                         "$base_link&amp;order=category"],
+                        ['Sh',
+                         "$base_link&amp;order=showperm"],
+                        [] );
+
+  for my $i (sort _sort keys %approved)
+   {
+    $categories{$approved{$i}{category}}++;
+    $categories_appr{$approved{$i}{category}}++;
+    next if $on{category} && $approved{$i}{category} ne $on{category};
+    $html_approved .= TaskListItem
+                       (
+                        [$approved{$i}{name},
+                         "$igwiki_path?".
+                         "disableautolang=1&amp;".
+                         "id=$approved{$i}{id}$igcontext"],
+                        [$approved{$i}{title}],                         
+                        [$approved{$i}{revision}],
+                        [$approved{$i}{lastedit}],
+                        [IG::CompareDate($approved{$i}{expire}) < 0 
+			 ? Blush($approved{$i}{expire}) 
+			 : $approved{$i}{expire}],
+                        [$approved{$i}{category}],
+                        [$approved{$i}{showperm}],
+                        [ Img( src  => "$IG::img_url/edit.gif",
+                               title=> $lang{edit},
+                               href => "igwiki?action=proto&amp;".
+                                              "id=$approved{$i}{id}$igcontext" ).
+                          Img( src  => "$IG::img_url/clock.gif",
+                               title=> $lang{page_history},
+                               href => "igwiki?action=showhistory&amp;".
+                                              "id=$approved{$i}{id}$igcontext" ).
+                          Img( src  => "$IG::img_url/prefs.gif",
+                               title=> $lang{property},
+                               href => "igwiki?action=property&amp;".
+                                              "id=$approved{$i}{id}$igcontext" ).
+			  ($on{ig} ? 
+			    Img( src  => "$IG::img_url/mime_mini_http.png",
+				 href => "$igwiki_path?".
+				         "disableautolang=1&amp;".
+				         "id=$approved{$i}{id}",
+				 target=>'wiki',
+				 title =>'Wiki View' ) : '')
+                        ]
+                       );
+   }
+
+  $html_approved .= TaskListFoot( undef, undef, 1 );
+  undef %approved;
+
+  ## Render Draft pages list
+  my $html_drafts  = TaskListMenu
+                      ( [$lang{name},
+                         "$base_link&amp;default_pane=1&amp;order=name"],
+                        [$lang{title},
+                         "$base_link&amp;default_pane=1&amp;order=title"],
+                        [substr($lang{revision},0,3),
+                         "$base_link&amp;default_pane=1&amp;order=revision"],
+                        [$lang{last_edit},
+                         "$base_link&amp;default_pane=1&amp;order=lastedit"],
+                        [$lang{due_date},
+                         "$base_link&amp;default_pane=1&amp;order=expire"],
+                        [$lang{category},
+                         "$base_link&amp;default_pane=1&amp;order=category"],
+                        ['Sh',
+                         "$base_link&amp;default_pane=1&amp;order=showperm"],
+                        [] );
+
+  for my $i (sort _sort keys %drafts)
+   {
+    $categories{$drafts{$i}{category}}++;
+    $categories_drafts{$drafts{$i}{category}}++;
+    next if $on{category} && $drafts{$i}{category} ne $on{category};
+    $public{$i}{revision} .= Blush( lc substr($lang{draft},0,1) )
+                             if defined $public{$i};
+
+    $html_drafts   .= TaskListItem
+                       (
+                        [$drafts{$i}{name},
+                         "$igwiki_path?".
+                         "disableautolang=1&amp;".
+                         "id=$drafts{$i}{id}$igcontext"],
+                        [$drafts{$i}{title}],
+                        [$drafts{$i}{revision}],
+                        [$drafts{$i}{lastedit}],
+                        [IG::CompareDate($drafts{$i}{expire}) < 0 
+			 ? Blush($drafts{$i}{expire}) 
+			 : $drafts{$i}{expire}],
+                        [$drafts{$i}{category}],
+                        [$drafts{$i}{showperm}],
+                        [ Img( src  => "$IG::img_url/edit.gif",
+                               title=> $lang{edit},
+                               href => "igwiki?action=proto&amp;".
+                                              "id=$drafts{$i}{id}$igcontext" ).
+                          Img( src  => "$IG::img_url/clock.gif",
+                               title=> $lang{page_history},
+                               href => "igwiki?action=showhistory&amp;".
+                                              "id=$drafts{$i}{id}$igcontext" ).
+                          Img( src  => "$IG::img_url/prefs.gif",
+                               title=> $lang{property},
+                               href => "igwiki?action=property&amp;".
+                                              "id=$drafts{$i}{id}$igcontext" ).
+			  ($on{ig} ? 
+			    Img( src  => "$IG::img_url/mime_mini_http.png",
+				 href => "$igwiki_path?".
+				         "disableautolang=1&amp;".
+				         "id=$drafts{$i}{id}",
+				 target=>'wiki',
+				 title =>'Wiki View' ) : '')
+                        ]
+                       );
+   }
+
+  $html_drafts   .= TaskListFoot( undef, undef, 1 );
+  undef %drafts;
+
+  ## Render public page list
+  my $html_public  = TaskListMenu
+                      ( [$lang{name},
+                         "$base_link&amp;default_pane=1&amp;order=name"],
+                        [$lang{title},
+                         "$base_link&amp;default_pane=1&amp;order=title"],
+                        [substr($lang{revision},0,3),
+                         "$base_link&amp;default_pane=1&amp;order=revision"],
+                        [$lang{last_edit},
+                         "$base_link&amp;default_pane=1&amp;order=lastedit"],
+                        [$lang{due_date},
+                         "$base_link&amp;default_pane=1&amp;order=expire"],
+                        [$lang{category},
+                         "$base_link&amp;default_pane=1&amp;order=category"],
+                        [] );
+
+  for my $i (sort _sort keys %public)
+   {
+    $categories_public{$public{$i}{category}}++;
+    next if $on{category} && $public{$i}{category} ne $on{category};
+    $html_public   .= TaskListItem
+                       (
+                        [$public{$i}{name},
+                         "$igwiki_path?".
+                         "disableautolang=1&amp;".
+                         "id=$public{$i}{id}$igcontext"],
+                        [$public{$i}{title}],
+                        [$public{$i}{revision}],
+                        [$public{$i}{lastedit}],
+                        [IG::CompareDate($public{$i}{expire}) < 0 
+			 ? Blush($public{$i}{expire}) 
+			 : $public{$i}{expire}],
+                        [$public{$i}{category}],
+                        [ Img( src  => "$IG::img_url/edit.gif",
+                               title=> $lang{edit},
+                               href => "igwiki?action=proto&amp;".
+                                              "id=$public{$i}{id}$igcontext" ).
+                          Img( src  => "$IG::img_url/clock.gif",
+                               title=> $lang{page_history},
+                               href => "igwiki?action=showhistory&amp;".
+                                              "id=$public{$i}{id}$igcontext" ).
+                          Img( src  => "$IG::img_url/prefs.gif",
+                               title=> $lang{property},
+                               href => "igwiki?action=property&amp;".
+                                              "id=$public{$i}{id}$igcontext" ).
+			  ($on{ig} ? 
+			    Img( src  => "$IG::img_url/mime_mini_http.png",
+				 href => "$igwiki_path?".
+				         "disableautolang=1&amp;".
+				         "id=$public{$i}{id}",
+				 target=>'wiki',
+				 title =>'Wiki View' ) : '')
+                        ]
+                       );
+   }
+
+  $html_public   .= TaskListFoot( undef, undef, 1 );
+
+  ## Render categories list
+  my $html_categories = TaskListMenu
+                         ( [$lang{category}],
+                           [$lang{approved_pages}],
+			   [$lang{draft_pages}],
+			   [$lang{expired_pages}],
+			   [$lang{public_pages}],
+   			   [$lang{total}], );
+  my ($totPages, $totAppr, $totDrafts, $totExpired, $totPublic) = 0;
+  foreach (sort keys %categories)
+   {
+    my $link = "igwiki?action=summary&amp;".
+               "order=$on{order}&amp;".
+               "sortdirection=$on{sortdirection}&amp;".
+               "user=$on{user}&amp;".
+	       "category=".MkUrl($_)."$igcontext&amp;".
+	       "default_pane=";
+    $html_categories .= TaskListItem
+	                  ( 
+			    [$_, $link.'0'],
+			    [$categories_appr{$_}, $link.'0'],
+			    [$categories_drafts{$_}, $link.'1'],
+			    [$categories_expired{$_}, $link.'2'],
+			    [$categories_public{$_}, $link.'3'],
+			    [$categories{$_}, $link.'0'],
+			  );
+    $totPages   += $categories{$_};
+    $totAppr    += $categories_appr{$_};
+    $totDrafts  += $categories_drafts{$_};
+    $totExpired += $categories_expired{$_};
+    $totPublic  += $categories_public{$_};
+   }
+  my $style = 'style="font-weight: bold;"';
+  my $link = "igwiki?action=summary$igcontext&amp;".
+             "order=$on{order}&amp;".
+             "sortdirection=$on{sortdirection}&amp;".
+             "user=$on{user}&amp;".
+	     "default_pane=";
+  $html_categories .= TaskListItem( [$lang{total}, $link.'0', $style, 'link'],
+                                    [$totPages, $link.'0', $style, 'link'], 
+                                    [$totAppr, $link.'0', $style, 'link'], 
+                                    [$totDrafts, $link.'1', $style, 'link'], 
+                                    [$totExpired, $link.'2', $style, 'link'],
+				    [$totPublic, $link.'3', $style, 'link'],
+				  );
+
+  $html_categories .= TaskListFoot( 3, undef );
+
+  ## Render Clouds
+  my $html_clouds;
+  if ( @words )
+   {
+    for ( @words )
+     {
+      s/[^a-z0-9\-\_]//gi;
+      next if length($_) < 3 || /^\d/;    
+      $_ = ucfirst(lc $_);
+      $unique_word{$_}++;
+     }
+
+    my $counter;
+    foreach (reverse sort { $unique_word{$a} <=> $unique_word{$b} } keys %unique_word)
+     {
+      last if $counter++ == 35;
+      $cloud->add($_, "igwiki?".
+                      "action=findexec&amp;".
+                      "fieldtofind=title&amp;".
+                      "keytofind=$_$igcontext", $unique_word{$_});
+     }
+
+    $html_clouds = $cloud->html_and_css(150);
+    $html_clouds = TaskHead( icon => 2,
+                             width => '100%',
+                             title => 'Tag Clouds' ).
+                   "<div style=\"width:260px;\">$html_clouds</div>" .
+                   TaskFoot();
+   }
+
+  ## Render a quick form to create new pages
+  my $html_form = TaskHead( icon  => 2,
+                            width => '100%',
+                            style => 'margin-bottom:8px;',
+                            title => $lang{create_quickly} ).
+                            
+                  FormHead( cgiaction => 'proto').
+                  
+                  Input(    type  => 'hidden',
+                            name  => 'ig').
+                  
+                  Input(    type  => 'text',
+                            focus => 'true',
+                            autocompletion => { script_url   => 'igwiki',
+                                                script_action=> 'autocompletionname',
+                                                search_param => 'searchfor',
+                                                min_chars    => 3 },
+                            name  => 'name',
+                            style => 'width:125px' ).
+                            
+                  Input(    type  => 'submit',
+                            style => 'width:125px',
+                            float => 'left',
+                            show  => $lang{write_a_page} ).
+                            
+                  FormFoot().
+                  TaskFoot();
+
+  ## Render wiki status
+  my $html_status = TaskHead( icon  => 2,
+                              style => 'margin-bottom:8px;',
+                              width => '100%',
+                              title => 'Wiki Status' );
+  
+  $html_status .=
+   TaskMsg
+    ( HLayer( bottom_space => 0,
+              left_layers  => [( $wiki_status
+                                 ? "<span style=\"color:#009900\">".
+                                   $lang{wiki_online}.
+                                   "</span>"
+                                 : "<span style=\"color:#ff0000\">".
+                                   $lang{wiki_offline}.
+                                   "</span>" )],
+              right_layers => [( Input( type    => 'button',
+                                        style   => 'font-size:10px; width:80px; height:15px',
+                                        onclick => "document.location = '".
+                                                   "igwiki?action=change_wiki_status$igcontext'",
+                                        show    => ( $wiki_status
+                                                     ? $lang{deactivate}
+                                                     : $lang{activate} ) ) )]
+             )
+     , 4, '260px'); 
+
+  if ( !$mandatories{main} || !$mandatories{sitemap} )   
+   {
+    for my $i (qw(main sitemap) )
+     {
+      $html_status
+       .= MkTable( style      => 'border:0px solid black;width:100%',
+                   style_c1_r => 'width:10%; vertical-align:top;',
+                   cellspacing => 2,
+                   cellpadding => 2,
+                   values => [( [(
+                                 Img( src=>"$IG::img_url/" .
+                                           ( $mandatories{$i}
+                                             ? 'green.gif'
+                                             : 'red.gif' ),
+                                      width => 16 ),
+
+                                 "<span style=\"font-weight:bold;\">".
+                                 "<a href=\"igwiki?name=$i$igcontext\">$i</a>".
+                                 "</span><br>".
+
+                                 "<span style=\"font-size:10px; color:#999999\">".
+                                 $lang{"explain_".$i."_page"}.
+                                 "</span>"
+                                )]
+                             )]
+                 );
+     }
+   }
+  $html_status .= TaskFoot();
+
+
+  ## Render total space utilized
+  DbQuery("select owner, status, sum(length(text)) ".
+          "from pages ".
+          "group by owner,status");
+
+  my %sp;
+  while( my ($wiki_user, $page_status, $user_space) = FetchRow() )
+   {
+    if ($wiki_user eq $user)
+     {
+      $sp{user}{$page_status} += $user_space;
+     }
+    $sp{all}{$page_status} += $user_space;
+   }  
+
+  my $html_space = TaskHead( icon  => 2,
+                             style => 'margin-bottom:8px;',
+                             width => '100%',
+                             title => $lang{utilized_space}. ' : '.
+                                      IG::MkByte($sp{all}{A}+$sp{all}{B}) );
+
+  if ( $sp{all}{A} || $sp{all}{B} )
+   {
+    my $legend = HLayer( Img( src     =>"$IG::img_url/0.gif",
+                              style   =>'margin:5px;width:8px; height:8px'),
+                         "<span style=\"font-size:10px\">$lang{approved_pages}</span>",
+                         Img( src     =>"$IG::img_url/1.gif",
+                              style   =>'margin:5px; width:8px; height:8px'),
+                         "<span style=\"font-size:10px\">$lang{draft_pages}</span>" ); 
+
+    $html_space .= IG::MkGraph( title     => $legend,
+                                width     => 205,
+                                height    => 40,
+                                series_margin => 15,
+                                values_as => 'byte',
+                                draw_scale=> 'false',
+                                rows      => "($sp{user}{A},$sp{all}{A})".
+                                             "($sp{user}{B},$sp{all}{B})",
+                                vars      => IG::UsrInf('name',$user).
+                                             ",$lang{all}");
+
+    $html_space .= TaskFoot();
+   }
+  else
+   {
+    $html_space = '';
+   }
+
+
+  ## Print Html header and check cookies availability 
+  HtmlHead( align     => 'center',
+            title     => "IGWiki - $lang{summary} $wiki_title" );
+
+  ## summary header
+  PrOut "<table border=0 cellspacing=0 cellpadding=3 width=\"100%\">
+         <td colspan=2>
+         <table cellspacing=0 cellpadding=0 style=\"margin-bottom:5px; width:100%; background-color:$IG::clr{bg_barra}\">
+         <td width=20 $IG::imgbgbarra><span onclick=\"goOver(0,'menu')\">";
+
+  IG::ToolTip( title	=> $lang{binder},
+               onclick	=> "ajaxrequest(['NO_CACHE','ajaxaction__binder','a__1'],['binder_body']);",
+               id	=> 'binder', 
+               body	=> '<br><br><br>',
+               show	=> Img( title => 'IG',
+                                width => 23,
+                                src   => "$IG::img_url/$IG::tema{task}{favicon}" ),
+               width	=> 190 );
+
+  PrOut "</span></td>
+	   <td class=\"littlebar\" $IG::imgbgbarra>
+		IGWiki $IG::VERSION - $wiki_title</td>
+	   <td align=\"right\" class=\"littlebar\" nowrap $IG::imgbgbarra>";
+
+  Img( href       => 'igwiki_wizard',
+       target     => '_top',
+       caption    => 'Wiki Wizard',
+       align      => 'absmiddle',
+       style      => 'margin-right:10px',
+       src        => "$IG::img_url/wizard.png",
+       width      => 16 );
+
+  Img( href       => 'igwiki?action=getbook',
+       caption    => 'HtmlDoc',
+       align      => 'absmiddle',
+       style      => 'margin-right:10px',
+       src        => "$IG::img_url/guide.gif",
+       width      => 16 ) if $mandatories{main} || $mandatories{sitemap};
+
+  Img( href       => 'igwiki',
+       target     => '_blank',
+       align      => 'absmiddle',
+       caption    => $lang{wiki_portal},
+       style      => 'margin-right:10px',
+       src        => "$IG::img_url/house.gif",
+       width      => 16 );
+
+  Img( href       => "javascript:winPopUp('help?action=get_help&amp;script=igwiki&amp;scriptaction=summary',680,580,'Help');",
+       align      => 'absmiddle',
+       caption    => 'Help',
+       src        => "$IG::img_url/microview_help.gif",
+       width      => 16 );
+
+  PrOut "</td></tr></table></td></tr>\n\n";
+
+  if ( 0 && $IG::screen_size =~ /^noframe/ )
+   { 
+    ## All info 
+    ##XXX2DEVELOPE - noframe view
+   }
+  else
+   {
+    ## left column
+    PrOut "<td valign=\"top\" align=\"center\" width=\"100%\">";
+
+    TaskHead( width   => '100%',
+              icon    => 2,
+              icons   => Input( type     => 'logins',
+                                name     => 'user',
+                                onchange => "document.location='".
+                                            "igwiki?action=summary&amp;".
+                                            "order=$on{order}&amp;".
+                                            "sortdirection=$on{sortdirection}&amp;".
+                                            "category=$on{category}&amp;".
+                                            ($on{ig} ? "ig=$on{ig}&amp;" : '').
+                                            "user=' + this.value;",
+                                style    => 'font-size:10px; '.
+                                            'height:15px; '.
+                                            'margin: 1px 3px 1px 1px',
+                                output   => 'onlyfield' ),
+              title   => $lang{pages} .
+                         ( $on{category} ? " - $on{category}" : ''),
+              padding => 5 );
+
+    IG::TabPane( data       => [( ["$lang{approved_pages} ($totAppr)",
+                                   $html_approved ],
+                                  ["$lang{draft_pages} ($totDrafts)",
+                                   $html_drafts ],
+                                  ["$lang{expired_pages} ($totExpired)",
+                                   $html_expired ],
+			          ["$lang{public_pages} ($totPublic)",
+			           $html_public ],
+                                  [$lang{categories},
+                                   $html_categories ],
+                                )],
+	         width      => '100%',
+                 height     => 370,
+                 label_type => 1,
+                 default    => $on{default_pane},
+                 name       => 'tab',
+               );
+    TaskFoot();
+
+    ## right column
+    PrOut "</td><td style=\"width:280px;\" valign=\"top\">".
+          $html_form.
+          $html_status.
+          $html_space.
+          $html_clouds.
+          "</td></tr>";
+   }
+
+  ## summary header
+  PrOut "<td colspan=2 align=\"center\" $IG::imgbgbarra>".
+        "<table width=\"100%\" bgcolor=\"$IG::clr{bg_menu}\">".
+        "<td $IG::imgbgbarra>\n";
+
+  PrOut "</td><td align=\"right\" $IG::imgbgbarra>".
+        Img( href  => "igwiki?action=summary&amp;print=on",
+             src   => "$IG::img_url/microview_stampa.gif",
+             title => $lang{print},
+             width => 16).
+        "</td></tr></table></td></tr></table>";
+
+  HtmlFoot();
+
+  sub _sort
+   {
+    my ($val1, $val2, $res);
+
+    if (%expired)
+     {
+      ( $val1,
+        $val2 ) = ($expired{$a}{$on{order}}, $expired{$b}{$on{order}});
+     }
+    elsif (%approved)
+     {
+      ( $val1,
+        $val2 ) = ($approved{$a}{$on{order}}, $approved{$b}{$on{order}});
+     }
+    elsif (%drafts)
+     {
+      ( $val1,
+        $val2 ) = ($drafts{$a}{$on{order}}, $drafts{$b}{$on{order}});
+     }
+    else
+     {
+      ( $val1,
+        $val2 ) = ($public{$a}{$on{order}}, $public{$b}{$on{order}});
+     }
+
+    if ($on{order} eq 'lastedit' || $on{order} eq 'expire')
+     {
+      $res = IG::CompareDate( $val1, $val2 );
+     }
+    else
+     {
+      $res = $val1 cmp $val2;
+     }
+
+    $res *= -1 if $on{sortdirection} eq 'asc';
+
+    return $res;
+   }
+ }
+
+################################################################################
+################################################################################
+sub setexpiredate
+ {
+  my @pageids = ref($on{expiredpages_ids}) eq 'ARRAY'
+	      ? @{$on{expiredpages_ids}}
+	      : ($on{expiredpages_ids});
+  my $expiredate = $on{expiredate};
+
+  $on{default_pane} = 2;
+
+  if ( !$on{expiredate} || !($on{expiredate} = CkDate($on{expiredate},0)) )
+   {
+    push @IG::errmsg, $lang{Err_due_date};
+    summary();
+    return;
+   }
+   
+  QuoteParams();
+  
+  for my $id (@pageids)
+   {
+    next if !$id;
+    DbQuery( "update pages set expire='$in{expiredate}' ".
+             "where id='".DbQuote($id)."'" );
+   }
+  summary();
+ }
+
+################################################################################
+################################################################################
+sub autocompletion
+ {
+  HttpHead( expires => 'now' );
+
+  # testing param length to avoid too many queries while user is typing
+  my $min_length = 4;
+
+  # CAUTION: min length must be <= to 'minChars' param passed to
+  #          Ajax.autocompleter otherwise no matching will be displayed
+  return if length($on{searchfor}) < $min_length;
+
+  # prepare SQL to retrieve email contacts
+  my $sql = "select title "
+          . "from pages "
+          . "where title~*'". DbQuote($on{searchfor}) . "' and status='A' "
+          . "group by title "
+          . "order by title "
+          . "limit 15";
+
+  my $start = 0;
+
+  DbQuery($sql);
+  while (my ($title) = FetchRow() )
+   {
+    if (!$start)
+     {
+      # initializing unordered list
+      PrOut(qq(<ul>));
+      $start = 1;
+     }
+
+    # adding list item
+    PrOut('<li>'.
+          Img( src   => "$IG::img_url/bullet_page.gif",
+               style => 'margin-right:2px',
+               width => 10 ).
+          $title.
+          '</li>');
+   }
+
+  # close list
+  PrOut(qq(</ul>)) if ($start);
+  1;
+ }
+
+################################################################################
+################################################################################
+sub autocompletionname
+ {
+  HttpHead( expires => 'now' );
+
+  # testing param length to avoid too many queries while user is typing
+  my $min_length = 3;
+
+  # CAUTION: min length must be <= to 'minChars' param passed to
+  #          Ajax.autocompleter otherwise no matching will be displayed
+  return if length($on{searchfor}) < $min_length;
+
+  # prepare SQL to retrieve page names
+  my $sql = "select name "
+          . "from pages "
+          . "where name~*'". DbQuote($on{searchfor}) . "' and status='A' "
+          . "group by name "
+          . "order by name "
+          . "limit 15";
+
+  my $start = 0;
+
+  DbQuery($sql);
+  while (my ($title) = FetchRow() )
+   {
+    if (!$start)
+     {
+      # initializing unordered list
+      PrOut(qq(<ul>));
+      $start = 1;
+     }
+
+    # adding list item
+    PrOut('<li>'.
+          Img( src   => "$IG::img_url/bullet_page.gif",
+               style => 'margin-right:2px',
+               width => 10 ).
+          $title.
+          '</li>');
+   }
+
+  # close list
+  PrOut '</ul>' if $start;
+  1;
+ }
+
+############################################################################
+############################################################################
+sub loadpage
+ {
+  ## load page values and populate %on like cgi paramters
+  my ($name, $id) = (@_);
+  my $query;
+
+  ## Find page name or page id in PATH_INFO value
+  if ($ENV{PATH_INFO} && !$name && !$id)
+   {
+    if ( $ENV{PATH_INFO} =~ /^\/id\/(.+)/ )
+     {
+      $id = $1;
+      $ENV{QUERY_STRING} = "id=$1";
+     }
+    else
+     {
+      $name = substr($ENV{PATH_INFO},1,);
+      $ENV{QUERY_STRING} = "name=" . MkUrl($name);
+     }
+   }
+
+  if ($id)
+   {
+    $query = "select *, expire-current_date from pages ".
+	     "where id='".DbQuote($id)."' order by $order";
+   }
+  elsif ($name)
+   {
+    $name =~ s/\_|\+/ /g;
+    $query = "select *, expire-current_date from pages ".
+	     "where name='".DbQuote($name)."' order by $order";
+   }
+  else
+   {
+    die("No name or id page specified!\n");
+   }
+
+  DbQuery($query);
+   ( 
+    $on{id},
+    $on{name},
+    $on{title},
+    $on{category},
+    $on{owner},
+    $on{date},
+    $on{expire},
+    $on{lastedit},
+    $on{lasteditor},
+    $on{showperm},
+    $on{editperm},
+    $on{status},
+    $on{revision},
+    $on{text},
+    $on{approvedby},
+    $on{template},
+    $on{cryptstatus},
+    $on{searchkeys},
+    $on{daystoexpire}    	) = FetchRow();
+ 
+  $on{name}	   ||= $name;
+  $on{name}	     =~ s/\_/ /g;
+  $on{id}	   ||= $id;
+  $on{expire}	     = CkDate($on{expire});
+  $on{cryptstatus} ||= '0';
+
+  ## Decrypt page if needed
+  $on{text} = chcryptstatus(	0,
+				$on{text},
+				IG::UsrInf( 'passwd', $on{owner} )
+			   ) if $on{cryptstatus};
+
+  if ($on{action} ne 'proto' && $on{action} ne 'protoagg')
+   {
+    ## Find translations for this page
+    undef %translations;
+    $translations{$1} = $2
+      while $on{text} =~ s/\[\[*(\w\w)\:([^\]]+)\]\]*(\n|\r)*//sm;
+
+    ## Try to redirect to the right page according to browser language
+    if ( ($on{action} eq 'showpage' || $on{action} eq 'default_action') &&
+         $translations{lc(substr($ENV{HTTP_ACCEPT_LANGUAGE},0,2))}      &&
+         !$on{disableautolang}
+       )
+     {
+      $on{disableautolang}++; ## prevent loadpage loop
+      loadpage( $translations{lc(substr($ENV{HTTP_ACCEPT_LANGUAGE},0,2))} );
+     }
+   }
+ }
+
+                                                                           
+#############################################################################
+#############################################################################
+sub showpage
+ {
+  my ($name, $id) = (@_);
+  my $html;
+
+  ## Need to store these values if page doesn't exist
+  my $template    = IG::MkUrl( $on{template} );
+  my $category    = IG::MkUrl( $on{category} );
+
+  $name = 'main' if !$name && !$id && !$ENV{PATH_INFO};
+  loadpage( $name, $id );
+
+  if (!$on{owner})
+   {
+    ## this page doesn't exist
+    my $name        = IG::MkUrl( $on{name}     );
+    $robots_default = 'noindex, nofollow';
+
+    $html = publish
+             (Br(1).
+	      TaskMsg
+               ( $lang{page_to_write}.Br(2).
+		 Input( type    => 'button',
+			onclick => "window.location = '".
+			           "$igwiki_path?action=proto&amp;".
+			                        "category=$category&amp;".
+			                        "template=$template&amp;".
+			                        "name=$name$igcontext';",
+			show    => $lang{write_a_page} ).
+		 Input( type    => 'button',
+			float   => 'left',	
+			onclick => "window.location = '".
+			           "${igwiki_path}_wizard?action=proto&amp;".
+			                        "step=step1&amp;".
+			                        "name=$name';",
+			show    => 'IGWiki Wizard' )
+		 ,6
+	       ).
+	      Br(1)
+	     );
+   }
+  elsif ( userdonthave('showperm') )
+   {
+    ## user can't view this page
+    $robots_default = 'noindex, nofollow';
+
+    $html = publish( TaskMsg("$lang{cant_show_page}<br>".
+                             "$lang{ask_to} ".IG::UsrInf('name',$on{owner})
+                            ) );
+   }
+  else
+   { 
+    ## If we have an html page we can't show it
+    $on{text} = $lang{Err_html_page} if IG::CkHtml( $on{text} );
+ 
+    $on{title} ||= $on{name};
+    $on{title}  .= " ($lang{draft})" if $on{status} eq 'B';
+    $on{title}  .= " ($lang{wiki_expired})" if $on{daystoexpire} < 1;
+
+    ## We want comments in this page?
+    $on{show_comments} = $on{text}=~ s/^\%\%NOCOMMENTS\%\%(\n|\r)*// ||
+			 $on{name} eq 'main' ||
+			 $on{print} ||
+			 $IG::tema eq 'microview_' ? '' : 'yes'; 
+
+    ## This is requested page
+    $html = publish( mkhtml($on{text}) );
+    LogD($on{title} || $on{name}, 'view', 'pages', $on{id});
+   }
+
+  return $html;  
+ }
+
+#############################################################################
+#############################################################################
+sub publish
+ {
+  my ($page, $title) = @_;
+  my $html;
+  $title ||= $on{title}
+	   ? "$on{title} - IGWiki"
+	   : "IGSuite $IG::VERSION - IGWiki";
+
+  ## Template   Page	Action     					
+  ## wiki	wiki	Merge content and show with IG header		
+  ## wiki	html	Don't show the page (html can be used only as template)
+  ## html	wiki	Merge content and show without IG header
+  ## html	html	Don't show the page (html can be used only as template)
+  ## none	wiki	Show page content with IG header
+  ## none	html	Don't show the page (html can be used only as template)
+
+
+  ## STEP 1 - PAGE LAYER RENDERING
+  if ( !$on{print} && $on{ig} != 1 )
+   {
+    if ($IG::tema eq 'microview_')
+     {
+      ## Force micro template layer (ignore template set by page owner)
+      $on{layer} =  "{| width=\"100%\"\n";
+      $on{layer} .= "| %%PAGE%%\n|-\n";
+      $on{layer} .= "| %%RELATEDDOCS%%\n|-\n" if $on{name} ne "main";
+      $on{layer} .= "| %%SITEMAP%%\n|-\n";  
+
+      if ($on{name} eq 'main')
+       {
+        $on{layer} .= "| %%LASTDOCS%%\n|-\n".
+		      "| %%FINDER%%\n|-\n".
+		      "| %%MINICALENDAR%%\n|-\n";
+       }
+
+      $on{layer} .= "|}\n";
+     }
+    elsif ($on{template})
+     {
+      ## Load predefinite template
+      my $template_file = $IG::cgi_dir . ${S}.
+                          'data'.        ${S}.
+                          'igwiki'.      ${S}.
+                          'templates'.   ${S}.
+                          $on{template};
+
+      if (-e $template_file)
+       {  
+        ## Template is on filesystem
+	if ( open( LAYER, '<', CkPath($template_file) ) )
+	 {
+          $on{layer} .= $_ while <LAYER>;
+	  close(LAYER);
+	  $on{template} = ''; ## we can't modify a filesystem template
+         }
+       }
+      else
+       {
+        ## The template is another igwiki page 
+
+        my $layer_crypt_status;
+        my $conn = DbQuery(	"select text, cryptstatus from pages ".
+				"where name='".DbQuote($on{template})."' ".
+				"order by $order limit 1");
+        ($on{layer}, $layer_crypt_status) = FetchRow($conn); 
+
+        $on{layer} = chcryptstatus( 0,
+				    $on{layer},
+				    IG::UsrInf( 'passwd', $on{owner} )
+				  ) if $layer_crypt_status;
+       }
+     }
+    else
+     {
+      ## check a wiki page named "defaulttemplate"
+
+      my $defaulttemplate = $auth_user eq 'guest'
+                            ? 'guesttemplate'
+                            : 'defaulttemplate';
+
+      my $layer_crypt_status;
+      my $conn = DbQuery(	"select text, cryptstatus from pages ".
+				"where name='$defaulttemplate' ".
+				"order by $order limit 1");
+      ($on{layer}, $layer_crypt_status) = FetchRow($conn); 
+
+      $on{layer} = chcryptstatus( 0,
+				  $on{layer},
+				  IG::UsrInf( 'passwd', $on{owner} )
+				) if $layer_crypt_status;
+     }
+
+
+    ## Layer rendering
+    if ( ! IG::CkHtml( $on{layer} ) )
+     {
+      ## set a base layer
+      $on{layer} ||= "{| width=\"100%\"\n".
+		     "| valign=\"top\" width=160 align=\"center\" | ".
+		     "%%WIKILOGO%%\n".
+		     "%%SITEMAP%%\n".
+		     "%%FINDER%%\n".
+		     "%%MINICALENDAR%%\n".
+		     "| valign=\"top\" width=\"100%\" | %%PAGE%%\n".
+		     "| valign=\"top\" width=160 align=\"center\" | ".
+		     "%%LOGIN%%\n".
+		     "%%RELATEDDOCS%%\n".
+		     "%%LASTDOCS%%\n".
+		     "<div style=\"width: 160px\"></div>\n".
+		     "|}\n";
+
+      $on{layer}        = mkhtml($on{layer});
+      $on{layercontent} = 'wiki';
+     }
+    else
+     {
+      $on{layercontent} = 'html'; 
+
+      ## Plug external features into template
+      $on{layer} =~ s/\%\%EXTPLUGIN\(([\w\d\_]+)\)\%\%
+                     /mkhtml(insert_ext_plugin($1))
+                     /xeg;
+
+      ## Replace only some wiki page elements in html layer
+      my @nestblocks;
+      my $i=0;
+
+      while ( $on{layer} =~ /\[([^\]]{1,50})\]\{(title|lastedit|lasteditor|text|date|expire|approvedby|revision)\}/)
+       {
+        my $pagename = $1;
+        my $field = $2;
+        my $noautolang = $on{disableautolang};
+
+        while( 1 )
+         {
+          my $conn = DbQuery( query => "select $field, revision, name,".
+	                               " owner, showperm ".
+			               "from pages ".
+	  		               "where name='".DbQuote($pagename)."' ".
+			               "order by $order limit 1",
+			      type  => 'UNNESTED' );
+          my @corr = FetchRow($conn);
+
+          if ( !$corr[2] )
+           {
+            $nestblocks[$i++] = "($pagename: empty element!)";
+           }
+          elsif ( userdonthave('showperm', $corr[3], $corr[4]) )
+           {
+            $nestblocks[$i++] = "($pagename: You can not view this element!)";
+           } 
+          elsif ( $field eq 'text' )
+           {
+            ## Find translations for this page
+            my %transl;
+            $transl{$1} = $2
+              while $corr[0] =~ s/\[\[*(\w\w)\:([^\]]+)\]\]*(\n|\r)*//sm;
+
+            ## Try to redirect to the right page according to browser language
+            my $tpagename = $transl{lc(substr($ENV{HTTP_ACCEPT_LANGUAGE},0,2))};
+            if ( $tpagename && !$noautolang )
+             {
+              $pagename = $tpagename;
+              $noautolang = 1;
+              next;
+             }
+
+            $nestblocks[$i++] = mkhtml($corr[0]);
+           }
+          else
+           {
+            $nestblocks[$i++] = $corr[0];
+           }
+	  last;
+         }
+        $on{layer} =~ s/\[([^\]]{1,50})\]\{[^\}]+\}/\%\%NESTBLOCKS\%\%/;
+       }
+
+      ## Insert wiki features into the layer
+      $on{layer} = plugwikifeatures($on{layer});
+
+      ## restore nested blocks
+      $i=0;
+      $i++ while $on{layer} =~ s/\%\%NESTBLOCKS\%\%/$nestblocks[$i]/smi;
+     }
+   }
+  $on{layercontent} ||= 'wiki';
+
+
+
+  ## STEP 2 - PAGE CONTENTS RENDERING
+  if ($on{layercontent} eq 'html')
+   {
+    require IG::Utils;
+    $page .= Br(2).
+             IG::MkComments(	comments	=> $on{show_comments},
+	        		commentbackurl	=> "id=$on{id}$igcontext",
+	        		commentowner	=> $on{owner},
+	        		commentid	=> $on{name},
+	        		background	=> 'transparent')
+             if $on{show_comments} eq 'yes';
+
+    $on{layer} =~ s/\%\%PAGE\%\%/$page/;
+    $html = HttpHead( expires => 'now' ) . $on{layer};
+   }
+  else
+   {
+    ## the layer is another wiki page
+    my $icons;
+    my $search_terms;
+
+    if ( $search_terms = _parse_referer() )
+     {
+      $search_terms =~ s/\'/\\'/g;
+      $html=HtmlHead( title	=> $title,
+                      align	=> 'left',
+                      javascript=> "<script src=\"$IG::img_url/highlighter.js\"".
+                                   " type=\"text/javascript\"></script>",
+                      onevent   => "onload=\"highlightSearchTerms('$search_terms');\"",
+	              searchkeys=> $on{searchkeys},
+	              robots	=> $robots_default );
+     }
+    else
+     {
+      $html=HtmlHead( title	=> $title,
+                      align	=> 'left',
+	              searchkeys=> $on{searchkeys},
+	              robots	=> $robots_default );
+     }
+
+    if ($on{action} eq 'showpage' || $on{action} eq 'default_action')
+     {
+      ## Set TaskHead icons
+
+      $icons = Img( href  =>"$igwiki_path?action=proto&amp;name=".
+                            MkUrl($on{name}) .
+                            $igcontext .
+                            ( $on{lasteditpos}
+                              ? '&amp;lasteditpos=' . MkUrl($on{lasteditpos})
+                              : '' ),
+		    src   =>"$IG::img_url/${IG::tema}edit.gif",
+		    width =>23,
+		    title =>$lang{edit_wiki} );
+
+      $icons.= Img( href  =>"$igwiki_path?disableautolang=1&amp;name=".
+                            MkUrl($on{name}),
+		    target=>'wiki',
+		    width =>23,
+		    src   =>"$IG::img_url/mime_http.gif",
+		    title =>'Wiki View' ) if $on{ig};
+
+      $icons.= Img( href  =>"$igwiki_path?action=showhistory&amp;name=".
+			    MkUrl($on{name}). $igcontext,
+		    src   =>"$IG::img_url/${IG::tema}history.gif",
+		    width =>23,
+		    title =>$lang{page_history} ) if $on{name};
+
+      $icons.= Img( href  =>"$igwiki_path?action=property&amp;id=$on{id}$igcontext",
+		    src   =>"$IG::img_url/${IG::tema}property.gif",
+		    width =>23,
+		    title =>$lang{property} ) if $on{id};
+
+      $icons.= Img( title => $lang{mark_by_igmsg},
+                    width => 23,
+                    src   => "$IG::img_url/comment_edit_big.gif",
+                    href  => "javascript:winPopUp(".
+                             "'isms?".
+                                    "action=composemessage&amp;".
+                                    "onsend=close&amp;".
+                                    "text_msg=[". MkUrl($on{name}). ']'.
+                                    "',500,200,'composemessage')"
+                  ) if $on{name} && CheckPrivilege();
+
+      $icons.= Img( href  =>"$igwiki_path/igwiki_page.pdf?action=getpdf&amp;id=$on{id}$igcontext",
+		    src   =>"$IG::img_url/${IG::tema}acroread.gif",
+		    width =>23,
+		    title =>"Get Pdf" ) if $on{id};
+     }
+
+    if ( $on{action} eq 'getpdf' )
+     {
+      $html .= $page;
+     }
+    elsif ( $on{print} )
+     {
+      ## this is a print version
+      $html
+       .= "<div style=\"width:98%; background-color:#CCCCCC; padding:1%;\">".
+          HLayer
+           ( left_layers
+             => [( "<span style=\"font-size:20px; color:#FFFFFF;\">".
+                   $on{title}.
+                   "</span>"
+                 )],
+             right_layers
+             => [( "\n<!-- START TASKHEAD ICONS -->\n".
+                   ( CheckPrivilege('webmail_new')
+                     ? Img( href  => "webmail?action=sendprintview",
+                            target=> 'mainf',
+                            onclick=> "setTimeout('self.close()',500);",
+                            class => 'noprint',
+                            style => 'float:right; width:13px; height:14px; margin-right:3px; ',
+                            src   => "$IG::img_url/email.png",
+                            title => $lang{send_by_email} )
+                     : '').
+                  "\n<!-- END TASKHEAD ICONS -->\n"
+                 )]
+            ).
+          "</div>".
+          $page;
+     }
+    else
+     {
+      $page = "<span id=\"page-content\">".
+               TaskHead( width => '100%',
+                         title => $on{title},
+                         icons => $icons).
+               $page.
+               TaskFoot( comments	=> $on{show_comments},
+                         commentbackurl	=> "id=$on{id}$igcontext",
+                         commentowner	=> $on{owner},
+                         commentid	=> $on{name}).
+               "</span>".Br().
+               ( $on{owner} ? TaskMsg(mkpageinfo(), 5) : '');
+
+     if ( $on{ig} )
+      {
+       ## use only page content
+       $html .= $page;
+      }
+     else
+      {
+       ## Insert the page in the template layer
+       $on{layer} =~ s/\%\%PAGE\%\%/$page/;
+       $html .= $on{layer};
+      }
+     }
+
+    $html .= HtmlFoot();
+   }
+
+  defined wantarray ? return $html : PrOut $html;
+ }
+
+sub _parse_referer
+ {
+  my $referer = $ENV{'HTTP_REFERER'};
+  return if !$referer || $IG::_IS_MOD_PERL;
+  require IG::URIParseSearchString;
+  my $uparse = new URI::ParseSearchString() ;
+  return $uparse->parse_search_string($referer);
+ }
+ 
+#############################################################################
+#############################################################################
+sub gettext
+ {
+  $on{name} = 'main' if !$on{name} && !$on{id};
+  loadpage( $on{name}, $on{id} );
+
+  if ( !$on{owner} || userdonthave('showperm') )
+   { PrOut showpage( $on{name}, $on{id} ) }
+  else
+   {
+    ## If we have an html page we can't show it
+    if ( IG::CkHtml( $on{text} ) )
+     {
+      $on{text} = "This is an Html page. It can't directly showen.<br>".
+		  "You can use it only as a Layer of other wiki pages.";
+     }
+
+    $on{title} ||= $on{name};
+    $on{title} .= " ($lang{draft})" if $on{status} eq 'B';
+    $on{title} .= " ($lang{wiki_expired})" if $on{daystoexpire} < 1;
+
+    IG::DocHead( type		=> 'text/plain',
+		 attachment	=> "$on{id}.txt",
+		 expires        => 'now',
+		 charset	=> $IG::lang_charset);
+ 
+    PrOut uc( $on{title} ) . "\n" . ("-"x78) . "\n\n" .
+	  mkargsindex( 'wiki' ).
+	  mktext( $on{text} );
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub getraw
+ {
+  $on{name} = 'main' if !$on{name} && !$on{id};
+  loadpage( $on{name}, $on{id} );
+
+  if (!$on{owner} || userdonthave('showperm') )
+   { PrOut showpage( $on{name}, $on{id} ) }
+  else
+   {
+    IG::DocHead( type		=> 'text/plain',
+		 attachment	=> "$on{id}.txt",
+		 expires        => 'now',
+		 charset	=> $IG::lang_charset);
+ 
+    PrOut $on{text};
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub plugwikifeatures 
+ {
+  my $text = shift;
+
+  ## these plugins has parsed both in print and screen version 
+  $text =~ s/\%\%PAGEINFO\%\%/mkpageinfo()/eg;
+  $text =~ s/\%\%PAGETITLE\%\%/$on{title}/eg; 
+  $text =~ s/\%\%PAGEID\%\%/$on{id}/eg; 
+  $text =~ s/\%\%PAGENAME\%\%/$on{name}/eg; 
+  $text =~ s/\%\%PAGEKEYS\%\%/$on{searchkeys}/eg; 
+  $text =~ s/\%\%PAGEROBOTS\%\%/$robots_default/eg; 
+  $text =~ s/\%\%(FORMHEAD|FORMINPUT|FORMFOOT)\(([^\)]*)\)\%\%(\n|\r)*/mkforms($1,$2)/eg;
+  $text =~ s/\%\%RANDOMCONTENT\(([\w\d\_\:\|\=]+)\)\%\%/mkrandomcontent($1)/eg;
+  $text =~ s/\%\%PARAM\(([\w\d\_]+)\)\%\%/$on{"field_$1"}/g;
+
+
+  if ($on{print})
+   {
+    $text = _cleanfeaturetags($text);
+   }
+  else
+   {
+    ## Insert wiki features
+    $text =~ s/\%\%WIKILOGO\%\%/mkwikilogo()/eg;
+    $text =~ s/\%\%PAGEACTION\%\%/mkpageaction()/eg;
+    $text =~ s/\%\%SITEMAP\%\%/mksitemap()/eg;
+    $text =~ s/\%\%USERMAP\%\%/mkusermap()/eg;
+    $text =~ s/\%\%FINDER\%\%/mkfindengine()/eg;
+    $text =~ s/\%\%LOGIN\%\%/mkloginframe()/eg;
+    $text =~ s/\%\%TOC\%\%/mkargsindex()/eg;
+    $text =~ s/\%\%FLOATTOC\%\%/mkargsindex("float")/eg;
+    $text =~ s/\%\%FLOATBIOGRAFY\%\%/mkbiografy()/eg;
+    $text =~ s/\%\%RELATEDDOCS\%\%/mkrelateddocs()/eg;
+    $text =~ s/\%\%LASTDOCS\%\%/mklastdocs()/eg; 
+    $text =~ s/\%\%MINICALENDAR\%\%/mkminicalendar()/eg;    
+    $text =~ s/\%\%REPOSITORY\%\%/IG::MkRepository(id=>$on{name},background=>'#BBBBBB')/eg; 
+   }
+  return $text;
+ }
+
+#############################################################################
+#############################################################################
+sub insert_ext_plugin
+ {
+  my $plugin_name = shift;
+     $plugin_name = 'IGWiki_' . $plugin_name if $plugin_name !~ /^IGWiki\_/;
+  
+  return IG::CkExtPlugins( $plugin_name,
+                           undef,
+                           { name       => $on{name},
+                             title      => $on{title},
+                             owner      => $on{owner},
+                             searchkeys => $on{searchkeys},
+                             id         => $on{id} } );
+ }
+ 
+#############################################################################
+#############################################################################
+sub mkrandomcontent
+ {
+  ## %%RANDOMCONTENT%%
+
+  my $argument = shift;
+  my @options = split /\|/, $argument;
+  my %argument; 
+  my @results;
+
+  for ( @options )
+   {
+    my ( $key, $value ) = split /\=/, $_;
+    $argument{$key} = DbQuote($value);
+   }
+
+  $argument{field}	||= 'title';
+  $argument{category}	||= 'Wiki';
+
+  my $conn = DbQuery("SELECT name, ".DbQuote($argument{field})." FROM pages ".
+		     "where showperm='A'".
+		     " and category='".DbQuote($argument{category})."' ".
+		     "ORDER by random() limit 1");
+
+  @results = FetchRow($conn);
+
+  return $argument{field} eq 'text'
+         ? mkhtml( $results[1] )
+         : "<a class=\"wiki\" href=\"$igwiki_path/".
+	   MkUrl($results[0]).
+	   "\">". MkLink($results[1]) . "</a>";
+ }
+
+#############################################################################
+#############################################################################
+sub mkpageaction
+ {
+  ## %%PAGEACTION%%
+
+  my $html = "<div>".
+	     "<a href=\"$igwiki_path?action=proto&amp;name=".MkUrl($on{name})."$igcontext\" style=\"font-size: x-small\">| $lang{edit_wiki} |</a>".
+	     ($on{template} ? "<a href=\"$igwiki_path?action=proto&amp;name=".MkUrl($on{template})."$igcontext\" style=\"font-size: x-small\"> $lang{edit_template} |</a>" : '').
+	     ($on{name} ? "<a href=\"$igwiki_path?action=showhistory&amp;name=".MkUrl($on{name})."$igcontext\" style=\"font-size: x-small\"> $lang{page_history} |</a>" : "").
+	     ($on{id}   ? "<a href=\"$igwiki_path?action=property&amp;id=$on{id}$igcontext\" style=\"font-size: x-small\"> $lang{property} |</a>" : "").
+	     "<a href=\"$igwiki_path?id=$on{id}&amp;print=1\" style=\"font-size: x-small\"> $lang{print} |</a>".
+	     "<a href=\"$igwiki_path\" style=\"font-size: x-small\"> Home |</a><br>".
+	     "</div>\n";
+
+  return $html;
+ }
+
+#############################################################################
+#############################################################################
+sub mkpageinfo
+ {
+  ## %%PAGEINFO%%
+  return if !$on{owner};
+
+  my $page_info = "$lang{name}: $on{name} -
+                   $lang{revision}: $on{revision} -
+		   $lang{author}: ".IG::UsrInf('name',$on{owner})." ($on{date}) -
+		   $lang{last_editor}: ".IG::UsrInf('name',$on{lasteditor})." ($on{lastedit}) -
+		   $lang{category}: $on{category} -
+		   $lang{due_date}: $on{expire} -
+		   $lang{show_privileges}: $perm{$on{showperm}} -
+		   $lang{edit_privileges}: $perm{$on{editperm}}";
+
+  $page_info .= " - $lang{approved_by}: ".IG::UsrInf( 'name', $on{approvedby} )
+                if $on{approvedby};
+  $page_info .= " - Copyright &copy " . IG::UsrInf( 'name', $IG::login_admin ).
+                " All right reserved\n";
+
+  if (%translations)
+   {
+    $page_info .=" - $lang{page_language} ";
+
+    $page_info .= "<a href=\"$igwiki_path?disableautolang=1&amp;name=".
+		  MkUrl($translations{$_}).
+		  "$igcontext\">
+		   <img width=14 height=14 src=\"$IG::img_url/flag_$_.png\" alt=\"$_\" title=\"$_\">
+ 		   </a>&nbsp; " for keys %translations;
+   }
+
+  return $page_info;
+ }
+
+#############################################################################
+#############################################################################
+sub mkforms
+ {
+  ## %%FORMHEAD%%
+  ## %%FORMINPUT%%
+  ## %%FORMFOOT%%
+
+  my $cnt;
+  my ($form_action, $form_params) = @_;
+  my %data = map { split /\=>/, $_ } split /\,/, $form_params;
+
+  if ($form_action eq 'FORMHEAD')
+   {
+    return FormHead(	cgiaction=>'formmail',
+			labelstyle=>'width: 150px').
+
+	   Input( type=>'hiddens',
+		  data=>{ title	     =>    $data{title}
+					|| $on{title}
+					|| $on{name},
+			  backpage   =>    $data{backpage}
+					|| 'main',
+			  msgreceiver=>    $data{email}
+					|| IG::UsrInf('email',$on{owner}),
+			  ig	     =>    ''});
+   }
+  elsif ($form_action eq 'FORMINPUT')
+   {
+    return if $data{type} !~ /text|textarea|date|select/;
+    $data{name} ||= MkId(); 
+    $data{name} = "field_$data{name}";
+
+    if ($data{type} eq 'select')
+     {
+      my @val = split /\|/, $data{value};
+      @val = ("$lang{select}...", @val);
+      $data{value} = '';
+      $data{data} = \@val; 
+     }
+    
+    return Input (	%data ).
+	   Input (	type=>'hidden',
+			name=>"label_$data{name}",
+			value=> $data{show} ||= 'field'.substr('000'.($cnt++),-3,3));
+   }
+  elsif ($form_action eq 'FORMFOOT')
+   {
+    return Input (	type=>'submit',
+			value=>$lang{send}).
+	   Input (	type=>'reset',
+			float=>'left',
+			value=>$lang{cancel}).
+	   FormFoot();
+   }
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return ($on{ig} == 1 ? IG::QuickCreator() : '') .
+         ($on{ig} != 2 ? mklastdocs()       : '');
+ }
+
+#############################################################################
+#############################################################################
+sub formmail
+ {
+  my $form_data;
+
+  foreach (sort { $on{$a} cmp $on{$b} } keys %on)
+   {
+    next if ! /^(label\_(.+))$/;
+    $on{$2} = '' if $on{$2} eq "$lang{select}...";
+    $form_data .= "$on{$1} = $on{$2}\n" if $on{$1};
+   }   
+
+  my $mail = <<FINEMESS;
+
+IGWiki automatic Message.
+
+Form   : $on{title} 
+Date   : $tv{today}
+Time   : $tv{time}
+Client : $IG::remote_host
+
+Form Fields
+----------------------------------------------------------------
+$form_data
+
+FINEMESS
+
+  ## send the message
+  require IG::WebMail;
+  IG::WebMail::SendMsg( 'To'       => $on{msgreceiver},
+                        'From'     => $IG::soc_email,
+                        'Reply-To' => $IG::soc_email,
+                        'Subject'  => "Subject: $IG::soc_name - IGFormMail",
+                        'Message'  => $mail );
+ 
+  $on{name} = $on{backpage};
+  PrOut showpage( $on{name}, $on{id} );
+ }
+
+#############################################################################
+#############################################################################
+sub _all_draft_pages
+ {
+  ## Set order view
+  $on{order}		||= 'lastedit';
+  $on{sortdirection}	||= $IG::list_order;
+
+  QuoteParams();
+  DbQuery("select name, id, title, lastedit, revision, category ".
+	  "from pages where owner='$auth_user' and status='B' ".
+          "order by $in{order} $in{sortdirection}, revision desc");
+
+  my $html = TaskListMenu
+		( ["$lang{name}/$lang{title}",
+		   "action=summary&amp;order=title"],
+		  [$lang{revision},
+		   "action=summary&amp;order=revision"],
+		  [$lang{last_edit},
+		   "action=summary&amp;order=lastedit"],
+		  [$lang{category},
+		   "action=summary&amp;order=category"] );
+
+  while (my @row = FetchRow() )
+   {
+    $row[0] = $row[2] if $row[2];
+    $html .= TaskListItem
+	       (
+		[$row[0],
+		 "$igwiki_path?disableautolang=1&amp;id=$row[1]$igcontext"],
+		[$row[4]],
+		[$row[3]],
+		[$row[5]]
+               );
+   }
+  $html .= TaskListFoot(3);
+
+  return $html;
+ }
+
+#############################################################################
+#############################################################################
+sub _all_approved_pages
+ {
+  my %pages;
+
+  ## Set order view
+  $on{order}		||= 'lastedit';
+  $on{sortdirection}	||= $IG::list_order;
+
+  QuoteParams();
+  DbQuery("select name, id, title, lastedit, revision, category ".
+	  "from pages where owner='$auth_user' and status='A' ".
+	  "order by $in{order} $in{sortdirection}, revision desc");
+
+  my $html = TaskListMenu
+		( ["$lang{name}/$lang{title}",
+		   "action=summary&amp;order=title"],
+		  [$lang{revision},
+		   "action=summary&amp;order=revision"],
+		  [$lang{last_edit},
+		   "action=summary&amp;order=lastedit"],
+		  [$lang{category},
+		   "action=summary&amp;order=category"] );
+
+  while (my @row = FetchRow() )
+   {
+    next if $pages{$row[0]}++;
+    $row[0] = $row[2] if $row[2];
+    $html .= TaskListItem
+               (
+		[$row[0],
+	         "$igwiki_path?disableautolang=1&amp;id=$row[1]$igcontext"],
+		[$row[4]],
+		[$row[3]],
+		[$row[5]]
+	       );
+   }
+
+  $html .= TaskListFoot();
+
+  return $html;
+ }
+
+#############################################################################
+#############################################################################
+sub mkwikilogo
+ {
+  ## %%WIKILOGO%%
+
+  return Img( href  => $igwiki_path,
+              src   => "$IG::img_url/wiki_logo.jpg",
+              width => 160,
+              title => "IGWiki Main Page");
+ }
+
+#############################################################################
+#############################################################################
+sub mkminicalendar
+ {
+  ## %%MINICALENDAR%%
+  require IG::Utils;
+
+  my @row;
+  my @selected_dates;
+  DbQuery("select name from pages ".
+	  "where substr(name,".(length($lang{events})+4).",8) = '.$tv{month}.$tv{year}'");
+
+  push @selected_dates, 0+(substr($row[0],(length($lang{events})+1),2))
+    while @row = FetchRow();
+
+  my $temphtml = IG::MkCalendar(selected=>\@selected_dates,
+				width=>"100%",
+				daylink=>"$igwiki_path/$lang{events}_CALENDARDATE");
+  return "<div style=\"margin-top:10px\">$temphtml</div>";
+ }
+
+#############################################################################
+#############################################################################
+sub mksitemap
+ {
+  ## %%SITEMAP%%
+  my $temphtml;
+
+  ## Find a sitemap content
+  DbQuery("select text from pages ".
+	  "where name='sitemap' ".
+	  "order by $order limit 1");
+  my $sitemap = FetchRow() || $lang{no_sitemap};
+ 
+  return $on{layercontent} eq 'html'
+	 ? mkhtml($sitemap)
+	 : TaskHead(	title=>'Site Map',
+			icon=>2,
+			padding=>10,
+			bgcolor=>'#fcfcfc',
+			width=>'100%').
+	   mkhtml($sitemap).
+	   TaskFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub mkusermap
+ {
+  ## %%USERMAP%%
+  my $temphtml;
+  
+  ## Find a usermap content
+  DbQuery("select text from pages ".
+          "where name='".DbQuote($auth_user)." map' ".
+          "order by $order limit 1");
+
+  my $sitemap = FetchRow() || ( $auth_user eq 'guest'
+                                ? ''
+                                : "$lang{no_usermap} [$auth_user map]" );
+                       
+  return $sitemap eq ''
+         ? ''
+         : $on{layercontent} eq 'html'
+         ? mkhtml($sitemap)
+         : TaskHead(    title => IG::UsrInf('name'). ' map',
+                        icon  => 2,
+                        width => '100%').
+           mkhtml($sitemap).
+           TaskFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub mkfindengine
+ {
+  ## %%FINDER%%
+
+  my $temphtml;
+
+  $temphtml .=
+    FormHead( cgiaction  => 'findexec',
+              fieldstyle => 'margin: 0px; padding: 0px;' ). 
+              
+    HLayer( Input( type     => 'text',
+                   maxlen   => 50,
+                   style    => 'width: 150px;',
+                   value    => '',
+                   focus    => 'true',
+                   override => 1,
+                   autocompletion => { script_url   => 'igwiki',
+		                       script_action=> 'autocompletion',
+		                       search_param => 'searchfor',
+		                       min_chars    => 4 }, 
+                   name     => 'keytofind') ).
+
+            HLayer( bottom_space => 2,
+                    layers  => [( 
+                                 Input( type  => 'submit',
+				        name  => 'findkey',
+				        style => 'width: 15px',
+				        value => 'text',
+				        title => $lang{multisearch},
+				        show  => '*'),
+
+				 Input(	type  => 'submit',
+					name  => 'findtitle',
+					style => 'width: 45px',
+					value => 'title',
+					show  => $lang{title}),
+
+				 Input(	type  => 'submit',
+					name  => 'findname',
+					style => 'width: 45px',
+					value => 'name',
+					show  => $lang{name}),
+	
+				 Input(	type  => 'submit',
+					name  => 'findtext',
+					style => 'width: 45px',
+					value => 'text',
+					show  => $lang{text}),
+			       )]
+		  ).
+    FormFoot();
+
+  return $on{layercontent} eq 'html'
+         ? $temphtml
+         : TaskMsg($lang{find_pages}.Br().$temphtml,5);
+ }
+
+#############################################################################
+#############################################################################
+sub mkloginframe
+ {
+  ## %%LOGIN%%
+  my $https_url = $igwiki_path;
+     $https_url =~ s/^http\:/https\:/;
+
+  my $temphtml;
+
+  if ($auth_user eq 'guest')
+   {
+    ## Insert Login frame
+    $temphtml = "<a href=\"mailto:$IG::soc_email\" style=\"font-size: 10px; white-space: nowrap\">
+		  <img src=\"$IG::img_url/user.gif\" alt=\"Need account?\" border=0>
+		  $lang{need_account}</a>" if $on{layercontent} ne 'html';
+ 
+    $temphtml = Blush($on{errmsg}) if $on{errmsg};
+
+    $temphtml.= FormHead( target=>'_top',
+			  labelstyle=>'width: 60px; font-size: 10px',
+			  formaction=>"$IG::cgi_url/igsuite",
+			  float=>'none',
+			  autofocus=>'false',
+			  cgiaction=>'login').
+
+		 Input  ( type=>'hidden',
+			  name=>'caller',
+			  value=>'igwiki').
+
+		 Input	( show=>'Login',
+			  name=>'login',
+			  style=>'width: 60px;',
+			  maxlen=>8,
+			  type=>'text').
+
+		 Input	( show=>'Password',
+			  maxlen=>20,
+			  style=>'width: 60px;',
+			  type=>'password',
+			  name=>'pwd').
+
+		 Input	( type=>'submit',
+			  style=>'margin-left: 4px; font-size: 10px',
+			  value=>$lang{log_in}).
+
+		 FormFoot().
+
+		 "<div style=\"margin-top:9px; float:right; font-size:8px\">".
+		 ( $ENV{HTTPS}
+		   ? Img( src=>"$IG::img_url/lock.png",
+			  title=>"Secure connection" )
+		   : "<a href=\"$https_url\">SSL</a>"
+		 ) . "</div>";
+   }
+  else
+   {
+    DbQuery("select count(name) from pages ".
+	    "where revision=(select max(revision) from pages p2 ".
+	                    "where p2.name=pages.name) ".
+	    "and owner='$auth_user' and status = 'A'");
+    my $approved_pages = FetchRow();
+
+    DbQuery("select count(name) from pages where owner='$auth_user' ".
+	                                        "and status='B'");
+    my $draft_pages = FetchRow();
+
+    $temphtml .= "<div style=\"font-size:10px; white-space: nowrap\">
+		  <a href=\"$IG::cgi_url/igsuite\" style=\"display:block; width:100%; background:#eeeeee\">
+		  <img src=\"$IG::img_url/$IG::tema{task}{favicon}\" width=23 border=0 alt=\"IGSuite\" title=\"IGSuite\">
+		  ".IG::UsrInf('name')."</a>
+		  <a href=\"$igwiki_path?action=summary\">$lang{approved_pages}: $approved_pages</a><br>
+		  <a href=\"$igwiki_path?action=summary&amp;default_pane=1\">$lang{draft_pages}: $draft_pages</a>
+		  </div>";
+   }
+
+  return $on{layercontent} eq 'html'
+	 ? $temphtml
+	 : TaskMsg($temphtml,5);
+ }
+
+#############################################################################
+#############################################################################
+sub mkargsindex
+ {
+  my $output = shift || 'html';
+  my $text = $on{text};
+  my $index;
+  my $result;
+  my $cnt;
+  my (@level,$level);
+
+  return if !$text; 
+
+  for (split /\n/,$text)
+   {
+    if (/^(\={1,4})\s([^\=]+)\s\1/)
+     {
+      $cnt++;
+      $level = "";
+      my $l = length($1);
+      my $title = $2;
+      $level[$l]++;
+      $level[$_] = 0 for ($l+1)..5;
+      $level .= $level[$_]  ? "$level[$_]." : "" for 1..$l;
+      if ($output eq "html" || $output eq "float")
+       { $index.= ("\t" x $l)."* [#$level|$title]\n" }
+      else
+       { $index.= "\t".("  " x $l)."$level $title\n" }
+     } 
+   }
+
+  if ($index && $cnt>1)
+   {
+    if ($output eq 'html')
+     {
+      $result .= TaskHead(	icon=>2,
+				width=>'100%',
+				bgcolor=>'#fcfcfc',
+				title=>$lang{wiki_index} ).
+		 mkhtml($index).
+		 TaskFoot() . Br();
+     }
+    elsif ($output eq 'float')
+     {
+      $result .= "<div class=\"floatbox\" style=\"width: 160px;\">".
+		 "$lang{wiki_index}<br>".
+		 mkhtml($index).
+		 "</div>";
+     }
+    else
+     {
+      $result = "$lang{wiki_index}\n\n$index\n\n";
+     }
+   }
+
+  return $result;
+ }
+
+#############################################################################
+#############################################################################
+sub mkbiografy
+ {
+  DbQuery("select userid, signature from users ".
+          "where login='". DbQuote($on{owner}) ."'");
+  my ($user_id, $user_sign) = FetchRow();
+
+  my $photo = -e $IG::cgi_dir . $IG::S .
+                 'data' . $IG::S .
+                 'photo' . $IG::S .
+                 'users' . $IG::S .
+                 "${user_id}.jpg"
+	    ? "docview?action=photo_view&amp;".
+	      "photo_type=users&amp;".
+	      "photo_name=${user_id}.jpg" 
+	    : "$IG::img_url/nobody.jpg";
+
+  my $html =  "<div class=\"floatbox\"".
+	      " style=\"font-size:10px; background:#F0F0F0; width:140px; text-align:left;\">".
+	      "<img src=\"$photo\" width=135>".
+	      IG::MkLink($user_sign).
+	      "</div>";
+
+  return $html;
+ }
+
+#############################################################################
+#############################################################################
+sub mkrelateddocs
+ {
+  ## %%RELATEDDOCS%%
+
+  my $htmltemp;
+  my %names;
+  my $cnt;
+
+  $htmltemp = "<ul style=\"padding: 0 0 0 9px; color: gray;".
+	      " list-style-image: url('$IG::img_url/mime_mini_document.png');\">\n";
+
+  if ( $on{name} )
+   {
+    DbQuery("select name, title, id from pages ".
+            "where category<>'IGHelp' and text~*'". DbQuote($on{name}) ."' ".
+	    ($auth_user eq "guest"
+	     ? "and showperm='A' "
+	     : '').
+            "order by $order limit 30");
+    while (my @row = FetchRow())
+     {
+      next if $names{$row[0]}++ || $row[0] eq 'sitemap';
+      last if $cnt++ > 5;
+      $row[1] ||= $row[0];
+      $row[0] =~ s/\s/\_/g;
+      $htmltemp.= "<li><a href=\"$igwiki_path/$row[0]\" class=\"wiki\">".
+		  "$row[1]</a></li>\n";
+     }
+   }
+ 
+  $htmltemp .= $lang{no_items} if !$cnt;
+  $htmltemp .= "</ul>";
+
+  return $on{layercontent} eq 'html'
+         ? $htmltemp
+	 : TaskHead(	icon=>2,
+			width=>'100%',
+			bgcolor=>'#fcfcfc',
+			title=>$lang{related_documents}).
+	   $htmltemp.
+	   TaskFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub mklastdocs
+ {
+  ## %%LASTDOCS%%
+
+  my $htmltemp;
+  my %names;
+  my $cnt;
+
+  $htmltemp = "<ul style=\"color: gray; padding: 0 0 0 9px;".
+	      " list-style-image: url('$IG::img_url/mime_mini_document.png');\">";
+
+  DbQuery("select name, title, id, lastedit, lasteditor from pages ".
+	  "where category<>'IGHelp' and name<>'main' and name<>'sitemap' and status='A' ".
+	  "order by lastedit desc limit 50");
+
+  while (my @row = FetchRow())
+     {
+      next if $names{$row[0]}++ || $row[0] eq 'sitemap';
+      last if $cnt++ > 5;
+      $row[1] ||= $row[0];
+      $row[0] =~ s/\s/\_/g;
+      $htmltemp.= "<li><a href=\"$igwiki_path?id=$row[2]$igcontext\" class=\"wiki\">".
+	          "$row[1]</a>".
+	          "<div style=\"font-size: 10px\">($row[4] $row[3])</div>".
+		  "</li>\n";
+     }
+
+  $htmltemp .= $lang{no_items} if !$cnt;
+  $htmltemp .= "</ul>".
+	       Img( href=>"$IG::cgi_url/igwiki?action=getrss",
+		    src=>"$IG::img_url/rss.png",
+		    width=>16,
+		    height=>16,
+		    style=>"float:right;border:0;margin:2px",
+		    title=>'getrss' );
+
+  return $on{layercontent} eq 'html'
+	 ? "<div style=\"margin: 0 2px 10px 10px;\">$htmltemp</div>"
+	 : TaskHead(	icon => 2,
+			width=> '100%',
+			bgcolor=>'#fcfcfc',
+			title=> $lang{last_wikies}).
+	   $htmltemp.
+	   TaskFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub getrss ##XXX2TEST
+ {
+  my (%names, $counter);
+  my $today_date = IG::GetDateExtended();
+
+  ## Rss header
+  IG::DocHead( type       => 'application/xml',
+               expires    => 'now',
+               attachment => 'igsuite.rdf' );
+
+  PrOut <<END;
+<?xml version="1.0" encoding="$IG::lang_charset"?>
+<rss version="2.0"
+ xmlns:content="http://purl.org/rss/1.0/modules/content/"
+ xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+ xmlns:dc="http://purl.org/dc/elements/1.1/"
+ xmlns:atom="http://www.w3.org/2005/Atom"
+ xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+ >
+   <channel>
+      <title>IGWiki $lang{last_wikies}</title>
+      <link>http://$IG::server_name/</link>
+      <description>Last Wiki pages updated.</description>
+      <language>$IG::default_lang</language>
+      <generator>IGWiki - IGSuite $IG::VERSION</generator>
+      <managingEditor>$IG::soc_email</managingEditor>
+      <pubDate>$today_date</pubDate>
+      <webMaster>$IG::soc_email</webMaster>
+END
+
+  QuoteParams();
+  my $where  = "showperm='A'";
+     $where .= " and category = '$in{category}'" if $on{category};
+
+  if( $on{status} eq 'any' ) 
+   {
+    $where .= "and (revision = (select max(revision) from pages pages2 ".
+                               "where pages2.name = pages.name and ".
+			             "status = 'A') or ".
+		   "(select count(*) from pages pages2 ".
+		    "where pages2.name = pages.name and status = 'A') = 0)";
+   }
+  elsif( $on{status} eq 'draft' ) 
+   {
+    $where .= "and status = 'B'";
+   }
+  else
+   {
+    $where .= "and status = 'A' ".
+              "and revision = (select max(revision) from pages pages2 ".
+                              "where pages2.name = pages.name and ".
+			            "status = 'A')";
+   }
+
+  DbQuery("select name,title,id,lastedit,lasteditor,owner from pages ".
+	  "where $where order by lastedit desc limit 50");
+
+  while (my @row = FetchRow())
+   {
+    next if $names{$row[0]}++ || $row[0] eq "sitemap";
+    last if $counter++ > 10;
+    $row[1] ||= $row[0];
+    $row[1] = MkEntities( $row[1], 'all' );
+    $row[0] =~ s/\s/\_/g;
+    my ($gg,$mm,$yy) = IG::GetValuesByDate( $row[3] );
+    my $pubDate      = IG::GetDateExtended( $gg, $mm, $yy, 12, 0, 0 );
+    my $emailaddr    = IG::UsrInf( 'email', $row[5] ); 
+    my $author       = IG::UsrInf( 'name',  $row[5] );
+
+    PrOut "      <item>
+         <title><![CDATA[$row[1]]]></title>
+         <link>$igwiki_path/$row[0]</link>
+         <description>no description</description>
+         <author>$emailaddr</author>
+         <pubDate>$pubDate</pubDate>
+         <dc:creator>$author</dc:creator>
+         <guid>$igwiki_path/id/$row[2]</guid>
+      </item>\n";
+   }
+  PrOut "   </channel>\n</rss>\n";
+ }
+
+#############################################################################
+#############################################################################
+sub proto
+ {
+  require IG::Utils;
+  $robots_default  = 'noindex, nofollow';
+  my $show_toolbar = IG::ConfigParam('igwiki.show_toolbar');
+  my $area_height  = $show_toolbar ? 295 : 350;
+  my %ajax_req;
+  my $preset_template = $on{template};
+  my $preset_category = $on{category};
+
+  ## load page
+  loadpage($on{name}, $on{id});
+
+  ## check user edit privileges
+  if ( userdonthave('editperm') )
+   {
+    ## He can't edit this page!
+    publish( TaskMsg( "$lang{cant_edit_page}!<br>".
+		      "$lang{ask_to} ".
+		      (    IG::UsrInf( 'name',  $on{owner} )
+		        || IG::UsrInf( 'name',  $IG::login_admin ).
+                           ' '.
+		           IG::UsrInf( 'email', $IG::login_admin ) 
+                      )
+                    )
+           );
+    return;
+   }
+
+  ## Set Ajax requests
+  if ( $on{name} && CheckPrivilege('igforms_view') )
+   {
+    $ajax_req{getpersonalizedfieldslist}
+                                  = "igforms?".
+                                    "action=build_form_mask&amp;".
+				    "igformid=igwiki&amp;".
+				    "recordid=". MkUrl( $on{name} );
+   }
+
+  HtmlHead( ajax_req  => \%ajax_req,
+            shortcuts => _short_cuts(),
+            title     => "IGWiki edit '$on{name}'" );
+
+  ## Check if it's a draft
+  TaskHead(	minwidth => '650px',
+		title    => $on{status} eq 'B'
+			    ? "$lang{page_name}: $on{name} ($lang{draft})"
+			    : "$lang{page_name}: $on{name}",
+		icon     => 2 ); 
+
+  FormHead(	method    => 'post',
+                name      => 'proto',
+                ckchanges => 'true',
+		cgiaction => 'protoagg');
+
+  Input (	type=>'hiddens',
+		data=>{ id  =>'',
+			name=>''} );
+
+  Input (       type=>'hidden',
+                method=>'html',
+                name=>'lasteditpos',
+                value=>$on{lasteditpos} );
+
+  Input (       type=>'hidden',
+                method=>'html',
+                name=>'ig');
+
+  Input (	type=>'text',
+		show=>$lang{title},
+		name=>'title',
+                style=>'width:510px;',
+		maxlen=>200 );
+
+  my $pan0  = $show_toolbar ? _build_toolbar( 'proto', 'text' ) : '';
+ 
+     $pan0 .= Input( type      => 'textarea',
+                     name      => 'text',
+                     fckeditor => 'available',
+                     fckeditor_width  => 620,
+                     fckeditor_height => $area_height,
+                     toolbar   => 'IGExtended',
+                     style     => "width:620px; height:${area_height}px; font-family:monospace;",
+                   );
+
+
+  my $pan1 = Input( show=>$lang{due_date},
+                    labelstyle => 'width:130px;margin-top:15px',
+                    type=>'date',
+                    fieldstyle => 'margin-top:15px',
+                    value=>IG::SumDate($tv{day},$tv{month},$tv{year},365),
+                    name=>'expire').
+                    
+             Input( show => $lang{category},
+                    type => 'combo',
+                    labelstyle => 'width:130px',
+                    style=>'width:200px',
+                    value=> $preset_category || 'Wiki',
+                    data => "select category,category from pages ".
+                            "where category<>'WiKi' group by category",
+                    name=>'category',
+                    maxlen=>50 ).
+
+             Input( show=>'Template',
+                    labelstyle => 'width:130px',
+                    type=>'combo',
+                    data=> _findtemplate(),
+                    value => $preset_template,
+                    name=>'template',
+                    style=>'width:200px',
+                    maxlen=>50 ).
+
+             Input( type=>'select',
+                    labelstyle => 'width:130px',
+                    show=>'Crypt on Database',
+                    name=>'cryptstatus',
+                    data=>[([0,	$lang{no}],
+                            [1,	$lang{yes}])]).
+
+             Input( type=>'textarea',
+                    labelstyle => 'width:130px',
+                    show=>$lang{keywords},
+                    name=>'searchkeys',
+                    style=>'width:450px; height:100px');
+
+   my $pan2 = "<iframe frameborder=\"0\" style=\"padding:0px; width:630px; height:360px;\"".
+              " src=\"\" id=\"files\" name=\"myframe\"></iframe>";
+
+   my $pan3 = [ $lang{personalized_fields},
+                $on{name} && CheckPrivilege('igforms_view') ? '&nbsp;' : '',
+                "getpersonalizedfieldslist".
+                "(['NO_CACHE'],['layer_content3'])" ];
+
+   ## Build TabPane
+   my $tab_files_action = "\$('files').src='filemanager?".
+                          "repid=". MkUrl($on{name}). "&amp;repapp=igwiki'";
+
+   IG::TabPane( data       => [( [$lang{page_text}, $pan0],
+                                 [$lang{settings},  $pan1],
+                                 [$lang{open_repository}, $pan2, $tab_files_action],
+                                 $pan3 )],
+                label_type    => 1,
+                margin_top    => 10,
+                margin_bottom => 1,
+                padding       => 5,
+                width         => 645,
+                height        => 380 );
+
+
+  _js_store_edit_position( 'proto', 'text' );
+
+  Input (	type=>'submit',
+		style=>'margin: 5px 0 5px 5;',
+		name=>'saveandcontinue',
+                onclick=>'IGWikiSaveLastEditPos();',
+		value=>$lang{apply});
+
+  Input (	type=>'submit',
+		float=>'left',
+		style=>'margin: 5px 0 5px 0;',
+		name=>'save',
+                onclick=>'IGWikiSaveLastEditPos();',
+		value=>$lang{save_page});
+
+  Input (	type=>'button',
+		float=>'left',
+		style=>'margin: 5px 0 5px 0;',
+		name=>'preview',
+		onclick=>"var ig = document.proto.ig.value;".
+                         "document.proto.ig.value='';".
+                         "document.proto.target='_blank';".
+		         "document.proto.submit();".
+		         "document.proto.ig.value=ig;".
+		         "document.proto.target='_self';",
+		value=>$lang{preview});
+
+  Input (	type=>'reset',
+		style=>'margin: 5px 0 5px 0;',
+		float=>'left',
+		name=>'restore',
+		value=>$lang{restore});
+
+  Input (	type=>'submit',
+		style=>'margin: 5px 0 5px 0;',
+		float=>'left',
+		name=>'cancel',
+		value=>$lang{cancel});
+
+  Input (	type=>'button',
+		style=>'margin: 5px 0 5px 5;',
+                onclick=>"javascript:winPopUp('$igwiki_path?action=showhelp$igcontext',600,500,'legenda')",
+                show=>$lang{show_tags},
+                float=>'right');
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+#############################################################################
+#############################################################################
+sub _js_store_edit_position
+ {
+  my ( $_form, $_textarea ) = @_;
+
+  PrOut <<ENDSCRIPT;
+<script language="JavaScript">
+<!--
+IGWikiRestoreLastEditPos();     
+
+function IGWikiSaveLastEditPos() {
+    if ( !\$('layer0').visible() )
+        return;
+
+    var lastEditPos = "";
+
+    if ( Prototype.Browser.IE ) {
+	//lastEditPos = document.selection.createRange().getBookmark();
+	lastEditPos = ie_getCursorPosition( document.$_form.$_textarea );
+    } else {
+        var selStart = document.$_form.$_textarea.selectionStart;
+        var selEnd = document.$_form.$_textarea.selectionEnd;
+	var scrollTop = document.$_form.$_textarea.scrollTop;
+        lastEditPos = selStart+","+selEnd+","+scrollTop;
+    }
+
+    document.$_form.lasteditpos.value  = lastEditPos;
+    return 1;
+}
+     
+function IGWikiRestoreLastEditPos() {
+    var lastEditPos = document.$_form.lasteditpos.value;
+    if( lastEditPos == undefined || lastEditPos == "" )
+      return;
+    if ( Prototype.Browser.IE ) {
+	var splitted = lastEditPos.split(",");
+	setTimeout( 'ie_setCursorPosition( document.$_form.$_textarea, '+
+	            splitted[0]+', '+splitted[1]+')', 200 );
+    } else {
+	var splitted = lastEditPos.split(",");
+	document.$_form.$_textarea.selectionStart = splitted[0];
+	document.$_form.$_textarea.selectionEnd = splitted[1];
+	document.$_form.$_textarea.scrollTop = splitted[2];
+	setTimeout('document.$_form.$_textarea.focus()',200);
+    }
+}
+     
+function ie_countTextAreaChars(text) {
+    var n = 0;
+    for (var i = 0; i < text.length; i++) {       
+        if (text.charAt(i) != '\\r') {
+            n++;
+        }
+    }
+    return n;
+}
+
+function ie_getCursorPosition(textArea) {
+    var start = 0;
+    var end = 0;
+    var dummyText = "*!*!*!dummy!*!*!*";
+
+    textArea.focus();
+    var sel1 = document.selection.createRange();       
+    var sel2 = sel1.duplicate();
+    sel2.moveToElementText(textArea);
+    var selText = sel1.text;
+    sel1.text = dummyText;
+    var index = sel2.text.indexOf(dummyText);
+    start = ie_countTextAreaChars((index == -1) ? sel2.text : sel2.text.substring(0, index));
+    end = ie_countTextAreaChars(selText) + start;
+    sel1.moveStart('character', -dummyText.length);
+    sel1.text = selText;
+    return start+","+end;
+}
+
+function ie_setCursorPosition(textArea, start, end) {
+    var sel = textArea.createTextRange();
+    sel.collapse(true);
+    sel.moveStart("character", start);
+    sel.moveEnd("character", end - start);
+    sel.select();
+    textArea.focus();
+}
+
+//-->
+</script>
+ENDSCRIPT
+ }
+
+#############################################################################
+#############################################################################
+sub _build_toolbar
+ {
+  my ( $_form, $_textarea ) = @_;
+  my $html;
+
+  $html = <<TOOLBARSCRIPTS;
+<script language="JavaScript">
+  <!--
+
+String.prototype.startsWith=function(prefix){
+    return this.substring(0,prefix.length)==prefix;
+}
+String.prototype.endsWith=function(suffix){
+    return this.substring(this.length-suffix.length)==suffix;
+}
+
+function IGWikiAddFormat(tagOpen, tagClose) {
+    document.$_form.$_textarea.focus();
+    var dfltPlaceholder = '::default::';
+    var dflt = "";
+    var dfltIdx = tagOpen.indexOf(dfltPlaceholder);
+    if( dfltIdx >= 0 ) {
+	dflt = tagOpen.substring(dfltIdx+dfltPlaceholder.length, tagOpen.length );
+	tagOpen = tagOpen.substring(0, dfltIdx);
+    }
+    var mode = 1; // 1=no current selection, 2=current selection
+    if ( Prototype.Browser.IE ) {
+        var rng = document.selection.createRange();
+	var text = rng.text;
+	if( text == "" )
+	  text = dflt;
+	if( text.startsWith( tagOpen ) && text.endsWith( tagClose ) ) {
+	    rng.text = text.substr( tagOpen.length, text.length-tagOpen.length-tagClose.length ); // ???;
+	}
+	else {
+	    rng.text = tagOpen + text + tagClose;
+	    if( text == "" ) {
+		document.$_form.$_textarea.focus();
+		range = document.selection.createRange();
+		range.move('character', -tagClose.length);
+		range.select();
+	    }
+	}
+        document.$_form.$_textarea.focus();
+    } else {
+	document.$_form.$_textarea.focus();
+	var prevScroll = document.$_form.$_textarea.scrollTop;
+        var selStart = document.$_form.$_textarea.selectionStart;
+        var selEnd = document.$_form.$_textarea.selectionEnd;
+        var text = document.$_form.$_textarea.value.substring(selStart, selEnd);
+	if( text == "" )
+	  text = dflt;
+        var before = document.$_form.$_textarea.value.substring(0, selStart);
+        var after = document.$_form.$_textarea.value.substring(selEnd, document.$_form.$_textarea.textLength);
+	if( before.endsWith(tagOpen) && after.startsWith(tagClose) ) {
+	    // remove format
+	    before = before.substr(0, before.length-tagOpen.length);
+	    after = after.substr(tagClose.length, after.length);
+	    if( text == dflt )
+	      text = "";
+	    document.$_form.$_textarea.value = before + text + after;
+	    document.$_form.$_textarea.setSelectionRange(
+		selStart-tagOpen.length,
+		selStart - tagOpen.length + text.length );
+	}
+	else {
+	    // add format
+	    ToAdd = tagOpen + text + tagClose;
+	    document.$_form.$_textarea.value = before + ToAdd + after;
+	    document.$_form.$_textarea.selectionStart = selStart+tagOpen.length;
+	    document.$_form.$_textarea.selectionEnd = 
+	      selStart + tagOpen.length + text.length;
+	}
+        //document.$_form.$_textarea.focus();
+	document.$_form.$_textarea.scrollTop = prevScroll;
+    } 
+}
+    
+   //-->
+</script>
+       
+TOOLBARSCRIPTS
+
+  $html .= '<div style="float:left; clear:left; display:block; width:620px; border:1px solid #BCBCBC; background-color:#d0d0d0;">'.
+
+      _wikitool( value    => 'B',
+	         name     => 'Bold', 
+	         title    => $lang{text_bold},
+	         style    => 'font-weight: bold;',
+	         accesskey=> 'B',
+	         tagOpen  => '\\\'\\\'\\\'',
+                 tagClose => '\\\'\\\'\\\'').
+      
+      _wikitool( value    => 'I',
+	         name     => 'Italic', 
+	         title    => $lang{text_italic},
+	         style    => 'font-style: italic;',
+	         accesskey=> 'I',
+	         tagOpen  => '\\\'\\\'',
+                 tagClose => '\\\'\\\'').
+      
+      _wikitool( value    => 'U',
+	         name     => 'Undeline', 
+	         title    => $lang{text_underlined},
+	         style    => 'text-decoration: underline;',
+	         accesskey=> 'U',
+	         tagOpen  => ',,',
+                 tagClose => ',,').
+      
+      _wikitool( value    => 'S',
+	         name     => 'Strike', 
+	         title    => $lang{text_strike},
+	         style    => 'text-decoration: line-through;',
+	         accesskey=> 'S',
+	         tagOpen  => '---',
+                 tagClose => '---').
+      
+      _wikitool( value    => 'Ev',
+	         name     => 'Evidence', 
+	         title    => $lang{text_evidenced},
+	         style    => 'background-image:none; background-color:yellow;',
+	         accesskey=> 'E',
+	         tagOpen  => ',,,',
+                 tagClose => ',,,').
+      
+      _wikitool( value    => 'Code',
+	         name     => 'Code', 
+	         title    => 'Code (C)', 
+	         style    => 'font-family:monospace;',
+	         accesskey=> 'C',
+	         tagOpen  => '<code>',
+                 tagClose => '</code>').
+      
+      _wikitool( value    => 'TT',
+	         name     => 'Teletype', 
+	         title    => $lang{text_monospaced},
+	         style    => 'font-family:monospace; margin-right:7px;',
+	         accesskey=> 'T',
+	         tagOpen  => '<TT>',
+                 tagClose => '</TT>').
+       
+      _wikitool( value    => '<>',
+	         name     => 'Center', 
+	         title    => $lang{text_centered},
+	         accesskey=> 'N',
+	         tagOpen  => '(((',
+                 tagClose => ')))').
+       
+      _wikitool( value    => '>>',
+	         name     => 'Right', 
+	         title    => $lang{text_right_giustify},
+	         accesskey=> '',
+	         tagOpen  => ')))',
+                 tagClose => ')))').
+
+      _wikitool( value    => '+/-',
+	         name     => 'Expandible', 
+	         title    => $lang{expandible_area},
+	         accesskey=> 'X',
+	         tagOpen  => '<expandible>expandible label|optional expanded label\n::default::expanded text',
+                 tagClose => '</expandible>').
+
+      Input( type     => 'select',
+             style    => 'font-size:10px; width:80px; margin-left:8px;',
+             onchange => "if( this.value != '' ) { IGWikiAddFormat('%'+this.value+'%', '%'+this.value+'%' ); this.value = '';}",
+             id       => 'TextColor',
+             class    => 'formselect',
+             name     => 'TextColor',
+             float    => 'left',
+             data => [( ['',         'Color...'],
+                        ['red',      'Red'],
+                        ['blue',     'Blue'],
+                        ['green',    'Green'],
+                        ['white',    'White'],
+                        ['black',    'Black'] )] ).
+
+      Input( type     => 'select',
+             style    => 'font-size:10px; width:80px;',
+             onchange => "if( this.value != '' ) { IGWikiAddFormat(this.value, this.value ); this.value = '';}",
+             id       => 'TextSize',
+             class    => 'formselect',
+             name     => 'TextSize',
+             float    => 'left',
+             data => [( ['',     'Size...'],
+                        ['****', 'XX-Small'],
+                        ['***',  'X-Small'],
+                        ['**',   'Small'],
+                        ['++',   'Large'],
+                        ['+++',  'X-Large'],
+                        ['++++', 'XX-Large'] )] ).
+
+      Input( type     => 'select',
+             style    => 'font-size:10px; width:80px;',
+             onchange => "if( this.value != '' ) { IGWikiAddFormat(this.value+' ', ' '+this.value ); this.value = '';}",
+             id       => 'HeadLine',
+             class    => 'formselect',
+             name     => 'HeadLine',
+             float    => 'left',
+             data => [( ['',     'Head...'],
+                        ['=',    'Level 1'],
+                        ['==',   'Level 2'],
+                        ['===',  'Level 3'],
+                        ['====', 'Level 4'] )] ).
+
+      Input( type     => 'select',
+             style    => 'font-size:10px; width:120px;',
+             onchange => "if( this.value != '' ) { var tags = this.value.split('##'); IGWikiAddFormat(tags[0],tags[1]); this.value = '';}",
+             id       => 'TableMenu',
+             class    => 'formselect',
+             name     => 'TableMenu',
+             data=> [( ['',      'Insert Table...'],
+                       ["{|\n|##line 1, col 1\n|line 1, col 2...\n|-\n|line 2, col 1\n|line 2, col 2...\n|}",
+                        'without border'],
+                       ["{| border=1 cellspacing=0\n|##line 1, col 1\n|line 1, col 2...\n|-\n|line 2, col 1\n|line 2, col 2...\n|}",
+                        'with border'],
+                       ["{| border=1 cellspacing=0\n!##header 1\n!header 2...\n|-\n|line 1, col 1\n|line 1, col 2...\n|-\n|line 2, col 1\n|line 2, col 2...\n|}",
+                        'with top headers'],
+                       ["{| border=1 cellspacing=0\n!##header 1\n|line 1, col 1\n|line 1, col 2...\n|-\n!header 2\n|line 2, col 1\n|line 2, col 2...\n|}",
+                        'with left headers'],
+                       ["{| border=1 cellspacing=0\n|\n!##header col 1\n!header col 2...\n|-\n!header line 1\n|line 1, col 1\n|line 1, col 2...\n|-\n!header line 2\n|line 2, col 1\n|line 2, col 2...\n|}",
+                        'with top and left headers'],
+                      )] ).
+
+      Input( type     => 'select',
+             style    => 'font-size:10px; width:130px;',
+             onchange => "if( this.value != '' ) { var tags = this.value.split('##'); IGWikiAddFormat(tags[0],tags[1]); this.value = '';}",
+             id       => 'LinkMenu',
+             class    => 'formselect',
+             name     => 'LinkMenu',
+             float    => 'left',
+             data=> [( ['',       'Link to...'],
+                       ["[::default::wiki page name##]",
+                        'a wiki page'],
+                       ["[::default::wiki page name##|Description]",
+                        'a wiki page with alternate description'],
+                       ["[::default::http://##]",
+                        'external resource'],
+                       ["[::default::http://##|Description]",
+                        'external resource (descriptive)'],
+                       ["[img://::default::/img/##]",
+                        'image'],
+                       ["[img://::default::/img/##|right|margin=10|]",
+                        'image (right aligned)'],
+                       ["[wikipedia:::default::wikipedia page name##]",
+                        'Wikipedia page'],
+                       ["[::default::name of wiki page to display##]{text}",
+                        'content of a wiki page'],
+                       ["[::default::name of wiki page##]{date}",
+                        'creation date of a wiki page'],
+                       ["[::default::name of wiki page##]{lastedit}",
+                        'last edit date of a wiki page'],
+                       ["[::default::name of wiki page##]{expire}",
+                        'expiration date of a wiki page'],
+                       ["[::default::name of wiki page##]{lasteditor}",
+                        'last editor of a wiki page'],
+                       ["[::default::name of wiki page##]{approvedby}",
+                        'user that approved a wiki page'],
+                       ["[::default::name of wiki page##]{revision}",
+                        'revision number of a wiki page'],
+                     )] ).
+                     
+      Input( type     => 'select',
+             style    => 'font-size:10px; width:120px;',
+             onchange => "if( this.value != '' ) { var tags = this.value.split('##'); IGWikiAddFormat(tags[0],tags[1]); this.value = '';}",
+             id       => 'SpecialMenu',
+             class    => 'formselect',
+             name     => 'SpecialMenu',
+             float    => 'left',
+             data => [( [ '',       'Special...'],
+                        ["----\n##",
+                         'Horizontal line'],
+                        [" ;::default::title##:definition...",
+                         'Definition of'],
+                        ["^##^",
+                         'Exponent text'],
+                        ["%%TOC%%##",
+                         'TOC (summary)'],
+                        ["%%FLOATTOC%%##",
+                         'Floating TOC'],
+                        ["%%RELATEDDOCS%%##",
+                         'Related wiki pages'],
+                        ["%%NOCOMMENTS%%##",
+                         'Disable comments'],
+                        ["%%REPOSITORY%%##",
+                         'Insert a file repository'],
+                        ["<nowiki>##</nowiki>",
+                         'Disable wiki format'],
+                        ["<!-- ## -->",
+                         'Hidden Comments']
+                      )] ).
+
+      Input (type           => 'text',
+	     show           => 'Link',
+	     name           => 'linktool',
+	     float          => 'left',
+	     style          => 'width:110px;',
+	     labelstyle     => 'border:0px;width:30px;font-size:10px',
+	     quickhelp      => 'Autocompletition of wiki link and page head (with "#" after exact page name)',
+	     autocompletion => { script_url   => 'igwiki',
+		                 script_action=> 'linkautocomplete',
+		                 search_param => 'searchfor',
+		                 tokens       => '######', ## no token
+		                 min_chars    => 4 }
+	  
+	     ).
+       
+      _wikilinktool( value    => 'Link',
+	             name     => 'addLink', 
+	             float    => 'left',
+	             title    => $lang{insert_link},
+                     tagClose => ']').
+      
+      _wikilinktool( value    => '|title',
+	             name     => 'addLink', 
+	             float    => 'left',
+	             title    => $lang{insert_named_link},
+	             afterLink=> '|::default::title',
+                     tagClose => ']').
+       
+      "</div>";         
+
+  return $html;
+ }
+
+#############################################################################
+#############################################################################
+sub _wikitool
+ {
+  my %data = @_;
+  my $html = Input( type     => 'button',
+                    style    => ( $data{style} !~ /background\-color:/
+                                  ? ' background-color:#d0d0d0;'
+                                  : '' ).
+                                "width:30px; font-size:10px; $data{style}",
+                    fieldstyle => 'margin:2px 0 0 1px;',
+                    name     => $data{name},
+                    title    => $data{title},
+                    float    => 'left',
+                    accesskey=> $data{accesskey},
+                    onclick  => "IGWikiAddFormat('$data{tagOpen}',".
+                                                "'$data{tagClose}')",
+                    value    => $data{value} );
+
+  defined wantarray ? return $html : PrOut $html;
+ }
+
+#############################################################################
+#############################################################################
+sub _wikilinktool
+ {
+  my %data = @_;
+  my $html = Input( type     => 'button',
+                    style    => ( $data{style} !~ /background\-color:/
+                                  ? ' background-color:#d0d0d0;'
+                                  : '' ).
+                                "width:30px; font-size:10px; $data{style}",
+                    name     => $data{name},
+                    title    => $data{title},
+                    float    => 'left',
+                    ##accesskey=> $data{accesskey},
+                    onclick  => "IGWikiAddFormat('['+getVal('linktool')+'$data{afterLink}',".
+                                                "'$data{tagClose}')",
+                    value    => $data{value} );
+
+  defined wantarray ? return $html : PrOut $html;
+ }
+
+#############################################################################
+#############################################################################
+sub linkautocomplete
+ {
+  HttpHead( expires => 'now' );
+  
+  return linkautocomplete_head($1, $2) if $on{searchfor} =~ /^(.+?)\#(.*)$/;
+
+  # testing param length to avoid too many queries while user is typing
+  my $min_length = 4;
+  # CAUTION: min length must be <= to 'minChars' param passed to
+  #          Ajax.autocompleter otherwise no matching will be displayed
+  return if length($on{searchfor}) < $min_length;
+
+  # prepare SQL to retrieve page names
+  my $sql = "select name, title "
+          . "from pages "
+          . "where title ~* '".DbQuote($on{searchfor})."'"
+          . " or name ~* '".DbQuote($on{searchfor})."' "
+          . "group by name "
+          . "order by name "
+	  . "limit 18";
+  
+  my $start = 0;
+
+  DbQuery($sql);
+  while (my ($name, $title) = FetchRow() )
+   {
+    if (!$start)
+     {
+      # initializing unordered list
+      PrOut(qq(<ul>));
+      $start = 1;
+     }
+
+    # adding list item
+    ##PrOut("<li>$name<span class=\"informal\"> - <i>$name</i></span></li>");
+    PrOut("<li>$name</li>");
+   }
+
+  # close list
+  PrOut(qq(</ul>)) if ($start);
+  1;
+ }
+
+sub linkautocomplete_head
+ {
+  my ($name,$head) = @_;
+  ##PrOut "<ul><li>$name - $head ciao</li></ul>";
+  ##1;
+  ##return;
+  DbQuery( "select text, revision, name, owner, showperm ".
+          "from pages ".
+          "where name='".DbQuote($name)."' ".
+          "order by $order limit 1");
+  my ($text, $revision, $checkname, $owner, $showperm) = FetchRow();
+  return unless $checkname;
+  return if userdonthave('showperm', $owner, $showperm);
+  
+  my $start = 0;
+  for( split( /\r?\n/, $text ) ) 
+   {
+    next unless /^(\={1,4}) (.+?) \1/;
+    if (!$start)
+     {
+      # initializing unordered list
+      PrOut(qq(<ul>));
+      $start = 1;
+     }
+
+    # adding list item
+    ##PrOut("<li>$name<span class=\"informal\"> - <i>$name</i></span></li>");
+    PrOut("<li>$name#$2</li>");
+    ##PrOut("<li>$_</li>");
+   }
+  # close list
+  PrOut(qq(</ul>)) if ($start);
+  1;
+ }
+
+#############################################################################
+#############################################################################
+sub _findtemplate
+ {
+  my %templates;
+
+  ## find templates in db
+  my $conn = DbQuery("select template from pages ".
+		     "where template<>'' group by template");
+  $templates{$_}++ while $_ = FetchRow($conn);
+
+  ## find templates in filesystem
+  my $template_dir = $IG::cgi_dir . ${S}.
+                     'data'.        ${S}.
+                     'igwiki'.      ${S}.
+                     'templates';
+
+  opendir( DIR, CkPath($template_dir) )
+    or die("Can't open '$template_dir' directory.\n");
+
+  -T "$template_dir${S}$_" && $templates{$_}++ for grep !/^\./, readdir(DIR);
+
+  return [sort keys %templates];
+ }
+
+#############################################################################
+#############################################################################
+sub userdonthave
+ {
+  my ($action, $owner, $privilege) = @_;
+  $action    ||= 'showperm';
+  $owner     ||= $on{owner};
+  $privilege ||= $on{$action};
+
+  ## check user privileges
+  if (
+       (
+	(!$privilege        && $auth_user eq 'guest'			 ) ||
+	( $privilege eq 'P' && $owner ne $auth_user			 ) ||
+	( $privilege eq 'S' && $auth_user eq 'guest'			 ) ||
+	( $privilege eq 'F' && !IG::CheckSameMembership($owner, $auth_user) )
+       ) && !CheckPrivilege('sys_user_admin')
+     )
+   { return 1 }
+  return 0;
+ }
+
+#############################################################################
+#############################################################################
+sub protoagg
+ {
+  if (!$on{save} && !$on{saveandcontinue} && !$on{cancel})
+   {
+    ## This is a preview request
+    ## If we have an html page we can't show it
+    $on{text} = $lang{Err_html_page} if IG::CkHtml( $on{text} );
+ 
+    $on{title} ||= $on{name};
+
+    ## Show Preview
+    publish( mkhtml($on{text}) );
+    return;
+   }
+
+  if ($on{cancel})
+   {
+    IG::Redirect("$igwiki_path?".
+		 "disableautolang=1&amp;".
+		 "id=$on{id}$igcontext" );
+    return;
+   }
+
+  if (!$on{name})
+   {
+    push @IG::errmsg, $lang{Err_no_pagename};
+   }
+
+  if (!($on{expire} = CkDate($on{expire},1)))
+   {
+    push @IG::errmsg, $lang{Err_due_date};
+    $lang{due_date} = Blush($lang{due_date});
+   }
+
+  if (!$on{text})
+   {
+    push @IG::errmsg, $lang{Err_no_pagetext};
+   }
+
+  proto() && return if @IG::errmsg;
+
+  $on{category} ||= $on{categories};
+  $on{name} =~ s/\_/ /g;
+
+  if ($on{id})
+   {
+    ## this page already exist. We have to check if it is an approved
+    ## page or a draft page
+    DbQuery("select * from pages ".
+	    "where id='".DbQuote($on{id})."'");
+    my @row = FetchRow();
+    
+    if ($row[11] eq "B")
+     {
+      ## It's a draft, keep the same properties of previous approved pages
+      ## change only last edit date and last editor
+
+      ## Alert owner about changes if authuser is not the owner and is not
+      ## last editor of the document
+      if ( $auth_user ne $row[4] && $row[7] ne $auth_user )
+       {
+        IG::SendIsms (	receiver => $row[4],
+			body     => "$lang{wiki_alert} [$on{name}]");
+       }
+
+      $on{owner}	= $row[4];
+      $on{date}		= $row[5];
+      $on{lastedit}	= $tv{today};
+      $on{lasteditor}	= $auth_user;
+      $on{showperm}	= $row[9];
+      $on{editperm}	= $row[10];
+      $on{status}	= $row[11];
+      $on{revision}	= $row[12];
+     }
+    else
+     {
+      ## it's an approved page. Make a new revision of document
+
+      ## Alert the owner about new revision if authuser is not the owner
+      if ($auth_user ne $row[4])
+       {
+        IG::SendIsms (	receiver => $row[4],
+			body     => "$lang{wiki_alert1} [$on{name}]");
+       }
+
+      $on{id}		= MkId();
+      $on{owner}	= $row[4];
+      $on{date}		= $row[5];
+      $on{lastedit}	= $tv{today};
+      $on{lasteditor}	= $auth_user;
+      $on{showperm}	= $row[9];
+      $on{editperm}	= $row[10];
+      $on{cryptstatus}||= $row[16];
+      $on{searchkeys} ||= $row[17];
+
+      ## Set a new status and revision fields
+      DbQuery("select status,revision from pages ".
+	      "where name='".DbQuote($on{name})."' ".
+	      "order by revision desc");
+
+      ($on{status},$on{revision}) = FetchRow();
+      if ($on{status} eq "B")
+       {
+        ## Draft already exist. User want edit an approved document
+        publish( TaskMsg($lang{Err_page}) );
+        return;
+       }
+      $on{status} = "B";
+      ++$on{revision};
+     }
+   }
+  else
+   {
+    ## It's a new page
+    $on{id} = MkId();
+    $on{owner} = $on{lasteditor} = $auth_user;
+    $on{date} = $on{lastedit} = $tv{today};
+    $on{showperm} = $IG::def_wiki_show ||= "S";
+    $on{editperm} = $IG::def_wiki_edit ||= "P";
+    $on{status} = "B";
+    $on{revision} = "0";
+   }
+
+  ## Crypt page
+  if ($on{cryptstatus})
+   {
+    $on{text} = chcryptstatus(1, $on{text}, IG::UsrInf( 'passwd', $on{owner} ));
+   }
+
+  ## Update database
+  QuoteParams();
+  DbQuery(query =>[(	"delete from pages where id='$in{id}'",
+
+			"insert into pages values ('$in{id}', '$in{name}',".
+			" '$in{title}', '$in{category}', '$in{owner}',".
+			" '$in{date}', '$in{expire}', '$in{lastedit}',".
+			" '$in{lasteditor}', '$in{showperm}', '$in{editperm}',".
+			" '$in{status}', $in{revision}, '$in{text}',".
+			" '', '$in{template}', '$in{cryptstatus}',".
+			" '$in{searchkeys}')"
+		   )] );
+  LogD("insert/update page $on{name}", "insert", "pages", $on{id});
+
+  ## Show page
+  IG::Redirect( $on{saveandcontinue}
+                ? "$igwiki_path?action=proto&amp;lasteditpos=".
+                  MkUrl($on{lasteditpos})."&amp;id=$on{id}$igcontext"
+                : "$igwiki_path?disableautolang=1&amp;lasteditpos=".
+                  MkUrl($on{lasteditpos})."&amp;id=$on{id}$igcontext" );
+ }
+
+#############################################################################
+#############################################################################
+sub property
+ {
+  my $html;
+  loadpage( undef, $on{id} );
+  $robots_default = 'noindex, nofollow';
+  $on{layer} = $on{template} = ''; 
+
+  ## Check privileges
+  if (userdonthave('editperm'))
+   {
+    ## User can't edit/config page
+    publish( TaskMsg($lang{cant_config_page}),
+	     "$lang{property}: $on{name}" );
+    return;
+   }
+
+  $on{title} = "$lang{property}: $on{name}";
+  $html .=	FormHead(cgiaction=>'propertyagg').
+
+		Input (	type=>'hidden',	name=>'id').
+		Input (	type=>'hidden',	name=>'ig').
+		Input (	type=>'hidden',	name=>'name').
+
+		Input (	type=>'text',
+			size=>50,
+			name=>'newname',
+			readonly => CheckPrivilege('igwiki_writer') ? 0 : 1,
+			show=>$lang{page_name},
+			value=>$on{name}).
+
+		Input (	type=>'select',
+			show=>$lang{show_privileges},
+			value=>$on{showperm},
+			name=>'newshowperm',
+			data=>[(['P',	$perm{P}],
+				['S',	$perm{S}],
+				['A',	$perm{A}],
+				['F',	$perm{F}])]).
+
+		Input (	type=>'select',
+			show=>$lang{edit_privileges},
+			name=>'neweditperm',
+			value=>$on{editperm},
+			data=>[(['P',	$perm{P}],
+				['S',	$perm{S}],
+				['A',	$perm{A}],
+				['F',	$perm{F}])]).
+	
+		Input (	type=>'select',
+			show=>$lang{status},
+			readonly => CheckPrivilege('igwiki_writer') ? 0 : 1,
+			name=>'newstatus',
+			value=>$on{status},
+			data=>[(['B',	$lang{draft}],
+				['A',	$lang{approved}])]).
+	
+		Input (	type=>'submit',
+			name=>'save',
+			style=>'margin-top: 30px',
+			value=>$lang{save}).
+
+		FormFoot();
+
+  publish( $html );  
+ }
+
+#############################################################################
+#############################################################################
+sub propertyagg
+ {
+  loadpage( undef, $on{id} );
+  $robots_default = 'noindex, nofollow';
+  $on{layer} = $on{template} = ''; 
+
+  die($lang{Err_page1}) if !$on{id}          ||
+			   !$on{newname}     ||
+			   !$on{newshowperm} ||
+			   !$on{neweditperm} ||
+			   !$on{newstatus};
+
+  ## Check privileges
+  if (userdonthave('editperm'))
+   {
+    ## User can't edit/config page
+    publish ( TaskMsg($lang{cant_config_page}) );
+    return;
+   }
+
+  ## If user has changed page name
+  if ($on{newname} ne $on{name} && CheckPrivilege('igwiki_writer'))
+   {
+    ## Check if page name already exists
+    DbQuery("select name from pages ".
+	    "where name='".DbQuote($on{newname})."' limit 1");
+    my ($newname) = FetchRow();
+    if ($newname eq $on{newname})
+     {
+      push @IG::errmsg, $lang{Err_wiki_exist};
+      property();
+      return;
+     }
+
+    ## Ok page name doesn't exist user can modify it
+    QuoteParams();
+    DbQuery("update pages set name='$in{newname}' where name='$in{name}'");
+    LogD("update page '$on{name}' to '$on{newname}'", 'update', 'pages');
+    $on{name} = $on{newname};
+   }
+
+  QuoteParams();
+  DbQuery("update pages set showperm='$in{newshowperm}', editperm='$in{neweditperm}' ".
+	  "where name='$in{name}'");
+
+  LogD("update permissions of page '$on{name}'", 'update', 'pages');  
+
+  if (CheckPrivilege('igwiki_writer'))
+   {
+    if ($on{newstatus} eq 'A') { $on{approvedby} = $auth_user; }
+
+    QuoteParams();
+    DbQuery("update pages ".
+	    "set status='$in{newstatus}', approvedby='$in{approvedby}' ".
+	    "where id='$in{id}'");
+    LogD("update status", 'update', 'pages', $on{id});
+   }
+
+  IG::Redirect("$igwiki_path?id=$on{id}&amp;disableautolang=1$igcontext");
+ }
+
+#############################################################################
+#############################################################################
+sub chcryptstatus
+ {
+  my ($status, $text, $key) = @_;
+
+  return $status
+         ? IG::Crypt($text, 'encrypt', $key)
+         : IG::Crypt($text, 'decrypt', $key);
+ }
+
+#############################################################################
+#############################################################################
+sub showhistory
+ {
+  my ($html, $counter);
+  loadpage($on{name}, $on{id});
+  $on{layer} = $on{template} = ''; 
+  $robots_default = 'noindex, nofollow';
+
+  my $name = MkUrl($on{name});
+  $name =~ s/( |\%20)/\_/g; 
+
+  if (!$on{owner})
+   {
+    IG::Redirect( "$igwiki_path?name=" . MkUrl($on{name}) . $igcontext );
+    return;
+   }
+  else
+   {
+    ## Check user view privileges
+    if ( userdonthave('showperm') )
+     {
+      publish( TaskMsg("$lang{cant_show_history}<br>".
+                       "$lang{ask_to} ".IG::UsrInf('name',$on{owner})
+                      )
+             );
+      return;
+     } 
+
+    ## Show wiki history
+    $on{title} = $lang{page_history};
+
+    $html = FormHead(	cgiaction => 'showdiff',
+		        mode      => 'nosession',
+                        method    => 'get' ).
+
+	    Input(	type=>'hidden',
+			name=>'ig');
+
+    $html .= Input (	type=>'label',
+			fieldstyle=>'width: 160px',
+			show=>$lang{show_privileges},
+			data=>$perm{$on{showperm}});
+
+    $html .= Input (	type=>'label',
+			fieldstyle=>'width: 160px',
+			show=>$lang{edit_privileges},
+			float=>'left',	
+			data=>$perm{$on{editperm}});
+
+    $html .= Input (	type=>'label',
+			fieldstyle=>'width: 160px',
+			show=>$lang{owner},
+			data=>IG::UsrInf('name',$on{owner}) );
+
+    $html .= Input (	type=>'label',
+			fieldstyle=>'width: 160px',
+			show=>$lang{page_name},
+			float=>'left',
+			data=>"<a href=\"$igwiki_path?name=$name$igcontext\">$on{name}</a>");
+
+    $html .= Input (	type=>'label',
+			fieldstyle=>'width: 160px',
+			show=>$lang{issue},
+			data=>$on{date});
+
+    $html .= Input (	type=>'label',
+			fieldstyle=>'width: 160px',
+			float=>'left',
+			show=>$lang{category},
+			data=>$on{category});
+
+    DbQuery("select * from pages ".
+	    "where name='".DbQuote($on{name})."' order by revision desc");
+
+    $html .= Br(2).TaskListMenu(
+				 [substr($lang{revision},0,1)],
+				 [1],
+				 [2],
+				 [$lang{title}],
+				 [$lang{last_editor}],
+				 [$lang{status}],
+				 [$lang{size}],
+				 [],
+				 [],
+				 [],
+				 [],
+			      );
+
+    $on{diff1} = $on{diff2} = 'x';
+
+    while (my @row=FetchRow())
+     {
+      ++$counter;
+      $on{diff1} = $row[0] if $counter==1;
+      $on{diff2} = $row[0] if $counter==2;
+      $row[14] &&= "$lang{approved_by} ".IG::UsrInf('name',$row[14]);
+      $row[14] ||= $lang{draft};
+
+      $html .= TaskListItem (
+	[ $row[12],
+	  "$igwiki_path?disableautolang=1&amp;id=$row[0]$igcontext" ],
+	[ Input (type=>"radio", name=>"diff1", value=>$row[0]) ],
+	[ Input (type=>"radio", name=>"diff2", value=>$row[0]) ],
+	[ $row[2] ],
+	[ IG::UsrInf('name',$row[8])." $row[7]" ],
+	[ $row[14] ],
+	[ IG::MkByte(length($row[13])) ],
+	[ Img( src     => "$IG::img_url/delete.gif",
+	       title   => $lang{delete},
+               onclick => IG::JsConfirm( $lang{are_you_sure} ) ),
+	  "$igwiki_path?action=delexec&amp;id=$row[0]$igcontext" ],
+	[ "Txt",
+	  "$igwiki_path/$row[0].txt?action=gettext&amp;id=$row[0]$igcontext"],
+	[ "Raw",
+	  "$igwiki_path/$row[0].txt?action=getraw&amp;id=$row[0]$igcontext"],
+	[ "Pdf",
+	  "$igwiki_path/$row[0].pdf?action=getpdf&amp;id=$row[0]$igcontext"],
+		);
+     }
+
+    $html .= 	TaskListFoot(3).
+		Input (	type=>'submit',
+			value=>$lang{show_diff}).
+		FormFoot();
+
+    publish( $html );
+   }
+ }
+
+###########################################################################
+###########################################################################
+sub mkhtml
+ {
+  my $text = shift || return '&nbsp;';
+  my @nowiki;
+  my @nestblocks;
+  my $i = 0;
+  my $isNested = (caller(1))[3] =~ /\:\:mkhtml$/; ## because mod_perl don't
+                                                  ## work with main::
+
+  ## Plug external features
+  $text =~ s/\%\%EXTPLUGIN\(([\w\d\_]+)\)\%\%/insert_ext_plugin($1)/eg;
+
+  ## Finds nowiki blocks and store them
+  $nowiki[$i++] = MkEntities($1) while $text=~ s/<nowiki>(.+?)<\/nowiki>/\%\%NOWIKI$i\%\%/smi;
+
+  ## Finds "code" blocks and store them
+  $nowiki[$i++] = MkEntities($1) while $text=~ s/<code>(.+?)<\/code>/\t\%\%NOWIKI$i\%\%/smi;
+
+  ## Finds noparse blocks and store them without parse
+  $nowiki[$i++] = $2 while $text=~ s/<(noparse|html)>(.+?)<\/\1>/\%\%NOWIKI$i\%\%/smi;
+
+  ## Finds 4 spaces at line start and use it as a code block
+  $nowiki[$i++] = MkEntities($1) while $text=~ s/^    (.+)$/\t\%\%NOWIKI$i\%\%/m;
+
+  ## Parse Expandible blocks
+  while ( $text =~ s/<expandible(.+?)<\/expandible>/\%\%EXPANDIBLE\%\%/smi )
+   {
+    my $html;
+    my $expandible_content = $1;
+
+    if ( $expandible_content =~ /^(?: +\"(.*?)\")?(?: +\"(.*?)\")?\>(.+?)\n(.+)$/sm )
+     {
+      my $closed_style  = $1;
+      my $opened_style = "display:none; $2";
+      my $expanded_content = $4;
+      my ( $closed_label, $opened_label ) = split /\|/, $3;
+      $opened_label ||= $closed_label;
+
+      my $id = 'igwikiexpandible_' . MkId(15);
+      my $id_1 = $id . '_1';
+      my $id_2 = $id . '_2';
+
+      ## Closed label
+      $html = "%%NOWIKI$i%% $closed_label";
+      $nowiki[$i++] = "<div><div id=\"$id_1\" style=\"$closed_style\">". 
+                      "<a onclick=\"$id_1.style.display = 'none';".
+                                   "$id_2.style.display = 'block';\"".
+                        " style=\"cursor:pointer;\">".
+                      IG::Img( src => "$IG::img_url/add.gif" );
+      
+      ## Opened label
+      $html .= "%%NOWIKI$i%% $opened_label";
+      $nowiki[$i++] = "</a></div>".
+                      "<div id=\"$id_2\" style=\"$opened_style\">".
+                      "<a onclick=\"$id_2.style.display = 'none';".
+                                   "$id_1.style.display = 'block';\"".
+                        " style=\"cursor:pointer;\">".
+                      IG::Img( src => "$IG::img_url/sub.gif" );
+
+      ## Content
+      $html .= "%%NOWIKI$i%%\n$expanded_content";
+      $nowiki[$i++] = "</a><br/>";
+      $html .= "%%NOWIKI$i%%";
+      $nowiki[$i++] = "</div></div>\n";
+     }
+    else
+     {
+      $html = 'Broken expandible block.';
+     }
+     
+    $text =~ s/\%\%EXPANDIBLE\%\%/$html/;
+   }
+     
+  ## Also store html tags
+  $nowiki[$i++] = $1 while $text=~ s/(<[^>]+>)/\%\%NOWIKI$i\%\%/smi;
+
+  ## Owner signature
+  $text =~ s/\-\-\~\~\~\~/IG::UsrInf('name',$on{owner})/esmg;
+
+  ## remove unwanted TOC (if page is nested)
+  $text =~ s/\%\%(FLOAT)?TOC\%\%//smi if $isNested;
+
+  ## Link to a wiki page element
+  $i=0;
+  while ($text=~ /\[\[*([^\]]{1,50})\]\]*\{(title|lastedit|lasteditor|text|date|expire|approvedby|revision)\}/)
+   {
+    my $pagename = $1;
+    my $field = $2;
+    my $noautolang = $on{disableautolang};
+    
+    while( 1 )
+     {
+      my $conn = DbQuery( query => "select $field, revision,".
+                                   " name, owner, showperm ".
+                                   "from pages ".
+                                   "where name='".DbQuote($pagename)."' ".
+                                   "order by $order limit 1",
+			  type  => 'UNNESTED' );
+      my @corr = FetchRow($conn);
+
+      if ( !$corr[2] )
+       {
+        $nestblocks[$i++] = "($pagename: empty element!)";
+       }
+      elsif ( userdonthave('showperm', $corr[3], $corr[4]) )
+       {
+        $nestblocks[$i++] = "($pagename: You can not view this element!)";
+       }
+      elsif ( $field eq 'text' )
+       {
+        ## Find translations for this page
+        my %transl;
+        $transl{$1} = $2
+          while $corr[0] =~ s/\[\[*(\w\w)\:([^\]]+)\]\]*(\n|\r)*//sm;
+
+        ## Try to redirect to the right page according to browser language
+        my $tpagename = $transl{lc(substr($ENV{HTTP_ACCEPT_LANGUAGE},0,2))};
+        if ( $tpagename && !$noautolang )
+         {
+          $pagename = $tpagename;
+          $noautolang = 1;
+          next;
+         }
+
+        $nestblocks[$i++] = mkhtml($corr[0]);
+       }
+      else
+       {
+        $nestblocks[$i++] = $corr[0];
+       }
+      last;
+     }
+    $text =~ s/\[\[*([^\]]{1,50})\]\]*\{[^\}]+\}/\%\%NESTBLOCKS\%\%/;
+   }
+
+
+  ## Change 'indent' type to make lists tags compatible acros formats.
+  $text =~ s/^( +)(.+)$/("\t" x length($1)).$2/mge;
+
+  ## Parse [img://imageurl|options|alt]
+  $text =~ s/\[\[*img\:\/\/([^\]]+)\]\]*/parseimage($1)/eg; 
+
+  ## Apply IG standard formatting and Wiki Format
+  $text = ParseLink($text);
+  $text = WikiFormat::format( $text, {}, { implicit_links => 0} );
+
+  ## restore nest blocks
+  $i=0;
+  $i++ while $text =~ s/\%\%NESTBLOCKS\%\%/$nestblocks[$i]/smi;
+
+  ## Insert wiki features
+  $text = plugwikifeatures($text);
+
+  ## restore nowiki blocks
+  $i = 0;
+  $i++ while $text =~ s/\%\%NOWIKI$i\%\%/$nowiki[$i]/smi;
+
+  return ($text);
+ }
+
+###########################################################################
+###########################################################################
+sub parseimage
+ {
+  my $argument = shift;
+  my @options = split /\|/, $argument;
+
+  ## if imageurl start with '/' we have a relative url image
+  ## otherwise it's an absolute url
+  my $imageurl = shift(@options);
+  if ( -e "$IG::cgi_dir${S}data${S}repository${S}igwiki${S}".
+          MkUrl( $on{name} ) . ${S} . $imageurl
+     )
+   {
+    my ($imgpath, $imgname) = $imageurl =~ /^(.*)\/([^\/]+)$/;
+    $imgname ||= $imageurl;
+    $imageurl = 'filemanager?action=openfile&amp;'.
+                            "dir=".MkUrl($imgpath)."&amp;".
+                            "repid=".MkUrl($on{name})."&amp;".
+                            "repapp=igwiki&amp;".
+                            "file=".MkUrl($imgname);
+   }
+  else
+   {
+    $imageurl =~ s/^([^\/].+)/http:\/\/$1/; 
+   }
+
+  my $imagealt = $argument =~ /\|$/ ?  $imageurl : pop(@options); 
+  my $imagealign;
+  my $imagewidth;
+  my $imageheight;
+  my $imagelayout;
+  my $imagemargin;
+  my $imageborder;
+  my $imagelink;
+  my $html;
+
+  for (@options)
+   {
+    $imagealign  = "align=\"$_\"" if /^(left|right|center)$/;
+    $imagewidth  = $_ if /width=\d+/;
+    $imageheight = $_ if /height=\d+/;
+    $imagelayout = $_ if /frame|none/;
+    $imagelink   = $1 if /link=(.+)/;
+
+    if ( /margin=(.+)/ )
+     {
+      $imagemargin = "$1 ";
+      $imagemargin =~ s/px/ /g;
+      $imagemargin =~ s/(\d+) +/$1px /g;
+     }
+
+    if ( /border=(.+)/ )
+     {
+      $imageborder = "$1 ";
+      $imageborder =~ s/px/ /g;
+      $imageborder =~ s/(\d+) +/$1px /g;
+     }
+   }
+ 
+  $imageborder ||= '0px';
+  $imagemargin ||= '0px';
+  $imagelayout = $imagelayout ne 'frame'
+	       ? "style=\"border: $imageborder solid #666; margin: $imagemargin\""
+	       : $imagealign eq 'align="left"'
+		 ? 'style="float: left; clear: left; margin: 10px 10px 10px 0; border: 1px solid #666; padding: 2px;"'
+		 : 'style="float: right; clear: right; margin: 10px 0 10px 10px; border: 1px solid #666; padding: 2px;"';
+
+  my $options = join ' ',
+		grep /./,
+		( $imagealign,
+		  $imagewidth,
+		  $imageheight,
+		  "alt=\"$imagealt\" title=\"$imagealt\"",
+		  $imagelayout,
+		); 
+
+  $html = "<img src=\"$imageurl\" $options>";
+  $html = "<a href=\"$imagelink\">$html</a>" if $imagelink;
+
+  return $html;
+ } 
+
+###########################################################################
+########################################################################### 
+sub mktext
+ {
+  require IG::Utils;
+  my $text = shift || return "&nbsp;";
+  my @nestblocks;
+  my @nowiki;
+  my @levels;
+  my $i=0;
+
+  ## Finds nowiki blocks and store them
+  $nowiki[$i++] = $1 while $text=~ s/<nowiki>(.+?)<\/nowiki>/\%\%NOWIKI$i\%\%/smi;
+  ## Finds "Code" block store them
+  $nowiki[$i++] = $1 while $text=~ s/<code>(.+?)<\/code>/ \%\%NOWIKI$i\%\%/smi;
+
+  ## Owner signature
+  $text =~ s/\-\-\~\~\~\~/IG::UsrInf('name',$on{owner})/esmg;
+
+  my %tags   = (
+	indent		=> qr/^\t+/,
+	newline		=> '\n',
+	link		=> \&make_html_link,
+	strong		=> sub { "$_[0]" },
+	strong_tag	=> qr/'''(.+?)'''/,
+	exponent	=> sub { "$_[0]" },
+	exponent_tag	=> qr/\^(.+?)\^/,
+	strike		=> sub { "$_[0]" },
+	strike_tag	=> qr/---(.+?)---/,
+	evidence	=> sub { "$_[0]" },
+	evidence_tag	=> qr/\,\,\,(.+?)\,\,\,/,
+	colored		=> sub { "$_[1]" },
+	colored_tag	=> qr/\%(red|blue|green|white|black)\%(.+?)\%\1\%/,
+	emphasized	=> sub { "$_[0]" },
+	emphasized_tag	=> qr/''(.+?)''/,
+	underline	=> sub { "$_[0]" },
+	underline_tag	=> qr/\,\,(.+?)\,\,/,
+	center		=> sub { "$_[0]" },
+	center_tag	=> qr/\(\(\((.+?)\)\)\)/,
+        right		=> sub { "$_[0]" }, 
+        right_tag	=> qr/\)\)\)(.+?)\)\)\)/, 
+ 
+	code	 => [ "\n", "\n", '',	"\n" ],
+	line	 => [ '',   "",	  ("-"x77),"" ],
+	table	 => [ "",   "",	  "\n$_[2]",	"" ],
+	paragraph=> [ '',   "\n", '',	"\n", 1 ],
+	unordered=> [ "\n", "\n", "\t* ", "\n\n" ],
+	ordered  => [ "",   "\n", sub { "\t$_[2] ", $_[0], "\n" } ],
+	defs	 => [ "",   "\n", sub {	$_[0] =~ /([^\:]+)\:(.+)/;
+					return "   ",
+					$1,
+					"$2\n"
+				      } ],
+	header	 => [ '',   "\n", sub {   my $name;
+					  my $level = length $_[2];
+					  $levels[$level]++;
+					  $levels[$_] = 0 for ($level+1)..5;
+					  $name .= $levels[$_]
+					         ? "$levels[$_]."
+					         : "" for 1..$level;
+					  return "\n$name ",
+						 WikiFormat::format_line($_[3],
+						 @_[-2, -1]),"\n"
+				      } ],
+	blocks	 => {
+			table		=> qr/^(<\/*(?:td|tr|th|table)[^>]*>)/,
+			ordered		=> qr/^([\dA-Za-z]+\.)\s*/,
+			unordered	=> qr/^\*\s*/,
+			defs		=> qr/^\;/,
+			code		=> qr/  /,
+			header		=> qr/^(=+) (.+) \1/,
+			paragraph	=> qr/^/,
+			line		=> qr/^-{4,}/,
+	   	    },
+	indented => { map { $_ => 1 } qw( defs ordered unordered code )},
+	nests	 => { map { $_ => 1 } qw( ordered unordered ) },
+
+	blockorder => [qw( table header line defs ordered unordered code paragraph )],
+	extended_link_delimiters => [qw( [ ] )],
+  );
+
+  ## Delete links to images
+  $text =~ s/\[\[*img\:\/\/([^\]]+)\]\]*//mg; 
+
+  ## Delete Table tags
+  $text =~ s/\{\|(.*)$//mg;			 ## <TABLE>
+  $text =~ s/\|\}.*$//mg;                        ## </TABLE>
+  $text =~ s/^\|\-(.*)$/\n\n/mg;		 ## <TR>
+  $text =~ s/^(\|)\s*(.+)\|\|\s*(.+)$/$2\n$3/mg; ## </TD><TD>
+  $text =~ s/^\|\s*([^\|]+)$/$1/mg;		 ## <TD>
+  $text =~ s/^\|([^\|]+)\|([^\|]+)$/\n$2/mg;     ## <TD p>
+  $text =~ s/^(\!)\s*(.+)\!\!\s*(.+)$/$2\n$3/mg; ## </TH><TH>
+  $text =~ s/^\!\s*([^\!]+)$/\n$1/mg;		 ## <TH>
+  $text =~ s/^\!([^\|]+)\|([^\|]+)$/\n$2/mg;     ## <TH p>
+
+  ## Clean font size tag
+  $text=~ s/(\+{2,5})(.+)\1/$2/g;
+ 
+  ## Insert another wiki page element
+  $i=0;
+  while ($text=~ /\[\[*([^\]]{1,50})\]\]*\{(title|lastedit|lasteditor|text|date|expire|approvedby|revision)\}/)
+   {
+    ## remember to check privilege
+    my $cid = DbQuery( query => "select $2, revision, name from pages ".
+                                "where name='".DbQuote($1)."' ".
+                                "order by $order limit 1",
+                       type  => 'UNNESTED' );
+
+    my @corr = FetchRow($cid);
+
+    $nestblocks[$i++] = !$corr[2]	? "(empty element!)"
+		      : $2 eq "text"	? mktext($corr[0])
+		      : 		  $corr[0];
+  
+    $text=~ s/\[\[*([^\]]{1,50})\]\]*\{[^\}]+\}/\%\%NESTBLOCKS\%\%/;
+   }
+
+  ## Link to a wiki page tag
+  $text=~ s/\[\[*([1-9]\d\d\d\d\d)\.(\d\d)\|([^\]]{1,50})\]\]*/\[$3\]/g;
+  $text=~ s/\[\[*([^\|]{1,50})\|([^\]]{1,100})\]\]*/\[$2\]/g;
+
+
+  ## Clean _NOCOMMENTS_ tag
+  $text=~ s/^\%\%NOCOMMENTS\%\%(\n|\r)*//m;
+
+  ## Change 'indent' type to make lists tags compatible across styles.
+  $text =~ s/^( +)(\*|\d{1,3}\.|\w{1,3}\.)/("\t" x length($1)).$2/mge;
+  $text =~ s/^( +)([^ ].+)$/\t$2/mg;
+
+  ## Apply IG standard formatting and Wiki Format
+  $text = WikiFormat::format( $text, \%tags, { implicit_links => 0} );
+
+  ## Clean wiki features
+  $text = _cleanfeaturetags($text);
+
+  ## restore nest blocks
+  $i=0;
+  $i++ while $text=~ s/\%\%NESTBLOCKS\%\%/$nestblocks[$i]/smi;
+
+  ## Insert wiki features
+  $text = plugwikifeatures($text);
+
+  ## restore nowiki blocks
+  $i=0;
+  $i++ while $text=~ s/\%\%NOWIKI$i\%\%/$nowiki[$i]/smi;
+
+  ## Clean html tags
+  $text = IG::HtmlUntag($text);
+
+  return IG::WrapText($text);
+ }
+
+#############################################################################
+#############################################################################
+sub delexec
+ {
+  my $errmsg;
+  loadpage(undef,$on{id});
+  if (	 $on{id} &&
+	 $auth_user ne 'guest' &&
+	 ( $on{owner} eq $auth_user || CheckPrivilege('sys_user_admin'))
+     )
+   {
+    DbQuery("delete from pages where id='". DbQuote($on{id}) ."'"); 
+    LogD('', 'delete', 'pages', $on{id});
+   }
+  else
+   {
+    $errmsg = MkUrl($lang{cant_edit_page});
+   }
+
+  IG::Redirect( "$igwiki_path?".
+		"action=showhistory&amp;".
+		"errmsg=$errmsg&amp;".
+		"name=". MkUrl($on{name}).
+		$igcontext );
+ }
+
+#############################################################################
+#############################################################################
+sub showdiff
+ {
+  require IG::AlgorithmDiff;
+  $robots_default = 'noindex, nofollow';
+  $on{layer} = $on{template} = ''; 
+  my ( @a, @b );
+  my $html;
+
+  # Read each file into an array.
+  DbQuery("select * from pages where id='". DbQuote($on{diff1}) ."'");
+  my @row1 = FetchRow();
+  $row1[13] = chcryptstatus(0, $row1[13], IG::UsrInf('passwd',$row1[4])) if $row1[16];
+  $row1[13] = IG::WrapText( text=>$row1[13], columns=>100);
+  $row1[13] = MkEntities($row1[13]);
+  $row1[13] =~ s/  /\&nbsp\;\&nbsp\;/g;
+  @a = split (/\n/,$row1[13]);
+
+  DbQuery("select * from pages where id='". DbQuote($on{diff2}) ."'");
+  my @row2 = FetchRow();
+  $row2[13] = chcryptstatus(0, $row2[13], IG::UsrInf('passwd',$row1[4])) if $row2[16];
+  $row2[13] = IG::WrapText( text=>$row2[13], columns=>100);
+  $row2[13] = MkEntities($row2[13]);
+  $row2[13] =~ s/  /\&nbsp\;\&nbsp\;/g;
+  @b = split (/\n/,$row2[13]);
+
+  if (!$row1[13] || !$row2[13]) { die($lang{Err_page2}) }
+
+  # Print out the starting HTML
+  $on{title} = $lang{show_diff};
+  if ($row1[13] eq $row2[13])
+   {
+    $html .= TaskMsg("$lang{no_diff} <a href=\"$igwiki_path?disableautolang=1&amp;action=showhistory&amp;id=$row1[0]$igcontext\">[$row1[1]]</a>
+			$lang{revisions}:
+			<a href=\"$igwiki_path?disableautolang=1&amp;id=$row1[0]$igcontext\">$row1[12]</a> $row1[5] ;
+			<a href=\"$igwiki_path?disableautolang=1&amp;id=$row2[0]$igcontext\">$row2[12]</a> $row2[5]",1);
+   }
+  else
+   {
+    $html .= TaskMsg("$lang{page_name} <a href=\"$igwiki_path?disableautolang=1&amp;action=showhistory&amp;id=$row1[0]$igcontext\">[$row1[1]]</a>
+			$lang{revisions}:
+			<a href=\"$igwiki_path?disableautolang=1&amp;id=$row1[0]$igcontext\">$row1[12]</a> $row1[5] ;
+			<a href=\"$igwiki_path?disableautolang=1&amp;id=$row2[0]$igcontext\">$row2[12]</a> $row2[5]<br>
+			<span style=\"color: blue;\">$lang{diff_add}</span>, <span style=\"color: red; text-decoration: line-through;\">$lang{diff_del}</span>",4);
+    # compare the arrays  
+    $html .= "<span style=\"font-family: Courier;\">\n";
+    Algorithm::Diff::traverse_sequences (
+	\@a,    # first sequence
+	\@b,    # second sequence
+	{
+	 MATCH     => sub { $html .= $a[$_[0]]."<br>\n" },
+	 DISCARD_A => sub { $html .= "<span style=\"color: blue;\">$a[$_[0]]</span><br>\n" },
+	 DISCARD_B => sub { $html .= "<span style=\"color: red; text-decoration: line-through;\">$b[$_[1]]</span><br>\n" },
+	}
+ 		     );
+    $html .= "</span>\n";
+   }
+  publish( $html );
+ }
+
+#############################################################################
+#############################################################################
+sub findshow
+ {
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer( bottom_space => 0,
+            right_layers=>
+	     [(
+		FormHead (	name		=> 'findnavi',
+				method		=> 'get',
+				autofocus	=> 'false',
+				target		=> 'mainf',
+				cgiaction	=> 'findexec',
+                                labelstyle	=> 'border:0px; width:auto;',
+				float		=> 'left' ),
+
+		Input (	type=>'findable' ),
+
+		Input (	type=>'hidden', name=>'ig', value=>1),
+
+		Input (	type=>'select',
+			name=>'fieldtofind',
+			value=>'searchkeys',
+			data=>[(['searchkeys',  $lang{with_keys}],
+			        ['name',	$lang{with_name}],
+				['text',	$lang{with_text}],
+				['title',	$lang{with_title}],
+				['category',    $lang{with_category}])]),
+
+		Input (	type=>'text',
+			name=>'keytofind',
+			value=>$IG::cookie{lastsearch},
+                        focus => 'true',
+                        style=>'width:100px; margin-right: -5px;',
+			onblur=>"document.cookie='lastsearch=' + escape(this.value)"),
+
+		Input (	type=>'image',
+			name=>$lang{find},
+			src=>"$IG::img_url/${IG::tema}search.gif",
+			alt=>$lang{find}),
+			
+		FormFoot()
+	      )]
+	 );
+   }
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub findexec
+ {
+  my %name;
+  my $temphtml;
+  my $id;
+  my $counter;
+
+  $on{fieldtofind} ||= $on{findname}  ? 'name'
+		     : $on{findtitle} ? 'title'
+		     : $on{findtext}  ? 'text'
+                     : $on{findkey}   ? 'searchkeys'
+		     : 'title';
+
+  my $searchString = substr($on{keytofind},0,1) eq '@' 
+                     ? substr($on{keytofind},1,) 
+                     : quotemeta($on{keytofind}); 
+
+  $robots_default = 'noindex, nofollow';
+  $on{layer} = $on{template} = ''; 
+
+  $IG::set_cookie{lastsearch} = $on{keytofind}; 
+  $on{title} = $lang{find_pages};
+
+  $temphtml = ( $auth_user ne 'guest' && length($on{keytofind}) > 2
+		? HLayer
+		   ( MkButton( text => $lang{make_page},
+		               link => "$igwiki_path?action=proto&amp;name=".
+                                       MkUrl($on{keytofind}) . $igcontext,
+                               quick_help => "Make a new page with this word"),
+		   )
+		: Br()
+	      );
+
+  if ( length($on{keytofind}) < 2 )
+   {
+    $temphtml .= TaskMsg($lang{Err_find});
+    publish($temphtml);
+    return;
+   }
+
+  $temphtml .= TaskMsg( "$lang{find_pages}: <strong>".
+			$lang{"with_$on{fieldtofind}"}.
+			" $on{keytofind}</strong>",4);
+
+  QuoteParams();
+     
+  my $where;
+  if ( $on{fieldtofind} ne 'searchkeys' )
+   { $where = "$in{fieldtofind}~*'".DbQuote($searchString)."'"; }
+  else
+   {
+    for my $field ( qw( name title searchkeys ) )
+     {
+      $where .= ' or ' if $where;
+      $where .= "$field~*'".DbQuote($searchString)."'";
+     }
+    $where = "($where)";
+   }
+  
+  $where = "showperm='A' and ($where)" if $auth_user eq "guest";
+  
+  $where = "($where) and revision = (select max(revision) from pages pages2 ".
+                                    "where pages2.name = pages.name)";
+  
+  DbQuery( "SELECT * FROM pages where $where ".
+  	   "ORDER by $order, lastedit desc" );
+
+  $temphtml .= "<table cellspacing=18 width=\"100%\">";
+
+  while ( my @row = FetchRow() )
+   {
+    my $result;
+    next if $name{$row[1]}++;	## to catch only last revision of the pages
+    $id = $row[0];		## to store last id found
+    my $pagename = $row[1];     ## $row[1] is overwritten with title
+    $row[1] = $row[2] if $row[2];
+    ++$counter;
+
+    $temphtml .= "<tr><td valign=top>".
+		 "<a href=\"$igwiki_path?id=$row[0]$igcontext\">".
+		 "<strong><u>$row[1]</u></strong></a> ".
+		 "<a href=\"$igwiki_path?action=gettext&amp;id=$row[0]\">".
+		 "[Text version]</a><br>";
+
+    if ( $on{fieldtofind} eq 'text' )
+     {
+      my $text = mktext($row[13]);
+      my $cnt;
+      for (split /\n/, $text)
+       {
+	if ( s/($searchString)
+	      /<span style="background:$IG::clr{bg_evidence};">$1<\/span>/sgix
+	   )
+	 {
+	  $result .= " $_...";
+	  last if $cnt++ == 4;
+	 }
+       }
+     }
+    else 
+     {
+      $result = substr(mktext($row[13]), 0, 300);
+     }
+
+    $result = 'Encrypted Text' if $row[16];
+
+    $temphtml .= $result.Br().
+		 "<table cellspacing=0 cellpadding=0 width=\"100%\">
+		  <td width=\"100%\" class=\"minilist\"> 
+		        $lang{page_name}: $pagename -
+			$lang{revision}: $row[12] -
+			$lang{author}: ".IG::UsrInf('name',$row[4])." ($row[5]) -
+			$lang{last_editor}: ".IG::UsrInf('name',$row[8])." ($row[7]) -
+			$lang{category}: $row[3] - 
+		  <script> 
+		   pv('$igwiki_path?id=$row[0]&amp;print=on','$counter', 600, 250, '(Preview)', 'Close Preview')
+		  </script>
+		  </td></tr></table>
+		  </td></tr>\n";
+   }
+
+  LogD("find $on{keytofind} with method '$on{fieldtofind}'", 'find', 'pages');
+
+  if (!$counter)
+   {
+    $temphtml .= '</table>';
+    push @IG::errmsg, $lang{no_items};
+   }
+  elsif ($counter == 1 && !$on{ajax_request})
+   {
+    IG::Redirect("$igwiki_path?id=$id$igcontext");
+   }
+  else
+   {
+    $temphtml .= '</table>';
+   }
+
+  if( $on{ajax_request} )
+   {
+    HttpHead( expires => 'now' );
+    PrOut $temphtml;
+    HtmlFoot();
+   }
+  else
+   {
+    publish( $temphtml );
+   }
+ }
+
+############################################################################
+############################################################################
+sub getbook
+ {
+  HtmlHead();
+  TaskHead();
+  FormHead( cgiaction => 'getbookagg');
+
+  Input( type   => 'multiselect',
+         name   => 'pages',
+         data   => "select id, title from pages ".
+                   "where status='A' and title<>'' ".
+                   "order by revision desc",
+         style  => 'font-size: x-small;width: 400px; height: 350px',
+         labelstyle => 'width:auto');
+
+  Input( type   => 'submit',
+         value  => 'Make Book');
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub getbookagg
+ {
+  IG::DocHead( type    => 'text/plain',
+               expires => 'now' );
+
+  my @args = qw (
+			-t pdf13
+			-f igsuite.pdf
+			--webpage
+			--no-title
+			--linkcolor #ff7908
+			--linkstyle plain
+			--size A4
+			--left 1.00in
+			--right 0.50in
+			--top 0.50in
+			--bottom 0.50in
+			--header ...
+			--footer t.1
+			--nup 1
+			--tocheader .t.
+			--tocfooter ..i
+			--portrait
+			--color
+			--no-pscommands
+			--no-xrxcomments
+			--compression=8
+			--jpeg=0
+			--fontsize 11.0
+			--fontspacing 1.2
+			--headingfont Helvetica
+			--bodyfont Times
+			--headfootsize 10.0
+			--headfootfont Helvetica
+			--charset iso-8859-1
+			--links
+			--no-embedfonts
+			--pagemode document
+			--pagelayout single
+			--firstpage p1
+			--pageeffect none
+			--pageduration 10
+			--effectduration 1.0
+			--no-encryption
+			--permissions all
+			--owner-password ""
+			--user-password ""
+			--browserwidth 680
+		);
+
+  PrOut "#HTMLDOC 1.8.23\n";
+  PrOut join " ",@args;
+  PrOut "\n";
+  PrOut "$IG::cgi_url/igwiki?print=1&amp;id=$_\n" for split /\n/,$on{pages};
+ }
+
+############################################################################
+############################################################################
+sub getpdf
+ {
+  if (-e $IG::ext_app{htmldoc})
+   {
+    $on{print}++;
+    $IG::tema = 'printable_';
+
+    ## create html page and strip http header from it
+    my $html = showpage( $on{name}, $on{id} );
+
+    ## clean html start
+    $html =~ s/.+(<\!DOCTYPE html PUBLIC.+)/$1/s; 
+
+    ## write html page on a temp file
+    my $tempfile = $IG::temp_dir . $IG::S . $on{id} . '_tmppage.htm';
+    open( FH, '>', CkPath($tempfile) )
+      or die("Can't write on '$tempfile'.\n");
+    binmode(FH);
+    print FH $html;
+    close(FH);
+
+    select(STDOUT);
+    $| = 1;
+    print STDOUT IG::DocHead( type       => 'application/pdf',
+                              expires    => 'now',
+                              attachment => "$on{id}.pdf" );
+    %ENV = (); ## needed by htmldoc 
+
+    my @args = qw (	-t pdf13
+			--webpage
+			--no-title
+			--linkcolor \#ff7908
+			--linkstyle plain
+			--size A4
+			--left 1.00in
+			--right 0.50in
+			--top 0.50in
+			--bottom 0.50in
+			--header ...
+			--footer t.1
+			--nup 1
+			--tocheader .t.
+			--tocfooter ..i
+			--portrait
+			--color
+			--no-pscommands
+			--no-xrxcomments
+			--compression=8
+			--jpeg=0
+			--fontsize 11.0
+			--fontspacing 1.2
+			--headingfont Helvetica
+			--bodyfont Times
+			--headfootsize 10.0
+			--headfootfont Helvetica
+			--charset iso-8859-1
+			--links
+			--no-embedfonts
+			--pagemode document
+			--pagelayout single
+			--firstpage p1
+			--pageeffect none
+			--pageduration 10
+			--effectduration 1.0
+			--no-encryption
+			--permissions all
+			--owner-password ""
+			--user-password ""
+			--browserwidth 680
+		);
+
+    IG::SysExec( command   => $IG::ext_app{htmldoc},
+                 stdout    => 'active',
+                 arguments => [( @args,
+                                 $tempfile )]
+               ) or die("Can't execute: '$IG::ext_app{htmldoc}'");
+
+    ## delete html temp file
+    IG::FileUnlink( $tempfile ) or die("Can't delete '$tempfile'\n");
+   }
+  else
+   {
+    publish( TaskMsg ("Ask to your Administrator to configure ".
+		      "\$ext_app{htmldoc} in IGSuite configuration ".
+		      "file igsuite.conf")
+	   );
+   }
+ } 
+
+#############################################################################
+#############################################################################
+sub showhelp
+ {
+  HtmlHead( robots => 'noindex, nofollow' );
+  TaskHead( title  => $lang{page_tags} );
+
+  PrOut <<FINE;
+  <table border=1 cellspacing=0 cellpadding=4>
+  <td>,,Underline,,</td><td><u>Underline</u></td></tr>
+  <td>,,,Evidence,,,</td><td><span style="background: $IG::clr{bg_evidence}">Evidence</td></tr>
+  <td>''Italic''</td><td><i>Italic</i></td></tr>
+  <td>'''Bold'''</td><td><b>Bold</b></td></tr>
+  <td>Text^Exponent^</td><td>Text<span style=\"vertical-align: super\">Exponent</span></td></tr>
+  <td>---Strike---</td><td><strike>Strike</strike></td></tr>
+  <td>%red%</td><td><font color="red">Red</td></tr>
+  <td>***Smaller***</td><td><span style=\"font-size: 110%\">Smaller</span></td></tr>
+  <td>**Smaller**</td><td><span style=\"font-size: 110%\">Smaller</span></td></tr>
+  <td>++Bigger++</td><td><span style=\"font-size: 110%\">Bigger</span></td></tr>
+  <td>+++Bigger+++</td><td><span style=\"font-size: 110%\">Bigger</span></td></tr>
+  <td>++++Bigger++++</td><td><span style=\"font-size: 110%\">Bigger</span></td></tr>
+  <td>===== Title 5 =====</td><td><h5>Title 5</h5></td></tr>
+  <td>==== Title 4 ====</td><td><h4>Title 4</h4></td></tr>
+  <td>=== Title 3 ===</td><td><h3>Title 3</h3></td></tr>
+  <td>== Title 2 ==</td><td><h2>Title 2</h2></td></tr>
+  <td>= Title 1 =</td><td><h1>Title 1</h1></td></tr>
+  <td>(((Centered)))</td><td align=center>Centered</td></tr>
+  <td>----</td><td><hr></td></tr>
+  <td>img://url.image</td><td>Insert an image</td></tr>
+  <td> text</td><td><pre>If you start paragraph with a blank space or a [tab]<br>text is showen with monospace character</pre></td><tr>
+  <td>&lt;code&gt;my programming code&lt;/code&gt;</td><td><pre>my programming code</pre></td></tr>
+  <td>[tab|space] + *</td><td><ul><li>Unordered list</li></ul></td></tr>
+  <td>[tab|space] + #</td><td><ol><li>Ordered list</li></ol></td></tr>
+  <td>[tab|space] ; Title : Definition</td><td><dl><dt><strong>Title</strong><dd>Definition</dl></td></tr>
+  <td>&lt;!-- comments --&gt;</td><td>Comments</td></tr>
+  <td nowrap>[Page Name]</td><td>Make an automatic link to a wiki page</td></tr>
+  <td nowrap>[Page Name]{element}</td><td>Show a wiki page element (text,date,expire,lastedit,<br>lasteditor,approvedby,revision)</td></tr>
+  <td nowrap>[Page Name|Description]</td><td>Make an automatic link to a wiki page with this 'Description'</td></tr>
+  <td nowrap>[http://Url]</td><td>Make an automatic link to a specified Url</td></tr>
+  <td nowrap>http://Url</td><td>Make an automatic link to a specified Url</td></tr>
+  <td nowrap>[http://Url|Description]</td><td>Make an automatic link to a specified Url with this 'Description'</td></tr>
+  <td>--~~~~</td><td>Insert owner's signature</td></tr> 
+  <td>%%NOCOMMENTS%%</td><td>Disable users comment</td></tr>
+  </table>
+FINE
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub _cleanfeaturetags
+ {
+  my $text = shift;
+  $text =~ s/\%\%(    PAGEACTION
+		    | NOCOMMENTS
+		    | PAGETITLE
+		    | PAGEID
+		    | PAGEINFO
+		    | PAGEKEYS
+		    | PAGENAME
+		    | PAGEROBOTS
+                    | FORMHEAD
+                    | FORMINPUT
+                    | FORMFOOT
+                    | WIKILOGO
+                    | SITEMAP
+                    | USERMAP
+                    | FINDER
+                    | LOGIN
+                    | TOC
+                    | FLOATTOC
+                    | FLOATBIOGRAFY
+                    | RELATEDDOCS
+                    | LASTDOCS
+                    | MINICALENDAR
+                    | REPOSITORY )\%\%//xg;
+
+  return $text;
+ }
+
+###############################################
+## $lang{explain_main_page}
+## $lang{explain_sitemap_page}

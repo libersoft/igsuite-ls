@@ -1,0 +1,29 @@
+## IGSuite 4.0.0
+## Language: services_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+back_to_services	=>'Voltar para lista de serviços',
+close_service		=>'Fechar',
+do_services		=>'Abrir',
+done_services		=>'Concluir',
+del_service		=>'Apagar',
+Err_service_date	=>'Data serviço',
+ext_equipment		=>'Equipamento externo',
+material		=>'Material',
+new_service		=>'Novo',
+request_date		=>'Data abertura',
+service_date		=>'Data conclusão',
+service_type		=>'Tipo serviço',
+service_todo		=>'Executar serviço',
+service_note		=>'Notas serviços',
+service_check		=>'Checks serviços',
+today_services		=>'Serviços para hoje',
+planned_services	=>'Serviços planejados',
+plan_service		=>'Planejando serviços',
+Warn_service_notes	=>'ATENÇÂO ! O serviço que está sendo registrado de ser anotado pelas seguintes razões...',
+  ));
+
+1;

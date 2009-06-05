@@ -1,0 +1,15 @@
+## IGSuite 4.0.0
+## Language: checkmsg_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+chat_invitation =>'You received an invite to chat',
+alert_events    =>'Attention, contrôles tes évents en calendrier!',
+alert_timeout	=>'Attention, la session est en train de expirer',
+new_email	=>'Nouveaux messages de courriel en arrivée',
+new_isms	=>'Nouveaux messages i-sms en arrivée',
+   ));
+
+1;
+

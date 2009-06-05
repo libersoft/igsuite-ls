@@ -1,0 +1,30 @@
+## IGSuite 4.0.0
+## Language: circular_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+attach_from_igfile      => 'Aggiungi allegato da IGFile',
+attach_from_selected    => 'Aggiungi allegato da file selezionato',
+attach_delete_selected  => 'Cancella allegati selezionati',
+attach_delete_all       => 'Cancella tutti gli allegati',
+limit_size              => 'Limite dell\'allegato',
+circular_content        => 'Contenuto della circolare',
+back_to_igwebmail       => 'Torna a IGWebMail',
+send_and_save           => 'Invia e Salva',
+Err_missing_receiver    => 'Attenzione: occorre selezionare un gruppo destinatario valido',
+share_mode0             =>'Messaggio condiviso solo per l\'intestazione',
+share_mode1             => 'Messaggio interamente condiviso',
+share_mode2             => 'Messaggio non condiviso',
+stop_sending		=>'Blocca l\'invio',
+send_circular		=> 'Invia Circolare',
+sent_messages		=> 'Messaggi inviati',
+sending_message		=> 'Invio del messaggio',
+use_text_below		=> 'Usa il testo sottostante',
+Err_missing_subject     => 'Inserire un Oggetto del messaggio',
+notify			=> 'Richiedi notifica ricevimento',
+replyto			=> 'Rispondi a',
+select_group		=> 'Selezionare un gruppo di contatti a cui inviare il messaggio',
+   ));
+
+1;

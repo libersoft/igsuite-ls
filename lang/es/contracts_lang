@@ -1,0 +1,34 @@
+## IGSuite 4.0.0
+## Language: contracts_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+days_to_expire          =>'Days to expire',
+in_revision_contract    =>'In revision contract',
+contract_status		=>'Contract Status in this phase',
+active_contract		=>'Active Contract',
+inactive_contract	=>'Inactive Contract',
+Err_type_phase          =>'You have to select a contract type and a phase',
+phase_manager           =>'Phase Manager',
+Err_contract_type       =>'Attention: contract type is missing',
+Err_phase_name          =>'Attention: phase name is missing',
+Err_priority            =>'Attention: priority is missing',
+no_other_revision       =>'No other contracts revision',
+next_revue		=>'Next Revue',
+contracts_protocol	=>'Protocolo de Contratos',
+new_contract		=>'Nuevo contrato',
+save_contract		=>'Salva en el protocolo de Contratos',
+new_phase		=>'Nueva fase',
+make_standard_phases	=>'Crea fases standard',
+contracts_phases	=>'Fases de los Contratos',
+close_phase		=>'Cierra fase',
+days_before_alert	=>'Dìas antes de avisar sobre el vencimiento',
+phase_name		=>'Fase',
+contract_duration	=>'Duraciòn',
+phase_bgcolor		=>'Color de Fondo de la Fase',
+move_to_phase		=>'Traslada a la Fase',
+change_duedate		=>'Cambia fecha de vencimiento',
+  ));
+
+1;

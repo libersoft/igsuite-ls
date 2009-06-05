@@ -1,0 +1,20 @@
+## IGSuite 4.0.0
+## Language: vendors_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+valuation		=>'Evaluatie',
+supervision		=>'Supervisie',
+first_valuation		=>'Eerste evaluatie datum',
+remark			=>'Opmerking',
+unqualified_vendors	=>'Ongekwalificeerde leveranciers',
+Err_start_qualify	=>'Error: kwalificatie start datum ongeldg',
+Err_end_qualify		=>'Error: kwalificatie eind datum ongeldig',
+check_rules		=>'Raadpleeg regels',
+vendors_report		=>'Reporteer',
+  ));
+
+1;
+
+

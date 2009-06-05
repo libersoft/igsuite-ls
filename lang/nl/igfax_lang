@@ -1,0 +1,46 @@
+## IGSuite 4.0.0
+## Language: igfax_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+arrived_byfax		=>'Aangekomen per fax',
+attempt_time		=>'Aantal pogingen',
+ca			=>'Ter attentie van',
+cc			=>'Carbon Copy',
+cover_page		=>'Cover Page',
+delete_attach		=>'Verwijder attachment',
+direction               =>'Direction',
+document_exist		=>'Bestaande document',
+document_tosend		=>'Te verzenden bericht',
+edit_fax_notes          =>'Edit notes',
+Err_no_document_cover   =>'No document or cover page to send',
+Err_no_fax_number	=>'U moet een fax nummer in uw contact info invoegen voor het verzenden van de fax',
+events_report		=>'Evenementen report',
+inner_fax		=>'Ontvangen Fax',
+insert_tospool		=>'Voeg aan uitgaande fax toe',
+max_5rows		=>'U kunt maximaal 5 rijen invoegen',
+multi_receivers		=>'Meerdere Ontvangers',
+no_preview		=>'Geen preview beschikbaar! check convert path in IGSuite configuration file',
+normal_view		=>'Normaal beeld',
+notify1			=>'Notificeer wanneer verzending is voltooid',
+notify2			=>'Niet notificeren',
+notify3			=>'Notification if respooled',
+notify_byemail		=>'Notificeer met E-Mail',
+outer_fax		=>'Uitgaande Fax',
+pages_without_cover	=>'Pagin\’s zonder opmaak',
+placed_call		=>'Geplaatste gesprekken',
+probable_receiver	=>'Potentiële ontvanger',
+rotate_view		=>'Roteer beeld',
+sendfax_ok		=>'Deze fax is succesvol toegevoegd aan de wacht rij van uitgaande faxen',
+sendfax			=>'Verzend Fax',
+send_it_this_night      =>'Send it this night',
+single_receiver		=>'Enkele Ontvanger',
+to_be_seen		=>'en getoond aan',
+view_fax		=>'Bekijk Fax',
+without_paper_fax	=>'This fax has been sent without paper support',
+   ));
+
+1;
+
+

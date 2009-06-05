@@ -1,0 +1,357 @@
+#! /usr/bin/perl
+# Procedure: igwiki_wizard
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+my $igwiki_path    = "$IG::cgi_url/igwiki";
+my $robots_default = "noindex, nofollow";
+
+if (!$on{ig})
+ {
+  $IG::clr{bg} = $IG::clr{bg_barra};
+  $IG::tema{task}{corner_image} = '';
+ }
+else
+ { $on{ig} = "&amp;ig=$on{ig}"; }
+
+IG::DTable (	proto		=>CheckPrivilege(),
+		default_action	=>CheckPrivilege() );
+
+
+############################################################################
+############################################################################
+sub proto
+ {
+  no strict 'refs';
+
+  ## Check page name
+  DbQuery("select name from pages where name='".DbQuote($on{name})."'");
+
+  if ($on{next} && $on{next} ne 'step1' && (FetchRow() || !$on{name}))
+   {
+    push @IG::errmsg, "Page name already exists or not valid! ".
+                      "insert a new name";
+    $on{next} = 'step1';
+   }
+ 
+    $on{next}     ? &{$on{next}} 
+  : $on{previous} ? &{$on{previous}}
+  : default_action();
+ }
+
+############################################################################
+############################################################################
+sub default_action
+ {
+  Header();
+  TaskMsg("<h3>IGWiki Page Wizard</h3>".
+	  "Welcome to IGWiki Page Wizard! We will help you to create".
+	  " your IGWiki page by beautiful open source templates.<br><br>".
+	  "During the tour we will show you how to use some IGWiki features.<br><br>".
+ 
+	  FormHead( cgiaction=>'proto' ).
+	  Input ( type=>'submit',
+		  name=>'next',
+		  float=>'right',
+		  show=>'Next',	
+		  onclick=>"this.value = 'step1';",
+		  fieldstyle=>'margin-top: 30px').
+	  FormFoot()	
+	  ,6,500 );
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub step1
+ {
+  Header();
+  TaskMsg("<h3>Page Name</h3>".
+	  "Every IGWiki page is identified by an unique 'name'. ".
+	  "An IGWiki page name is composed by a string (a-z,0-9).<br><br>".
+	  "Now insert a name for your new page<br><br>".
+
+	  FormHead( cgiaction=>'proto', name=>'pagewizard').
+	  Input ( type=>'text',
+		  show=>'Page Name',
+		  labelstyle=>'width:auto',
+		  name=>"name",
+		  value=>'main',	
+		  size=>30,
+		  maxlen=>200 ).
+	  _submit_buttons(1).
+	  FormFoot()	
+	  ,6,500 );
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub step2
+ {
+  Header();
+  TaskMsg("<h3>Page Title</h3>".
+	  "Your IGWiki page must have a title that is showed instead the ".
+	  "name everytime the page will be reached.<br><br>".
+	  "Insert a title for your new page<br><br>".
+
+	  FormHead( cgiaction=>'proto', name=>'pagewizard').
+	  Input ( type=>'text',
+		  show=>'Page Title',
+		  labelstyle=>'width:auto',
+		  name=>"title",
+		  size=>30,
+		  value=>"$IG::soc_name Home Page",
+		  maxlen=>200 ).
+	  _submit_buttons(2).
+	  FormFoot()	
+	  ,6,500 );
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub step3
+ {
+  Header();
+  TaskMsg("<h3>Page Crypt</h3>".
+	  "For safety reasons your page can be crypted when it's stored ".
+	  "inside the database. You must simply choose ".
+	  "yes. The decrypt operation is transparent to the user who have ".
+	  "permissions to shows the page.<br><br>".
+
+	  FormHead( cgiaction=>'proto', name=>'pagewizard').
+	  Input ( type=>'select',
+		  show=>'Crypt on Database',
+		  name=>"cryptstatus",
+		  labelstyle=>'width:auto',
+		  data=>[([0,	$lang{no}],
+			  [1,	$lang{yes}])]).
+	  _submit_buttons(3).
+	  FormFoot()	
+	  ,6,500 );
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub step4
+ {
+  Header();
+  TaskMsg(
+   HLayer(
+    valign=>'top',
+    bottom_space=>1,
+    intra_space=>5,	
+    left_layers=>[( "<h3>Page Template</h3>".
+		    "In IGWiki each page can be rendered by a different template. ".
+		    "You can use normal HTML page or other IGWiki page as template. ".
+		    "Html template can be stored on the server file system or ".
+		    "inside a wiki page too.<br>".
+		    "By this wizard you can choose different predefined Html template ".
+		    "available<br><br>".
+
+		    FormHead( cgiaction=>'proto', name=>'pagewizard').
+		    Input(show=>'Template',
+			  type=>"select",
+			  onchange=>"document.images['templateimg'].src='$IG::img_url/' + this.value + '.jpg';",
+			  value=>'igtemplate01',
+			  data=> _findtemplate(),
+			  labelstyle=>'width:auto',
+			  name=>"template" )
+                  )],
+    right_layers=>[("<img width=243 height=200 src=\"$IG::img_url/igtemplate01.jpg\" id=\"templateimg\">" )]
+         ).
+
+   _submit_buttons(4).
+   FormFoot()
+   ,6,500 );
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub step5
+ {
+  Header();
+  TaskMsg("<h3>Page Content</h3>".
+	  "Now insert the content of your IGWiki page. We are suggesting to you ".
+	  "some casual text like 'Lorem ipsum dolor...' but you can ".
+	  "change it if you want.<br><br>".
+	  "<a style=\"text-decoration: underline\"".
+	  " href=\"javascript:winPopUp('igwiki?action=showhelp',500,500,'legenda')\">".
+	  " Show Legend</a>".
+
+	  FormHead( cgiaction=>'proto', name=>'pagewizard').
+
+	  Input(type=>'textarea',
+		name=>"text",
+		style=>'width:450px; height:180px; font-family:monospace;').
+
+	  _submit_buttons(5).
+
+	  FormFoot()	
+	  ,6,500 );
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub step6
+ {
+  Header();
+  TaskMsg("<h3>Finish!</h3>".
+	  "There are other information fields you can fill during a wiki ".
+	  "page creation.<br><br>".
+	  "<b>Category</b>: You can assign a category to the page to group ".
+	  "it or improve its search.<br><br>".
+	  "<b>Keywords</b>: You can apply keywords to the page that will be ".
+	  "used by search engines.<br><br>".
+	  "<b>Due Date</b>: Some time page contents can expire. You can assign ".
+	  "a due date to your IGWiki page.<br><br>".
+	  "<b>If you want change some informations after creating the page ".
+	  "click on pen icon and modify your wiki page contents.</b>".
+
+	  FormHead(formaction=>'igwiki',
+		   cgiaction=>'protoagg').
+	  _submit_buttons(6).
+	  FormFoot()	
+	  ,6,500 );
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub Header
+ {
+  HtmlHead();
+  Br(4);
+  TaskHead(	title=>'IGWiki Page Wizard',
+		icon=>1,
+		width=>400,
+		align=>'center' );
+ }
+
+#############################################################################
+#############################################################################
+sub Footer
+ {
+  PrOut "<br><a href=\"igsuite\">Back to IGSuite</a>";
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub _submit_buttons
+ {
+  my $step = shift;
+  return  Br(2).
+	  Input ( type=>'hiddens',
+		  persistent=>1,
+		  data=>{ name		=>'',
+			  cryptstatus	=>'',
+			  text		=>mktext(),
+			  template	=>'',
+			  title		=>''} ).
+
+	 ($step == 6 ?
+	  Input (type=>'submit',
+       	         float=>'right',
+       	         name=>'save',
+       	         value=>'Create Page').
+
+	  Input (type=>'button',
+ 	         float=>'left',
+             	 name=>'cancel',
+		 onclick=>"document.location='igwiki_wizard?action=default_action';",
+               	 value=>'Cancel')
+	   :	
+ 
+	  Input ( type=>'submit',
+		  name=>'previous',
+		  float=>'left',
+		  fieldstyle=>'margin-top: 20px;',
+		  show=>'Previous',
+		  onclick=>"this.value = '".($step==1 ? 'default_action' : 'step'.($step-1))."';").
+ 
+	  Input ( type=>'submit',
+		  name=>'next',
+		  float=>'right',
+		  fieldstyle=>'margin-top: 20px;',
+		  show=>'Next',
+		  onclick=>"this.value = 'step".($step+1)."';")
+	 );
+ }
+
+#############################################################################
+#############################################################################
+sub _findtemplate
+ {
+  my %templates;
+
+  ## find templates in db
+  my $conn = DbQuery("select template from pages ".
+		     "where template<>'' group by template");
+  $templates{$_}++ while $_ = FetchRow($conn);
+
+  ## find templates in filesystem
+  opendir (DIR, "$IG::cgi_dir${S}data${S}igwiki${S}templates")
+    or die("Can't open '$IG::cgi_dir${S}data${S}igwiki${S}templates' ".
+           " directory. Check permission.\n");
+
+  -T "$IG::cgi_dir${S}data${S}igwiki${S}templates${S}$_" && $templates{$_}++
+    for grep !/^\./, readdir(DIR);
+
+  return [sort keys %templates];
+ }
+
+sub mktext
+ {
+  return <<FINE;
+%%NOCOMMENTS%%
+
+=== The idea behind the design ===
+
+Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.
+
+Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna. At vero eos et accusam et justo duo dolores et ea rebum.Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. 
+
+
+=== What is 'accessibility' and why is it important? ===
+
+Image aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum.Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua.
+
+At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. At vero eos et accusam et justo duo dolores et ea rebum.Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. 
+
+Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.
+
+
+=== Open source is freedom! ===
+
+Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. At vero eos et accusam et justo duo dolores et ea rebum.Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.
+
+Good luck with your new design!
+FINE
+ }

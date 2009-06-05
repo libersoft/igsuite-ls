@@ -1,0 +1,47 @@
+## IGSuite 4.0.0
+## Language: igsuite_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+first_connection        =>'My Compliment! This is your first access to IGSuite. Please update your %1$s',
+file_zip_ok             =>'The File was successfully compressed',
+file_unzip_ok           =>'The File was successfully uncompressed',
+Err_module_zip          =>'Sorry, you have to install Perl module \'Archive::Zip\' if you want to compress documents.',
+Err_host_deny           =>'Sorry you can\'t login from this client host! Administrator has set some IP address restrictions',
+Err_disabled_user	=>'Attention! disabled user please contact your system administrator',
+maximize		=>'Maximize',
+active_sessions		=>'Actieve Sessie',
+my_pipeline             =>'Mijn Lijn',
+top_open_opportunities  =>'Exceptionele Bedrijfskansen',
+password_expired        =>'U meld zich voor het eerst aan of uw wachtwoord is verlopen. Wijzig uw wachtwoord %1$s',
+new_comments            =>'Nieuwe opmerkingen van',
+change_user             =>'Wijzig gebruiker',
+weather                 =>'Weerbericht',
+personal_calendar	=>'Persoonlijke Kalender',
+personal_links		=>'Persoonlijke Link',
+igsuite_login		=>'IGSuite Login',
+personal_info		=>'Persoonlijke Info',
+news			=>'Nieuws',
+internal_news		=>'Interne Nieuws',
+personal_documents	=>'Persoonlijk Documenten',
+poll			=>'Poll',
+wellcome_message	=>'Wij danken u voor het kiezen voor IGSuit. Bij deze stap van de installatie is het van belang om de gebruikers accounts en de toegewezen rechten te implementeren. De administrator is automatisch geïnstalleerd; de administrator heeft de rechten om alle overige gebruikers aan te maken. Click <a href="users">Here</a> om een gebruiker aan te maken, of herlaad de pagina om het menu te updaten.',
+no_event		=>'Geen evenementen in u Kalender',
+no_tasks		=>'Geen taken in u TO DO Lijst',
+connected_users		=>'Aangemelde Gebruikers',
+connected_guest		=>'Aangemelde Gast',
+unread_msgs		=>'Niet gelezen Berichten',
+registered_users	=>'Geregistreerde Gebruikers',
+vote			=>'Stem',
+my_letters		=>'Mijn Brieven',
+my_offers		=>'Mijn Offertes',
+my_orders		=>'Min Bestellingen',
+my_archive		=>'Mijn Archief',
+my_contracts		=>'Mijn Contracten',
+my_fax_received		=>'Mijn Faxen',
+  ));
+
+1;
+
+

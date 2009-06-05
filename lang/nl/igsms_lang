@@ -1,0 +1,18 @@
+## IGSuite 4.0.0
+## Language: igsms_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+wait_for_status_update  =>'Please wait for status update',
+available_msgs		=>'Beschikbare Sms Berichten',
+available_chars		=>'Beschikbare Taken',
+err_no_credit		=>'Attentie! U heeft onvoldoende krediet of er kon geen verbinding worden gemaakt met de Sms server',
+err_no_text		=>'Error: Geen tekst bericht gevonden',
+err_wrong_number	=>'Error: Ongeldig telefoon nummer',
+err_send_failed		=>'Error: Verzenden mislukt',
+  ));
+
+1;
+
+

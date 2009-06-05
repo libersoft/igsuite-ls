@@ -1,0 +1,24 @@
+## IGSuite 4.0.0
+## Language: postit_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+edit_form         => 'Edit form fields',
+add_form_field    => 'Add new form fields',
+field_label       => 'Field label',
+field_type        => 'Field type',
+field_position    => 'Field position',
+field_values      => 'Field values',
+field_css_style   => 'Field CSS style',
+label_css_style   => 'Label CSS style',
+update_field_data => 'Update field property',
+text_type         => 'Text field type',
+date_type         => 'Date field type',
+select_type       => 'Select field type',
+textarea_type     => 'Textarea field type',
+checkbox_type     => 'Checkbox field type',
+users_type        => 'Users field type',
+   ));
+
+1;

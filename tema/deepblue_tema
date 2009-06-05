@@ -1,0 +1,80 @@
+## IGSuite 4.0.0
+## Procedure: deepblue_tema
+## Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+$tema = 'deepblue_';
+
+%clr = (
+	 font		   => '#3B3B3B',     ## Text Color
+	 font_link	   => '#075686',     ## Link Color
+	 font_button	   => '#075686',     ## Button Color
+	 font_menu         => '#D6DFF7',     ## Menu Text color
+	 font_menu_title   => '#FFFFFF',     ## Menu Title Color
+         font_low_evidence => '#777777',     ## Text Color in low evidence
+         font_menu_task    => '#FFFFFF',     ## Menu Task text color
+	 font_barra	   => '#FFFFFF',     ## Task Bar Color
+	 bg		   => '#D6DFF7',     ## Main Background Color
+	 bg_menu	   => '#075685',     ## Menu Background Color
+	 bg_menu_title	   => '#075685',     ## Menu Title Background Color
+	 bg_menu_item	   => '#00649c',     ## Menu Item Background Color
+	 bg_barra	   => '#075685',     ## Task Bar Background Color
+	 line_task	   => '#BCBCBC',     ## Task Border Color
+	 border            => '#999999',     ## Borders Color
+	 border_low        => '#BCBCBC',     ## Borders Low Color
+	 bg_link	   => '#DDDDDD',     ## Task List Link Background Color
+	 bg_list	   => '#F0F0F0',     ## Task List Background Color
+	 bg_task	   => '#FFFFFF',     ## Task Content Background Color
+	 bg_menu_task	   => '#5a91e1',     ## Task List Head Bacground Color
+	 bg_evidence	   => '#FFFF69',     ## Evidence Background High Color
+	 bg_low_evidence   => '#FFFF8C',     ## Evidence Background Low Color
+	 bg_button	   => '#FFFFFF',     ## Form Button Background Color
+       );
+
+
+## Task features
+$tema{task}{corner_image} = '';
+$tema{task}{barra_bg_image} = 'yes';
+$tema{task}{favicon} = 'favicon.gif';
+
+
+## This tema is the default when no other is specified. We use it also in 
+## igwiki rendering. So only in this tema we have to select a default font
+## in according to client operating system.
+##
+my $fonts = $IG::client_os eq 'win'
+          ? 'Lucida, Helvetica, Arial, sans-serif'
+	  : $IG::client_os eq 'linux'
+            ? 'arial, verdana, helvetica, sans-serif'
+            : $IG::client_os eq 'mac'
+              ? 'arial, verdana, helvetica, sans-serif'
+	      : 'arial, verdana, helvetica, sans-serif';
+
+
+## Default Fonts Family and size 
+##
+$barrafontname ||= $fonts;
+$barrafontsize ||= '16px';
+$menufontname  ||= $fonts;
+$menufontsize  ||= '11px';
+$tasksfontname ||= $fonts;
+$tasksfontsize ||= '12px';
+$buttonfontname||= $fonts;
+$buttonfontsize||= '12px';

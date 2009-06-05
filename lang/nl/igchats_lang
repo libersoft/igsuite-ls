@@ -1,0 +1,20 @@
+## IGSuite 4.0.0
+## Language: igchats_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+chat_invite		=> 'Invite in chat',
+disconnect		=>'Verbinding verbreken',
+clean_msgs		=>'Verwijder Berichten',
+close_session_alert	=>'Wilt u deze sessie sluiten?',
+connection_lost 	=> 'Connection lost! Press ok in order to establish a new connection',
+welcome_to		=> 'Welcome to room',
+connected_users 	=> 'Connected users',
+available_rooms 	=> 'Available rooms',
+nousers_alert           => 'Any online user! The system will try to invite available users. If possible wait for a while.',
+  ));
+
+1;
+
+

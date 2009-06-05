@@ -1,0 +1,24 @@
+## IGSuite 4.0.0
+## Language: default_lang
+## Last update: 25/05/2009
+
+%default_lang = (
+email_msgs	=>'E-mail',
+home		=>'Home',
+letters		=>'Lettere',
+offers		=>'Offerte',
+orders		=>'Ordini',
+archive		=>'Archivio',
+fax_received	=>'FaxRicevuti',
+fax_sent	=>'FaxInviati',
+basket		=>'Cestino',
+contracts	=>'Contratti',
+nc_ext		=>'NCesterne',
+nc_int		=>'NCinterne',
+templates	=>'modelli',
+documentation	=>'Documentazione',
+help_files	=>'Guida',
+equipments	=>'Manutenzione',
+   );
+
+1;

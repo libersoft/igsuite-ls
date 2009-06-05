@@ -1,0 +1,11 @@
+## IGSuite 4.0.0
+## Language: polls_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+voters		 => 'Votants',	
+poll_group_limit => 'Limit the poll to this users group',
+   ));
+
+1;

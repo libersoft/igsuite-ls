@@ -1,0 +1,47 @@
+## IGSuite 4.0.0
+## Language: igsuite_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+first_connection        =>'My Compliment! This is your first access to IGSuite. Please update your %1$s',
+file_zip_ok             =>'The File was successfully compressed',
+file_unzip_ok           =>'The File was successfully uncompressed',
+Err_module_zip          =>'Sorry, you have to install Perl module \'Archive::Zip\' if you want to compress documents.',
+Err_host_deny           =>'Sorry you can\'t login from this client host! Administrator has set some IP address restrictions',
+Err_disabled_user	=>'Attention! disabled user please contact your system administrator',
+maximize                =>'Maximize',
+active_sessions         =>'Active Sessions',
+my_pipeline             =>'My Pipeline',
+top_open_opportunities  =>'Top Open Opportunities',
+password_expired	=>'Ton mot de passe est expiré ou cette est ta première connection. Tu est prié de changer le mot de passe dans ton %1$s',
+new_comments		=>'Nouveaux commentaires de ',
+change_user		=>'Change utilisateur',
+weather			=>'Météo',
+personal_calendar	=>'Agenda personnelle',
+personal_links		=>'Link Personnels',
+igsuite_login		=>'Isogest Login',
+personal_info		=>'Personal Info',
+news			=>'News',
+internal_news		=>'News internes',
+personal_documents	=>'Documents personnels',
+poll			=>'Sondage',
+wellcome_message	=>'Merci pour avoir choisi ce produit, à ce point de l\'installation il faut insérer les utilisateurs du système avec relatifs permis. L\'utilisateur Administrateur a été inséré automatiquement; il est l\'administrateur qui aura les privilèges pour insérer tous les autres utilisateurs. Cliquer <a href="users">ICI</a> pour insérer un autre utilisateur, ou recharger la page pour mettre à jour le menu.',
+no_event		=>'Aucun évent en Agenda',
+no_tasks		=>'Aucun task inséré',
+connected_users		=>'Utilisateurs on-line',
+connected_guest		=>'Visitateurs on-line',
+unread_msgs		=>'Messages pas lus',
+registered_users	=>'Utilisateurs registrés',
+vote			=>'Votes',
+my_letters		=>'Mes Lettres',
+my_offers		=>'Mes Offres',
+my_orders		=>'Mes Ordres',
+my_archive		=>'Mon archive',
+my_contracts		=>'Mes Contrats',
+my_fax_received		=>'Mes Fax',
+  ));
+
+1;
+
+

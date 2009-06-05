@@ -1,0 +1,33 @@
+## IGSuite 4.0.0
+## Language: tables_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+table           =>'Table',
+tables_1	=>'Escalas das vendas nos contatos',
+tables_2	=>'Categoria produtos',
+tables_3	=>'Contato original',
+tables_4	=>'Nível confidencial',
+tables_5	=>'Contatos divididos por importância',
+tables_6	=>'Compartilhamento de áreas por negócios',
+tables_7	=>'Fornecedores qualificados',
+tables_8	=>'Categoria fornecedores',
+tables_9	=>'Verificação método fornecedores',
+tables_10	=>'Assunto bom de serviço',
+tables_11	=>'Tipografia serviços',
+tables_12	=>'Prioridade serviço',
+tables_13	=>'Tipo contrato',
+tables_14	=>'Tipo equipamento',
+tables_15       =>'Modo de entrega dos produtos',
+tables_16       =>'Tempo de entrega dos produtos',
+tables_17       =>'Empacotamento produtos',
+tables_18       =>'Categoria ToDo',
+tables_19       =>'Origem oportunidade',
+tables_20       =>'Estágio oportunidade',
+tables_21       =>'Calendar event categories',
+tables_22       =>'Operative functions of contacts personnel',
+  ));
+
+1;

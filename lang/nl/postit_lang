@@ -1,0 +1,16 @@
+## IGSuite 4.0.0
+## Language: postit_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+web_site		=>'Web Site',
+personal_links		=>'Persoonlijke Links',
+link_name		=>'Linknaam',
+attachments		=>'Attachments',
+save_link		=>'Bewaar als nieuwe link',
+Err_nolink		=>'Error: voeg een geldige linknaam toe',
+  ));
+
+1;
+

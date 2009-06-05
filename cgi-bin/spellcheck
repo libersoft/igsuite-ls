@@ -1,0 +1,238 @@
+#! /usr/bin/perl
+# Procedure: spellcheck
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+my $script          = "$IG::cgi_url/spellpack?action";
+my $spellercss      = "$script=spellerStyle_css";
+my $wordWindowSrc   = "$script=wordWindow_js";
+my @textinputs      = ref($on{'textinputs[]'}) eq 'array'
+                    ? @{$on{'textinputs[]'}}
+                    : $on{'textinputs[]'};
+my $aspell_cmd      = $IG::ext_app{aspell};
+my $lang            = $IG::lang;
+my $aspell_opts     = "-a --lang=$lang --encoding=utf-8";
+my $input_separator = "A";
+
+## Only an IG user can access to this feature
+IG::DTable( default_action => sub { $IG::demo_version || CheckPrivilege() } );
+
+#########################################################################
+#########################################################################
+sub default_action
+ {
+  ## Display HTML
+  PrOut <<EOF;
+Content-type: text/html; charset=utf-8
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<link rel="stylesheet" type="text/css" href="$spellercss"/>
+<script src="$wordWindowSrc"></script>
+<script type="text/javascript">
+var suggs = new Array();
+var words = new Array();
+var textinputs = new Array();
+var error;
+EOF
+
+  printTextVar();
+  printCheckerResults();
+
+  PrOut <<EOF;
+var wordWindowObj = new wordWindow();
+wordWindowObj.originalSpellings = words;
+wordWindowObj.suggestions = suggs;
+wordWindowObj.textInputs = textinputs;
+
+
+function init_spell() {
+	// check if any error occured during server-side processing
+	if( error ) {
+		alert( error );
+	} else {
+		// call the init_spell() function in the parent frameset
+		if (parent.frames.length) {
+			parent.init_spell( wordWindowObj );
+		} else {
+			error = "This page was loaded outside of a frameset. "; 
+			error += "It might not display properly";
+			alert( error );
+		}
+	}
+}
+
+</script>
+
+</head>
+<body onLoad="init_spell();">
+
+<script type="text/javascript">
+wordWindowObj.writeBody();
+</script>
+
+</body>
+</html>
+EOF
+ }
+
+#########################################################################
+#########################################################################
+# set the 'wordtext' JavaScript variable to the submitted text. 
+sub printTextVar
+ {
+  for( my $i = 0; $i <= $#textinputs; $i++ )
+   {
+    PrOut "textinputs[$i] = decodeURIComponent('" .
+          escapeQuote( $textinputs[$i] ) . "')\n";
+   }
+ }
+
+#########################################################################
+#########################################################################
+sub printTextIdxDecl
+ {
+	my $idx = shift;
+	PrOut "words[$idx] = [];\n";
+	PrOut "suggs[$idx] = [];\n";
+ }
+
+#########################################################################
+#########################################################################
+sub printWordsElem
+ {
+	my( $textIdx, $wordIdx, $word ) = @_;
+	PrOut "words[$textIdx][$wordIdx] = '" . escapeQuote( $word ) . "';\n";
+ }
+
+#########################################################################
+#########################################################################
+sub printSuggsElem
+ {
+	my( $textIdx, $wordIdx, @suggs ) = @_;
+	PrOut "suggs[$textIdx][$wordIdx] = [";
+	for my $i ( 0..$#suggs )
+	 {
+	  PrOut "'" . escapeQuote( $suggs[$i] ) . "'";
+	  if( $i < $#suggs ) { PrOut ", "; }
+	 }
+	PrOut "];\n";
+ }
+
+#########################################################################
+#########################################################################
+sub printCheckerResults
+ {
+  my $textInputIdx = -1;
+  my $wordIdx = 0;
+  my $unhandledText;
+
+  # create temp file
+  $tmpfilename = "$IG::temp_dir${S}".MkId();
+  open($fh, '>', $tmpfilename)
+    or die("Can't create the temporary file '$tmpfilename'.\n");
+  
+  # open temp file, add the submitted text.
+  for( my $i = 0; $i <= $#textinputs; $i++ )
+   {
+    $text = url_decode( $textinputs[$i] );
+    @lines = split( /\n/, $text );
+    print $fh "\%\n"; # terse mode off
+    print $fh "^$input_separator\n";
+    print $fh "!\n";  # terse mode on
+    for my $line ( @lines )
+     {
+      # use carat on each line to escape possible aspell commands
+      print $fh "^$line\n";
+     }
+   }
+   
+  # exec aspell command
+  my $cmd = "$aspell_cmd $aspell_opts < $tmpfilename 2>&1";
+  open ASPELL, "$cmd |"
+    or handleError( "Could not execute `$cmd`\\n$!" ) and return;
+
+  # parse each line of aspell return
+  for my $ret ( <ASPELL> )
+   {
+    chomp( $ret );
+    # if '&', then not in dictionary but has suggestions
+    # if '#', then not in dictionary and no suggestions
+    # if '*', then it is a delimiter between text inputs
+    if( $ret =~ /^\*/ )
+     {
+      $textInputIdx++;
+      printTextIdxDecl( $textInputIdx );
+      $wordIdx = 0;
+     }
+    elsif( $ret =~ /^(&|#)/ )
+     {
+      my @tokens = split( " ", $ret, 5 );
+      printWordsElem( $textInputIdx, $wordIdx, $tokens[1] );
+      my @suggs = ();
+      if( $tokens[4] ) { @suggs = split( ", ", $tokens[4] ); }
+      printSuggsElem( $textInputIdx, $wordIdx, @suggs );
+      $wordIdx++;
+     }
+    else
+     {
+      $unhandledText .= $ret;
+     }
+   }
+   
+  close ASPELL
+    or handleError( "Error executing `$cmd`\\n$unhandledText" ) and return;
+  unlink($tmpfilename)
+    or die("Can't delete temporary file '$tmpfilename'.\n");
+ }
+
+#########################################################################
+#########################################################################
+sub escapeQuote
+ {
+	my $str = shift;
+	$str =~ s/'/\\'/g;
+	return $str;
+ }
+
+#########################################################################
+#########################################################################
+sub handleError
+ {
+	my $err = shift;
+	PrOut "error = '" . escapeQuote( $err ) . "';\n";
+ }
+
+#########################################################################
+#########################################################################
+sub url_decode
+ {
+	local $_ = @_ ? shift : $_;
+	defined or return;
+	# change + signs to spaces
+	tr/+/ /;
+	# change hex escapes to the proper characters
+	s/%([a-fA-F0-9]{2})/pack "H2", $1/eg;
+	return $_;
+ }

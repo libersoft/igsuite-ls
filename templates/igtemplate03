@@ -1,0 +1,196 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>%%PAGETITLE%%</title>
+
+<STYLE type="text/css">
+<!--
+body {
+margin:0; padding:0;
+font-family:verdana, arial, sans-serif; color:#666666;
+background-color:#32668E;}
+
+.forminput
+ {              height: 20px;
+                padding: 0px;
+                margin: 0px;
+                visibility: visible;
+                border: 1px #999999 solid;
+                background-color: #f4f4f4; }
+
+.formbutton
+ {              height: 20px;
+                margin: 0px;
+                padding: 0px;
+                border: 1px #999999 solid;
+ }
+
+.formcheck
+ {              padding: 0;
+                margin: 0;
+                border: 0; }
+
+textarea
+ {              padding: 0px;
+                border: 1px #999999 solid;
+                margin: 0px;
+                background-color: #f4f4f4; }
+
+.field {        display: block;
+                float: left;
+                margin: 2px 2px 2px 0px;
+                background-color: transparent;
+                vertical-align: top;
+ }
+
+.label {        display: block;
+                float: left;
+                width: 100px;
+                margin: 2px 3px 2px 4px;
+                padding: 2px;
+                border: 0px;
+                vertical-align: top;
+       }
+
+a:link, a:visited {
+color:#80C62E; text-decoration:underline;}
+
+a:hover {
+color:#32668E; text-decoration:none;}
+
+a:active {
+color:#82D339; text-decoration:underline;}
+
+div.wholepage {
+margin:0 8% 0 8%; padding:0; background-color:#FFFFFF;}
+
+div,p {margin:0; padding:0;}
+
+h1,h2,h3,h4 {
+color:#32668E;
+font-family:"trebuchet ms", "lucida sans", arial, sans-serif; 
+font-weight:normal;}
+
+/* +++ Start Of Header Section +++ */
+
+#header {
+margin:0; padding:0;}
+
+.superheader {
+background-color:#294D69; text-align:right; color:#FFFFFF; padding:2px 1px
+2px 2px;}
+
+.superheader a { background-color:#294D69; color:#FFFFFF;
+text-decoration:none;}
+
+.mainheader {
+margin:0; padding:45px 1em 15px 1em; text-align:left;
+background-image:url(/images/tml3img1.jpg); background-repeat:no-repeat;
+background-position:right top;}
+
+.mainheader h1 {
+font-size:300%; margin:0 0 5px 0; padding:0;}
+
+.mainheader p {
+text-indent:4em; color:#5D99C7; margin:0; padding:0.2em; font-weight:bold;}
+
+.subheader {
+background-color:#32668E; margin:0; padding:0.5em; text-align:center;
+color:#FFFFFF;}
+
+#sidecontainer {
+margin:0; padding:0; float:left; width:20%; text-align:center;}
+
+#sidecontainer h2 {
+display:block; margin:0; padding:0.2em; color:#FFFFFF;
+background-color:#294D69; font-weight:normal;
+font-family:"trebuchet ms", "lucida sans", arial, sans-serif;
+font-size:120%;
+}
+
+.nav ul {
+margin:0 0 1.5em 0; padding:0; list-style-type:none;
+background-color:#FFFFFF;}
+
+.nav li {
+margin:0; padding:0; display:block; border-bottom:1px solid #294D69;}
+
+.nav a:link, .nav a:visited {
+display:block; margin:0; text-decoration:none; color:#32668E; margin:0;
+padding:0.5em;}
+
+.nav a:hover {
+display:block; margin:0; text-decoration:none; color:#666666; margin:0;
+padding:0.5em; background-color:#ACCBE2;}
+
+.nav a:active {
+display:block; margin:0; text-decoration:none; color:#32668E; margin:0;
+padding:0.5em;}
+
+#content {
+margin:0 0 0 20%; padding:0.8em; border-left:1px solid #294D69;}
+
+#content h1,h3 {margin:0; padding: 20px 0.1em 0.1em 0.1em;
+text-indent:2.5em;}
+
+#footer {
+margin:0; padding:0;}
+
+.superfooter {
+background-color:#32668E; height:1.8em;}
+
+.mainfooter {
+background-color:#FFFFFF; text-align:center;}
+
+.subfooter {
+background-color:#294D69; height:0.6em;}
+
+#footer p {
+font-size:75%; color:#999999; padding:0.3em;}
+-->
+</STYLE>
+</head>
+
+<body>
+<div class="wholepage">
+<div id="header">
+ <div class="superheader">%%PAGEACTION%%</div>
+ <div class="mainheader"><h1>IGLabs</h1><p>&ldquo;Your motto or random
+text&rdquo;</p></div>
+ <div class="subheader">Welcome to Daisy Cutter by Ad_267</div>
+</div>
+
+<div id="sidecontainer">
+
+<h2>Site Map</h2>
+<div class="nav">%%SITEMAP%%</div>
+
+<h2>Login</h2>
+<div style="padding: 5px">
+%%LOGIN%%
+<br/></div>
+
+<h2>Page Info</h2>
+<div style="padding: 3px; font-size: xx-small; text-align: left">
+%%PAGEINFO%%</div>
+
+</div>
+
+<div id="content">
+%%PAGE%%
+</div>
+
+<div id="footer">
+		 <div class="superfooter"></div>
+		 <div class="mainfooter">
+		 <p>Copyright &copy; IGLabs 2005</p>
+		 <p>Daisy Photo Credit: <strong><a
+href="http://www.sxc.hu/browse.phtml?f=profile&amp;l=tzankov">Dimiter
+Tzankov</a></strong>&nbsp;&nbsp;::&nbsp;&nbsp;Design by <strong><a
+href="http://www.oswd.org/userinfo.phtml?user=ad_267">Ad_267</a></strong></p>
+		 </div>
+		 <div class="subfooter"></div>
+</div>
+
+</div></body></html>

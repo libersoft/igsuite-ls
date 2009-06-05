@@ -1,0 +1,322 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<head>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1" />
+<meta name="description" content="IGLabs" />
+<meta name="keywords" content="%%PAGEKEYS%%" />
+<meta name="author" content="Luca Dante Ortolani / Original design: Andreas
+Viklund" />
+<title>%%PAGETITLE%%</title>
+<STYLE type="text/css">
+<!--
+body{
+margin:0;
+padding:30px 0;
+font:76% tahoma,verdana,sans-serif;
+background:#047 url(/images/tml1img1.png) repeat-x fixed;
+color:#222;
+}
+
+.forminput
+ {              height: 20px;
+                padding: 0px;
+                margin: 0px;
+                visibility: visible;
+                border: 1px #999999 solid;
+                background-color: #f4f4f4; }
+
+.formbutton
+ {              height: 20px;
+                margin: 0px;
+                padding: 0px;
+                border: 1px #999999 solid;
+ }
+
+.formcheck
+ {              padding: 0;
+                margin: 0;
+                border: 0; }
+
+textarea
+ {              padding: 0px;
+                border: 1px #999999 solid;
+                margin: 0px;
+                background-color: #f4f4f4; }
+
+.field {        display: block;
+                float: left;
+                margin: 2px 2px 2px 0px;
+                background-color: transparent;
+                vertical-align: top;
+ }
+
+.label {        display: block;
+                float: left;
+                width: 100px;
+                margin: 2px 3px 2px 4px;
+                padding: 2px;
+                border: 0px;
+                vertical-align: top;
+       }
+
+
+#thetop{
+margin:0;
+}
+
+#container{
+width:720px;
+margin:0 auto;
+padding:20px 20px 0 20px;
+background:#fff url(/images/tml1img2.png) no-repeat;
+color:#222;
+}
+
+a{
+text-decoration:none;
+color:#26c;
+}
+
+a img{
+border:0;
+}
+
+p{
+margin:0 0 15px 0;
+line-height:1.5em;
+}
+
+#main p,#sidebar p{
+padding:0 0 0 10px;
+}
+
+#logo{
+float:left;
+width:240px;
+margin:0 20px 0 0;
+padding:0 0 25px 0;
+background:#eee;
+border:4px solid #dde;
+text-align:center;
+color:#555;
+overflow:auto;
+}
+
+#logo h1{
+margin:50px 5px 1px 5px;
+letter-spacing:-3px;
+}
+
+#logo a{
+background-color:inherit;
+color:#26a;
+text-decoration:none;
+}
+
+#logo a:hover{
+background-color:inherit;
+color:#69e;
+}
+
+#tagline{
+text-align:center;
+font-size:1.2em;
+}
+
+#intro p{
+line-height:1.5em;
+}
+
+#main{
+float:left;
+width:530px;
+margin-right:20px;
+padding:0;
+}
+
+h3{
+display:block;
+margin:30px 0 10px 0;
+padding:5px 0 5px 8px;
+background:#eee url(/images/tml1img5.png) repeat-x;
+color:#222;
+border-top:1px solid #ddd;
+border-right:1px solid #bbb;
+border-bottom:1px solid #bbb;
+border-left:1px solid #ddd;
+text-decoration:none;
+}
+
+h3 a{ color:#222; }
+
+#sidebar{
+width:155px;
+float:right;
+margin-top:20px;
+font-size:1em;
+line-height:1.3em;
+}
+
+#sidebar p{
+font-size:0.9em;
+}
+
+.sidelink, .sidemenu li{
+display:block;
+width:140px;
+margin:3px 10px 2px 0;
+padding:5px 0 5px 8px;
+font-size:1.1em;
+font-weight:bold;
+text-align:left;
+background:#eee url(/images/tml1img4.png) repeat-x;
+color:#26c;
+border-top:1px solid #ddd;
+border-right:1px solid #bbb;
+border-bottom:1px solid #bbb;
+border-left:1px solid #ddd;
+}
+
+.sidemenu ul{
+border: 0px;
+padding: 0px;
+margin: 0px;
+}
+
+.sidelink:hover,.menuheader, .sidemenu li:hover{
+background:#fff url(/images/tml1img5.png) repeat-x;
+color:#222;
+border-top:1px solid #ddd;
+border-right:1px solid #888;
+border-bottom:1px solid #888;
+border-left:1px solid #ddd;
+text-decoration:none;
+}
+
+#footer{
+margin:0 auto 20px auto;
+width:760px;
+background:#fff url(/images/tml1img3.png) bottom left no-repeat;
+padding:0 0 5px 0;
+font-size:0.9em;
+color:#888;
+text-align:center;
+}
+
+h1,h2,h3,h4{
+margin:0 0 10px 0;
+font-weight:normal;
+}
+
+h1{
+font-size:3.0em;
+}
+
+h2{
+margin:0 0 4px 0;
+font-size:1.8em;
+}
+
+h3{
+margin:20px 0 8px 0;
+font-size:1.4em;
+}
+
+h4{
+margin:20px 0 5px 0;
+font-size:1.2em;
+border-bottom: 1px solid gray;
+}
+
+.clear{
+clear:both;
+margin:0;
+}
+
+.right{
+text-align:right;
+}
+
+.internallink{
+font-size:0.9em;
+text-align:center;
+}
+
+.block{
+padding:20px;
+background:#eee;
+color:#222;
+border:2px solid #ddd;
+}
+
+.credit{
+color:#888;
+background-color:inherit;
+}
+
+.hide{
+display:none;
+}
+
+-->
+</STYLE>
+</head>
+
+<body>
+<div id="thetop">
+<a id="top"></a>
+<p class="hide">Skip to: <a href="#sitemenu" accesskey="2">Site menu</a> |
+<a href="#maincontent" accesskey="3">Main content</a></p>
+</div>
+
+<div id="container">
+<div id="main">
+
+<div id="logo">
+<h1 style="font-weight: bold">[ <a href="" accesskey="4">IGLabs</a>] </h1>
+<span id="tagline">Your striking site slogan!</span>
+</div>
+
+<div id="intro">
+<h2>Speed and accessibility!</h2>
+<p>Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy
+eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam
+voluptua. At vero eos et accusam et justo duo dolores et ea rebum.</p>
+</div>
+<br>
+%%PAGE%%
+<div class="clear">&nbsp;</div>
+<p class="block">%%PAGEINFO%%
+%%PAGEACTION%%</p>
+</div>
+
+<div id="sidebar">
+%%WIKILOGO%%
+<h2 class="sidelink menuheader"><a id="sitemenu"></a>Site menu:</h2>
+<div class="sidemenu">%%SITEMAP%%</div>
+
+<h4>Latest News:</h4>
+[latestnews]{text}
+
+%%MINICALENDAR%%
+
+<h4>Related Pages</h4>
+<div style="padding: 0 0 10px 20px">
+%%RELATEDDOCS%%
+</div>
+
+<div style="border: 1px solid gray; padding: 3px">
+%%LOGIN%%
+</div>
+
+</div>
+<a href="http://www.igsuite.org" style="float:right; border:0; margin: 30px
+15px 0px 0px"><img src="/images/poweredbyig.gif" style="border:0"></a>
+<div class="clear">&nbsp;</div>
+</div>
+
+<div id="footer">&copy; 2005 IGLabs. Design by <a
+href="http://andreasviklund.com" class="credit">Andreas Viklund</a></div>
+
+</body></html>

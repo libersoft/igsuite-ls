@@ -1,0 +1,18 @@
+## IGSuite 4.0.0
+## Language: todo_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+completed_todos         =>'Completed',
+in_progress_todos       =>'In progress',
+new_task                =>'New Task',
+duration		=>'Duration',
+backto_project          =>'Back to Project',
+to_start		=>'Por Comenzar',
+delete_participant	=>'Borra participante',
+delete_project		=>'Borra todo el proyecto',
+todo_list		=>'Lista ToDo',
+   ));
+
+1;

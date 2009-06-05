@@ -1,0 +1,1285 @@
+#! /usr/bin/perl
+# Procedure: equipments
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+
+IG::MkEnv(__PACKAGE__);
+my $page_selector;
+
+IG::DTable (	proto		=> sub { CheckPrivilege('equipments_edit') },
+		protoagg	=> sub { CheckPrivilege('equipments_edit') },
+		protomodi	=> sub { CheckPrivilege('equipments_edit') },
+		findshow	=> sub { CheckPrivilege('equipments_view') },
+		findexec	=> sub { CheckPrivilege('equipments_view') },
+		delshow		=> sub { CheckPrivilege('equipments_edit') },
+		delexec		=> sub { CheckPrivilege('equipments_edit') },
+		plain_mntn	=> sub { CheckPrivilege('equipments_extra')},
+		show_mntn	=> sub { CheckPrivilege('equipments_view') },
+		datasheets	=> sub { CheckPrivilege('equipments_view') },
+		default_action	=> sub { CheckPrivilege('equipments_view') });
+
+
+##############################################################################
+##############################################################################
+sub default_action
+ {
+  my ($limit, $offset);
+  my $query = "where type='$on{filter_type}' " if $on{filter_type};
+  $on{sortdirection} ||= $IG::list_order;
+
+  my $base_query = "select COUNT(*) ".
+		   "FROM equipments $query";
+
+  my $base_url   = "equipments?filter_type=$on{filter_type}";
+
+  ( $limit,
+    $offset,
+    $page_selector ) = IG::MkTaskPaging($base_query, $base_url);
+
+  Header();
+  DbQuery("SELECT * FROM equipments $query ".
+          "ORDER BY id ".DbQuote($on{sortdirection}).
+          " limit $limit offset $offset" );
+
+  TaskListMenu(	[$lang{id}],
+		[$lang{type}],
+		[$lang{description}],
+		[$lang{plate}],
+		["$lang{notes}/$lang{location}"],
+		[""] );
+
+  while (my @row = FetchRow())
+   {
+    my $status;
+    my $icon;
+
+    if ( $row[27] == 2 )
+     { $icon = Img( src   => "$IG::img_url/red.gif",
+                    title => $lang{out_of_service}); }
+    elsif ( $row[27] == 1 )
+     { $icon = Img( src   => "$IG::img_url/orange.gif",
+                    title => $lang{alienate}); }
+    else
+     { $icon = Img( src   => "$IG::img_url/green.gif",
+                    title => $lang{available}); }
+
+    $icon .= Img( src   => "$IG::img_url/calendar.gif",
+                  title => $lang{booking_calendar},
+		  href  => "calendar?action=equipment_frames&amp;".
+		           "equipmentid=$row[0]" ) if $row[30];
+
+    TaskListItem (
+	[$row[0],
+	 "equipments?action=protomodi&amp;id=$row[0]"],
+	[GetTableVal( 'equipments_type', $row[5] ),
+	 "equipments?filter_type=$row[5]"],
+	[$row[1]],
+	[$row[3]],
+	[MkLink($row[4]) . '<br>' . MkLink($row[12])],
+	[$icon]
+		);
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  my $resource_status = IG::CheckResourcePrivileges
+                          ( id               => $on{id},
+                            mode             => 'r',
+                            resource_cgi     => 'equipments',
+                            resource_dbtable => 'equipments' );
+  return if !$resource_status;
+
+  my %ajax_req;
+  require IG::Utils;
+  
+  ## Set Ajax requests
+  if ( $on{id} && CheckPrivilege('igforms_view') )
+   {
+    $ajax_req{getpersonalizedfieldslist} = "igforms?".
+                                           "action=build_form_mask&amp;".
+                                           "igformid=equipments&amp;".
+                                           "recordid=$on{id}";
+   }
+
+  HtmlHead( ajax_req  => \%ajax_req,
+            shortcuts => _short_cuts() );
+
+  TaskHead( title     => $lang{equipments_mng} );
+
+  HLayer( MkButton( text      => $lang{technical_datasheet},
+                    privilege => $on{id} && $on{mntncinterval} ? 1 : 0,
+                    link      => "equipments?".
+                                 "action=datasheets&amp;".
+                                 "datasheet_id=$on{id}" ),
+
+          MkButton( text      => $lang{privileges_mng},
+                    privilege => $on{id} ? 1 : 0,
+                    link      => "javascript:winPopUp(".
+                                 "'igsuite?".
+                                          "action=resourcemode&amp;".
+                                          "resource_dbtable=equipments&amp;".
+                                          "resource_cgi=equipments&amp;".
+                                          "id=$on{id}".
+                                          "',620,550,'resourcemode')" ),
+
+          MkButton( text      => $lang{back_to_list},
+                    link      => "equipments?pos=$on{pos}" )
+        );
+
+  FormHead( cgiaction  => 'protoagg',
+            enctype    => 'multipart/form-data',
+            autofocus  => $on{id} ? 'false' : 'true',
+            labelstyle => 'width:150px');
+
+  Input(    show       => $lang{description},
+            readonly   => $resource_status == -1 ? 0 : 1,
+	    type       => 'text',
+	    validate   => { mandatory => 'true',
+	                    pattern   => '^[^,]+$'},
+            name       => 'description',
+            style      => 'width:460px',
+            containerstyle => 'padding-top:15px;' );
+
+  Input(    show       => $lang{id},
+	    validate   => { mandatory => 'true',
+	                    pattern   => '^\d+$'},
+            readonly   => $resource_status == -1 ? 0 : 1,
+            type       => 'text',
+            name       => 'id',
+            style      => 'width:150px',
+            maxlen     => 15 );
+
+  Input(    show       => $lang{type},
+	    validate   => { mandatory => 'true',},
+            readonly   => $resource_status == -1 ? 0 : 1,
+            type       => 'basictable',
+            name       => 'type',
+            zerovalue  => 'true',
+            float      => 'left',
+            style      => 'width:150px',
+            table      => 'equipments_type');
+
+  Input(    show       => $lang{plate},
+            type       => 'text',
+            name       => 'brand',
+            maxlen     => 50,
+            style      => 'width:150px' );
+
+  Input(    show       => $lang{status},
+            type       => 'select',
+            float      => 'left',
+            name       => 'status',
+            style      => 'width:150px',
+            data       => [([ 0, $lang{available}      ],
+		            [ 1, $lang{alienate}       ],
+		            [ 2, $lang{out_of_service} ] )] );
+
+  my $panel = Input( show     => $lang{assigned_to},
+                     type     => 'logins',
+                     zerovalue=> 'true',
+                     validate => { mandatory => 'true' },
+                     name     => 'owner',
+                     style    => 'width:240px').
+                     
+              Input( show     => $lang{contact},
+	             validate => { mandatory => 'false',},
+                     style    => 'width:220px',
+                     type     => 'contactfinder').
+
+              Input( show     => $lang{dislocation},
+                     type     => 'text',
+                     float    => 'left',
+                     style    => 'width:240px',
+                     maxlen   => 200,
+                     name     => 'location').
+  
+              Input( show     => $lang{register_date},
+                     style    => 'width:220px',
+                     name     => 'date5',
+                     validate => { mandatory => 'false' },
+                     type     => 'date').
+
+              Input( show     => $lang{certificate},
+                     type     => 'text',
+                     name     => 'builtcertificate',
+                     maxlen   => 50,
+                     style    => 'width:240px' ).
+
+              Input( show     => $lang{original_documentation},
+                     style    => 'width:240px',
+                     type     => 'select',
+                     zerovalue=> 'true',
+                     name     => 'manual',
+                     data     => { 1 => $lang{available},
+		                   0 => $lang{unavailable}} ).
+
+              ( CheckPrivilege('services_show')
+                ? Input( type     => 'select',
+                         style    => 'width:240px',
+                         name     => 'services',
+                         value    => 1,
+ 		         data     => { 1 => $lang{no},
+                                       2 => $lang{yes}},
+                         show     => 'Includi nei servizi') #XXX2TRANSLATE
+                : '').
+
+              Input( show     => $lang{last_maintenance_date},
+                     style    => 'width:220px',
+                     validate => { mandatory => 'false' },
+                     type     => 'date',
+                     name     => 'date9');
+
+  my $photo_url = -e $IG::cgi_dir . $IG::S .
+                     'data'       . $IG::S .
+                     'photo'      . $IG::S .
+                     'equipments' . $IG::S .
+                     "$on{id}.jpg"
+                ? "docview?action=photo_view&amp;".
+                          "photo_type=equipments&amp;".
+                          "photo_name=$on{id}.jpg"
+                : "$IG::img_url/noequipment.jpg";
+
+  my $pan0
+   = HLayer( intra_space => 0,
+	     valign      => 'top',
+	     left_layers => [($panel)],
+	     right_layers
+	      => [( TaskMsg( Img(   src     => $photo_url =~ /noequipment/
+                                            ?  $photo_url
+                                            :  $photo_url.
+	                                       "&amp;width=140",
+                                    href    => $photo_url,
+				    id      => 'equipment_photo',
+				    width   => 140 ).
+				  
+			     ( $on{id}
+			       ? Input( type    => 'file',
+			                size    => 5, 
+				        onchange=> "alert(document.upload.upfile.value +'dd' )",
+				        style   => 'width: 130px;',
+				        name    => 'upfile' )
+                               : '')
+			     ,4 )
+		  )]
+	   );
+
+
+  my $pan1 = Input( show     => $lang{maintenance_range},
+                    type     => 'select',
+                    name     => 'mntncinterval',
+                    style    => 'width: 160px',
+                    containerstyle=>'margin-left:90px',
+                    labelstyle=> 'width:160px;',
+                    data     => [( [ 0,   $lang{no_maintenance} ],
+                                   [ 1,   $lang{outsourcing_maintenance} ],
+		                   [ 7,   "7 $lang{days}"  ],
+		                   [ 15,  "15 $lang{days}" ],
+		                   [ 30,  "30 $lang{days}" ],
+		                   [ 60,  "60 $lang{days}" ],
+		                   [ 90,  "90 $lang{days}" ],
+		                   [ 120, "120 $lang{days}"])]).
+
+             Input( show     => $lang{time_needed},
+                    float    => 'left',
+                    labelstyle => 'width:auto',
+                    type     => 'select',
+                    data     => [1 .. 24],
+                    name     => 'mntnchoures').
+
+             Input( show       => $lang{ordinary_mntn_services},
+                    labelstyle => 'width:80px; height:165px',
+                    type       => 'textarea',
+                    style      => 'width:500px; height:160px',
+                    name       => 'mntn_interventions');
+   
+  my $pan2 = Input( show     => $lang{warranty},
+                    validate => { onerror => $lang{Err_expiration_dates} },
+                    name     => 'date4',
+                    type     => 'date').
+
+             Input( show     => $lang{insurance},
+                    validate => { onerror => $lang{Err_expiration_dates} },             
+                    name     => 'date3',
+                    float    => 'left',
+                    type     => 'date').
+
+             Input( show     => $lang{charter_party},
+                    validate => { onerror => $lang{Err_expiration_dates} },
+                    name     => 'date6',
+                    type     => 'date').
+
+             Input( show     => $lang{property_tax},
+                    validate => { onerror => $lang{Err_expiration_dates} },
+                    name     => 'date2',
+                    float    => 'left',
+                    type     => 'date').
+  
+             Input( show     => $lang{authorization_to_transport},
+                    validate => { onerror => $lang{Err_expiration_dates} },
+		    name     => 'date7',
+		    type     => 'date').
+
+             Input( show     => $lang{term_authorization},
+                    validate => { onerror => $lang{Err_expiration_dates} },
+                    name     => 'date8',
+                    float    => 'left',
+                    type     =>'date').
+
+             Input( show     => $lang{next_general_revision},
+                    validate => { onerror => $lang{Err_expiration_dates} },
+                    name     => 'date0',
+                    type     => 'date').
+
+             Input( show     => $lang{safety_certification_system},
+                    validate => { onerror => $lang{Err_expiration_dates} },
+                    float    => 'left',
+                    name     => 'date1',
+                    type     => 'date');
+
+  my $pan3 = Input( show    => $lang{assurance_cost},
+                    name    => 'assurancecost',
+                    style   => 'width:100px',
+                    maxlen  => 10,
+                    type    => 'text').
+
+             Input( show    => $lang{taxes_cost},
+                    name    => 'taxescost',
+                    float   => 'left',
+                    style   => 'width:100px',
+                    maxlen  => 10,
+                    type    => 'text').
+  
+             Input( show    => $lang{power_consumption_cost},
+                    name    => 'electrconsumption',
+                    style   => 'width:100px',
+                    maxlen  => 10,
+                    type    => 'text').
+
+             Input( show    => $lang{fuel_consumption_cost},
+                    name    => 'gasolconsumption',
+                    float   => 'left',
+                    style   => 'width:100px',
+                    maxlen  => 10,
+                    type    => 'text' );
+
+             Input( show    => $lang{annual_maintenance_cost},
+                    name    => 'maintenance',
+                    style   => 'width:100px',
+                    maxlen  => 10,
+                    type    => 'text').
+
+             Input( show    => $lang{operators_cost},
+                    float   => 'left',
+                    name    => 'staffcost',
+                    style   => 'width:100px',
+                    maxlen  => 10,
+                    type    => 'text');
+
+  my $pan4 = Input( show       => $lang{notes},
+                    labelstyle => 'width:80px; height:195px',
+                    type       => 'textarea',
+                    style      => 'width:500px; height:190px',
+                    name       => 'note');
+		
+  my $groupquery = "select groupid, name from users_groups order by name";
+  my $pan5 = Input( type     => 'select',	
+		    style    => 'width:300px;',
+		    allvalue => 'true',
+		    zerovalue=> 'true',
+		    show     => $lang{booking_group},
+		    data     => $groupquery,
+		    name     => 'booking_group' ).
+
+	     Input( type     => 'select',	
+		    style    => 'width:300px;',
+		    allvalue => 'true',
+		    zerovalue=> 'true',
+		    show     => $lang{booking_admin_group},
+		    data     => $groupquery,
+		    name     => 'booking_admin_group' ).
+  
+	     Input( type     => 'select',	
+		    style    => 'width:300px;',
+		    zerovalue=> 'true',
+		    show     => $lang{booking_approve_group},
+		    data     => $groupquery,
+		    name     => 'booking_approve_group' );
+
+  my $pan6 = $on{id} && CheckPrivilege('igforms_view') ? '&nbsp;' : '';
+
+
+  ## File Repository ############################################
+  my $pan7 = "<iframe frameborder=\"0\"".
+             " style=\"padding:0px; width:100%; height:230px;\"".
+             " src=\"\" id=\"files\" name=\"myframe\">".
+             "</iframe>";
+
+  my $pan7_action = "\$('files').src='filemanager?".
+                    "repid=$on{id}&amp;repapp=equipments'";
+
+  
+  IG::TabPane( data   => [( [$lang{general_information},
+                             $pan0],
+                            [$lang{ordinary_maintenance},
+                             $pan1],
+                            [$lang{expiration_dates},
+                             $pan2],
+                            [$lang{cost_and_rates},
+                             $pan3],
+                            [$lang{notes},
+                             $pan4],
+                            [$lang{bookings},
+                             $pan5],
+                            [$lang{personalized_fields},
+                             $pan6,
+                             "getpersonalizedfieldslist".
+                             "(['NO_CACHE'],['layer_content6'])"],
+                            [$lang{open_repository},
+                             ($on{id}
+                              ? ( $pan7, $pan7_action )
+                              : ( '','') ) ] )],
+               width      => 650,
+               height     => 235,
+               padding    => 14,
+               margin_top => 10 );
+
+
+  Input (	type=>'submit',
+		value=>$lang{save});
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  LogD( $on{description}, 'view', 'equipments', $on{id} ) if $on{id};
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  my $resource_status = IG::CheckResourcePrivileges
+                          ( id               => $on{id},
+                            mode             => 'w',
+                            resource_cgi     => 'equipments',
+                            resource_dbtable => 'equipments' );
+  return if !$resource_status;
+
+  ## Store photo
+  push @IG::errmsg,
+       IG::FileUpload( param_name	=> 'upfile',
+		       target_dir	=> $IG::cgi_dir. $IG::S.
+					   'data'.       $IG::S.
+					   'photo'.      $IG::S.
+					   'equipments'. $IG::S,
+		       can_overwrite	=> 'true',
+		       target_file	=> "$on{id}.jpg" );
+
+  ## Validate Form values
+  push @IG::errmsg, IG::FormValidate();
+  proto() && return if @IG::errmsg;
+ 
+  if (!$on{id})
+    {
+     DbQuery("SELECT id FROM equipments ORDER BY id desc");
+     $on{id} = FetchRow() + 1;
+    }
+  $on{id} = substr( '00000'.$on{id}, -5, 5 );
+  $on{services} ||= 1; ## not available to services
+
+  QuoteParams();
+  DbQuery( query=>[( "DELETE FROM equipments where id = '$in{id}'",
+
+		     "INSERT INTO equipments ".
+		     "VALUES ('$in{id}', '$in{description}',".
+		     " '$in{builtcertificate}', '$in{brand}', '$in{location}',".
+		     " '$in{type}', '$in{mntncinterval}', '$in{date0}',".
+		     " '$in{date1}', '$in{date2}', '$in{date3}',".
+		     " '$in{mntnchoures}', '$in{note}', '$in{date4}',".
+		     " '$in{manual}', '$in{taxescost}', '$in{assurancecost}',".
+		     " '$in{gasolconsumption}', '$in{electrconsumption}',".
+		     " '$in{maintenance}', '$in{staffcost}', '$in{date5}',".
+		     " '$in{date6}', '$in{date7}', '$in{date8}',".
+		     " $in{services}, '$in{date9}', $in{status},".
+		     " '$in{contactid}', '$in{mntn_interventions}',".
+                     " '$in{owner}',".
+		     " '$in{booking_group}', '$in{booking_admin_group}',".
+		     " '$in{booking_approve_group}' )"
+		   )] );
+
+  LogD('','insert', 'equipments', $on{id}); 
+
+  IG::Redirect('equipments');  
+ }
+
+##############################################################################
+##############################################################################
+sub protomodi
+ {
+  DbQuery("SELECT * FROM equipments where id='".DbQuote($on{id})."'");  
+  (	$on{id},
+	$on{description},
+	$on{builtcertificate},
+	$on{brand},
+	$on{location},
+	$on{type},
+	$on{mntncinterval},
+	$on{date0},
+	$on{date1},
+	$on{date2},
+	$on{date3},
+	$on{mntnchoures},
+	$on{note},
+	$on{date4},
+	$on{manual},
+	$on{taxescost},
+	$on{assurancecost},
+	$on{gasolconsumption},
+	$on{electrconsumption},
+	$on{maintenance},
+	$on{staffcost},
+	$on{date5},
+	$on{date6},
+	$on{date7},
+	$on{date8},
+	$on{services},
+	$on{date9},
+	$on{status},
+	$on{contactid},
+	$on{mntn_interventions},
+        $on{owner},
+	$on{booking_group},
+	$on{booking_admin_group},
+	$on{booking_approve_group} ) = FetchRow();
+
+  proto();
+ }
+
+#############################################################################
+#############################################################################
+sub findshow
+ {  
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer
+     ( bottom_space => 0,
+       right_layers
+        =>[ ( FormHead( name      => 'findnavi',
+			method    => 'get',
+			target    => 'mainf',
+	         	cgiaction => 'findexec',
+			labelstyle=> 'border:0px; width:auto;',
+			autofocus => 'false',
+			float     => 'left' ).
+
+              Input(    type      => 'findable' ),
+
+              Input(    type       => 'select',
+                        float      => 'left',
+                        name       => 'status',
+                        style      => 'width:150px',
+                        data       => [([ 0, $lang{all}            ],
+                                        [ 1, $lang{available}      ],
+                                        [ 2, $lang{alienate}       ],
+                                        [ 3, $lang{out_of_service} ] )] ),
+
+              Input(	type      => 'text',
+			name      => 'keytofind',
+                        focus     => 'true',
+                        value     => $IG::cookie{lastsearch},
+                        style     => 'width:100px; margin-right: -5px;',
+                        onblur    => "document.cookie='lastsearch=' +".
+                                     " escape(this.value)"),
+
+              Input(	type      => 'image',
+			name      => $lang{find},
+			src       => "$IG::img_url/${IG::tema}search.gif",
+			alt       => $lang{find}),
+			
+              FormFoot()
+	    )]
+	 );
+   }
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub findexec
+ {
+  my $counter;
+  my $query;
+  QuoteParams();
+ 
+  if ( $on{ajax_request} )
+   {
+    HttpHead( expires => '+30s' );
+
+    TaskMsg( Input( type      => 'button',
+                    float     => 'right',
+                    onclick   => "document.location = '".
+                                  "equipments?".
+                                          "action=proto&amp;".
+                                          "contactid=$on{contactid}&amp;".
+                                          "backtoreferer=1';",
+                    show      => $lang{new_item},
+                    fieldstyle=> 'margin:0px',
+                    style     => 'margin:0px;font-size:10px; height:15px' ).
+
+	     Img(   src       => "$IG::img_url/equipments.png",
+                    align     => 'absmiddle').
+
+             "<a href=\"equipments\">$lang{equipments}</a>"
+
+            ,7 );
+
+    $query = "contactid='$on{contactid}'";
+   }
+  else
+   {
+    $IG::set_cookie{lastsearch} = $on{keytofind};
+    Header();
+
+    TaskMsg("$lang{equipments} - ".
+            "$lang{find}: <strong>$on{keytofind}</strong>", 4);
+
+    if ( length($on{keytofind}) < 2 )
+     {
+      $query = '1=0';
+      push @IG::errmsg, $lang{Err_find};
+     }
+    else
+     {
+      $query = "location ~* '$in{keytofind}'".
+               " or description ~* '$in{keytofind}'".
+               " or note ~* '$in{keytofind}'".
+               " or builtcertificate ~* '$in{keytofind}'".
+               " or brand ~* '$in{keytofind}'".
+               " or id ~* '$in{keytofind}'";
+  
+      if ( $on{status} )
+       {
+        $query = 'status='. DbQuote($on{status}-1) . " and ($query)";
+       }
+     }
+   }
+
+  TaskListMenu( [$lang{id}],
+                [$lang{type}],
+	        [$lang{description}],
+	        [$lang{plate}],
+	        [$lang{notes} . ($on{ajax_request} ? '' : "/$lang{location}")],
+	        [] );
+
+
+  DbQuery("SELECT * FROM equipments ".
+  	  "WHERE $query ".
+	  "ORDER BY id");
+ 
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+    my $icon;
+    if ( $row[27] == 2 )
+     { $icon = Img( src   => "$IG::img_url/red.gif",
+                    title => $lang{out_of_service}); }
+    elsif ( $row[27] == 1 )
+     { $icon = Img( src   => "$IG::img_url/orange.gif",
+                    title => $lang{alienate}); }
+    else
+     { $icon = Img( src   => "$IG::img_url/green.gif",
+                    title => $lang{available}); }    
+    
+    TaskListItem (
+	[$row[0],
+	 "equipments?action=protomodi&amp;id=$row[0]"],
+	[GetTableVal('equipments_type',$row[5]),
+	 "equipments?filter_type=$row[5]"],
+	[$row[1]],
+	[$row[3]],
+	[($on{ajax_request} ? '' : MkLink($row[4]).Br()) . MkLink($row[12])],
+	[$icon]
+		);
+   }
+
+  if ($on{ajax_request})
+   {
+    TaskListFoot(7);
+   }
+  else
+   {
+    push @IG::errmsg, $lang{no_items} if !$counter && length($on{keytofind}) > 1;
+    TaskListFoot();
+    TaskFoot();
+    HtmlFoot();
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub delshow
+ {
+  Header();
+  TaskMsg( $lang{warn_before_delete}.Br(2).
+  
+           FormHead( cgiaction => 'delexec',
+                     float     => 'left',
+		     onsubmit  => IG::JsConfirm( $lang{are_you_sure} ) ).
+
+	   Input(    type      => 'select',
+                     name      => 'id',
+                     zerovalue => 'true',
+                     style     => 'width: 350px',
+                     data      => "SELECT id, id, description ".
+                                  "FROM equipments ORDER BY id desc",
+                     show      => $lang{equipment} ).
+
+	   Input(    type      => 'submit',
+                     show      => $lang{delete} ).
+
+           FormFoot()
+           ,2 );
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub delexec
+ {
+  my $resource_status = IG::CheckResourcePrivileges
+                          ( id               => $on{id},
+                            mode             => 'w',
+                            resource_cgi     => 'equipments',
+                            resource_dbtable => 'equipments' );
+  return if !$resource_status;
+
+  DbQuery("delete from equipments where id='".DbQuote($on{id})."'");
+
+  LogD('','delete', 'equipments', $on{id});
+  IG::Redirect('equipments');
+ } 
+
+#############################################################################
+#############################################################################
+sub datasheets
+ {
+  my $counter;
+  my $query = $on{datasheet_id}
+            ? "status='0' and id='".DbQuote( $on{datasheet_id} )."'"
+            : "status='0'"; 
+
+  IG::CkProtocolDir('equipments', $IG::tv{ye});
+  $IG::clr{bg} = '#FFFFFF';
+
+  HtmlHead();
+
+  DbQuery("SELECT * FROM equipments ".
+	  "where mntncinterval<>'0'".
+	  " and mntncinterval<>'1'".
+	  " and mntncinterval<>'2'".
+	  " and $query ORDER BY id");
+
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+
+    $row[14]  = $row[14] ? $lang{available} : $lang{unavailable};
+    $row[3] ||= '&nbsp;';
+    $row[4]   = MkLink($row[4]);
+    $row[29]  = MkLink($row[29]);
+    $row[29]  =~ s/\r\n*/<br>/g;
+    $row[2]   = CkDate($row[2]) || $lang{none};
+
+    my $html = <<FINE;
+<TABLE style="border:0; height:828px; width:100%">
+ <TR>
+ <TD width="49%" align="left" valign="top">
+  <TABLE width="100%" >
+   <TR><TD style="background-color:#EEEEEE; border:3px solid #999999; padding:3px; font-size:32px">
+    $IG::soc_name</TD></TR>
+   <TR><TD>
+    <TABLE BORDER WIDTH="100%" >
+     <TR>
+      <TD style="font-weight:bold; width:25%; text-align:center;">
+        $lang{date}</TD>
+      <TD style="font-weight:bold; width:25%; text-align:center;">
+        $lang{next_maintenance_date}</TD>
+      <TD style="font-weight:bold; width:50%; text-align:center;">
+        $lang{technical_director_sign}</TD>
+     </TR>
+FINE
+    $html .= ("<TR><TD>&nbsp;<br><br></TD>".
+              "<TD>&nbsp;</TD><TD>&nbsp;</TD></TR>") x 17;
+
+    $html .= <<FINE;
+    </TABLE>
+   </TD></TR>
+  </TABLE>
+ </TD>
+ <TD width="1%"></TD>
+
+ <TD width="50%" align="left" valign="top">
+  <TABLE border width="100%" height="100%">
+   <TR><TD style="font-size:26px">
+    $lang{technical_datasheet}</TD></TR>
+   <TR><TD>
+    <div style="font-style: italic;">$lang{equipment_id}</div>
+    <span style="font-size:26px; font-weight:bold">$row[0]</span></TD></TR>
+   <TR><TD><div style="font-style: italic">$lang{description}</div>
+     <strong>$row[1]</strong></TD></TR>
+   <TR><TD><div style="font-style: italic">$lang{dislocation}</div>
+     <strong>$row[4]<br>$row[12]</strong></TD></TR>
+   <TR><TD><div style="font-style: italic">$lang{certificate}</div>
+     <strong>$row[2]</strong></td></tr>
+   <TR><TD><div style="font-style: italic">$lang{maintenance_range}</div>
+     <strong>$row[6] $lang{days}</strong></TD></TR>
+   <tr><td><div style="font-style: italic">$lang{original_documentation}</div>
+     <strong>$row[14]</strong></td></tr>
+   <TR><TD valign="top" height="100%">
+    <div style="font-style: italic;">$lang{ordinary_mntn_services}</div><BR>
+   $row[29]
+   </TD></TR>
+  </TABLE>
+
+ </TD></TR>
+ <TR>
+ <TD COLSPAN=3>
+  <TABLE BORDER WIDTH="100%">
+   <TR><TD><strong>$lang{remark}</strong><br><BR><BR><BR><BR>&nbsp;</TD></TR>
+  </TABLE>
+ </TD></TR>
+</TABLE>
+<p style="page-break-before:always;">
+FINE
+    PrOut $html;
+
+    ## Write on disk
+    my $datasheet_file = $IG::htdocs_dir . ${IG::S} .
+                         $IG::default_lang{equipments} . ${IG::S} .
+                         $IG::tv{ye} . ${IG::S} .
+                         "mat$row[0].htm";
+
+    open (DAT, '>', $datasheet_file)
+      or die("Can't write on '$datasheet_file'.\n");
+
+    print DAT "<HTML><BODY background=\"white\">\n".
+	      $html.
+	      "</BODY></HTML>\n";
+    close(DAT);
+    chmod 0664, $datasheet_file;
+   }
+
+ HtmlFoot();
+}
+
+#############################################################################
+#############################################################################
+sub plain_mntn
+ {
+  my %gi;             ## giorni di manutenzione della programmazione precedente
+  my $previous;       ## serve a comparare la lista delle location
+  my @at;             ## le attrezzature con i loro attributi
+  my $cnt_equipments; ## conta le apparecchiature
+  my $cnt_attempts;   ## conta i tentativi
+  my @slots;          ## slot
+  my $mnt_ext;        ## set external maintenance
+
+  $lang{planned_maintenance} =~ s/<br>//g;
+
+  my $mntn_file = $IG::htdocs_dir . ${IG::S} .
+                  $IG::default_lang{equipments}. ${IG::S} .
+                  $tv{ye} . ${IG::S} .
+                  'manu01.htm';
+
+  if ( -e $mntn_file )
+   {
+    HtmlHead();
+    TaskHead( title => $lang{planned_maintenance} );
+    TaskMsg( $lang{Err_mntn_plan_exists} );
+    TaskFoot();
+    HtmlFoot();
+    return;
+   }
+
+  IG::CkProtocolDir('equipments', $IG::tv{ye});
+
+  ## clean previous planned manteinance
+  DbQuery("delete from equipments_maintenance ".
+          "where maintenance_date>='$IG::tv{start_year}'".
+          " and maintenance_date<='$IG::tv{end_year}'");
+
+  ## Carica i giorni di manutenzione della programmazione precedente
+  my $mntn_distance_file = $IG::htdocs_dir. ${IG::S}.
+                           $IG::default_lang{equipments}. ${IG::S}.
+                           'giornimanu.dat';
+
+  if ( -e $mntn_distance_file )
+   {
+    open( DET, '<', $mntn_distance_file)
+      or die("Can't read from '$mntn_distance_file'.\n");
+    my $fake_cnt_attempts = <DET>;
+    while (<DET>)
+     {
+      my ($code, $days) = split /\s/, $_, 2;
+      $gi{$code} = $days;
+     }
+    close(DET);
+   }
+
+  ## Carica l'elenco attrezzature applicando ad ogni attrezzatura
+  ## i giorni restanti per la prossima manutenzione
+  DbQuery("SELECT id, description, mntncinterval, date0, date1, type,".
+	  " mntnchoures, location, note ".
+	  "FROM equipments ".
+	  "where mntncinterval<>'0'".
+	  " and mntncinterval<>'1'".
+	  " and mntncinterval<>'2'".
+	  " and status='0' ".
+          "order by location");
+
+  while (my @row = FetchRow())
+   {
+    $cnt_equipments++;
+    $row[6] ||= 4; ## imposta le ore di manutenzione di default se non le trova
+
+    if (substr($row[7],0,3) eq 'c/o' || substr($row[7],0,3) eq 'C/O')
+     {
+      ## quelli che si trovano presso lo stesso stabilimento
+      ## li tratta come fosse una stessa attrezzatua
+      my $location;
+      if ($previous eq $row[7])
+       { $cnt_equipments--; }
+      else
+       { $location = "$row[7]<br>"; }
+
+      $at[$cnt_equipments][0] .= "$location$row[1] Mat.".
+                                 "<a href=\"equipments?".
+                                            "action=protomodi&amp;".
+                                            "id=$row[0]\">$row[0]</a> ".
+                                 "$row[8]<br>";
+      $previous = $row[7];
+
+      ## forza 8 ore di manutenzione (tutto il giorno)
+      $at[$cnt_equipments][5] = 8;
+     }
+    else
+     {
+      $at[$cnt_equipments][0] = "$row[1] Mat.".
+                                "<a href=\"equipments?".
+                                          "action=protomodi&amp;".
+                                          "id=$row[0]\">$row[0]</a>";
+
+      $at[$cnt_equipments][5] = $row[6]; ## ore di manutenzione
+     }
+
+    $at[$cnt_equipments][1] = $row[2];                 # giorni di intervallo
+    $at[$cnt_equipments][2] = "$row[3]|$row[4]";       # date revisioni
+    $at[$cnt_equipments][3] = $gi{$row[0]} || $row[2]; # distanza di intervento
+    $at[$cnt_equipments][4] = $row[0];                 # la matricola
+   }
+
+  ## Se non trova nessuna attrezzatura da manutenzionare
+  if ( !$cnt_equipments )
+   {
+    HtmlHead();
+    TaskHead( title => $lang{planned_maintenance});
+    TaskMsg( $lang{Err_no_equipment} );
+    TaskFoot();
+    HtmlFoot();
+    return;
+   }
+
+  $IG::months{02}[1] = 29 if (($tv{year}-1988)%4) == 0;
+  $IG::clr{bg} = 'white';
+
+  while(1) ## se $err=1 ricomincia da capo
+   {
+    my $err = 0;
+    $cnt_attempts++;
+ 
+    MONTHS: for my $cnt_months ('01' .. '12')
+     {
+      my $mntn_month_file = $IG::htdocs_dir . ${IG::S} .
+                            $IG::default_lang{equipments} . ${IG::S} .
+                            $IG::tv{ye} . ${IG::S} .
+                            'manu' . $cnt_months . '.htm';
+
+      open( DAT, '>', $mntn_month_file)
+        or die("Can't write on '$mntn_month_file'.\n");
+
+      print DAT HtmlHead( title   => 'Manutenzione Programmata',
+  			  nohttp  => 1,
+			  reprint => 1 );
+
+      print DAT HTitle(  level   => 2,
+                         style   => 'clear:both;margin-bottom:15px;',
+                         title   => $IG::months{$cnt_months}[0] );
+
+      print DAT "<table border=1 cellspacing=0>
+ 		 <td><strong>Data</strong></td>
+		 <td><strong>$lang{first_maintenance}</strong></td>
+		 <td><strong>$lang{second_maintenance}</strong></td>
+		 <td><strong>$lang{third_maintenance}</strong></td>
+		 <td><strong>$lang{outsourcing_maintenance}</strong></td><tr>\n";
+ 
+      DAYS: for my $cnt_month_days ('01' .. IG::GetDaysInMonth($cnt_months) )
+       {
+        $at[$_][3]++ for 1 .. $cnt_equipments; # incrementa di un giorno tutti
+
+        my $day = substr( $IG::days[ IG::GetDayByDate( $cnt_month_days,
+                                                       $cnt_months,
+                                                       $IG::tv{year} )], 0, 3 );
+        
+        if ( ! _is_holiday( $cnt_month_days, $cnt_months ) )
+         {
+          ## START
+          my $tmp_date = IG::GetDateByFormat( $cnt_month_days,
+                                              $cnt_months,
+                                              $tv{year} );
+          my $cnt_loop  = 0;
+
+          while (1)
+           {
+            EQUIPMENTS: for my $i (1 .. $cnt_equipments)
+             {
+              if (    $at[$i][1] - $cnt_loop < $at[$i][3]
+                   && $tmp_date !~ /($at[$i][2])/gi ) ## sono passati
+               {
+                for my $slot ( 0 .. 2 )
+                 {
+                  next if $slots[$slot];
+                
+                  ## controlla se e' il caso piu disperato
+                  for my $re (1 .. $cnt_equipments)
+	 	   {
+		    if ($at[$i][3]-$at[$i][1] < $at[$re][3]-$at[$re][1])
+                     {
+                      $i = $re;
+                      last;
+                     }
+	           } 
+
+                  $slots[$slot] = $at[$i][0];
+                  $at[$i][3] = 0;
+                  next EQUIPMENTS;
+                 }
+
+                last EQUIPMENTS if $slots[0] && $slots[1] && $slots[2];
+               }
+             }
+
+            $cnt_loop++;
+            last if ($slots[0] && $slots[1] && $slots[2]) || $cnt_loop == 3; 
+           }
+
+          $err = 1 if !$slots[0] && !$slots[1] && !$slots[2];
+
+          $slots[1] ||= "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+          $slots[2] ||= "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+
+          ## cerca eventi esterni
+          DbQuery("SELECT id,description,date0,date1 FROM equipments ".
+ 		  "where date0='$tmp_date' or date1='$tmp_date'");  
+          while (my @row = FetchRow())
+           {
+            if ($row[2] eq $tmp_date)
+             { $mnt_ext .= "Revisione $row[1] Mat.$row[0]<br>";}
+            else
+             { $mnt_ext .= "Revisione Tachigrafo $row[1] Mat.$row[0]<br>";}
+           }
+
+          $mnt_ext ||= "&nbsp;";
+
+          print DAT "	<td><font size=\"-1\"><b>$day $cnt_month_days</b></td>
+			<td><font size=\"-2\">$slots[0]</font></td>
+			<td><font size=\"-2\">$slots[1]</font></td>
+			<td><font size=\"-2\">$slots[2]</font></td>
+			<td><font size=\"-2\">$mnt_ext</font></td><tr>\n";
+          @slots   = ();
+          $mnt_ext = '';
+          ####################################################################
+         }
+       }
+
+      print DAT "</td><tr></table></table>\n";
+
+      ## Calcola i mesi successivi e precedenti
+      my ($next_month, $prev_month);
+      if ( $cnt_months == 12 )
+       {
+        $next_month = "01";
+        $prev_month = "11";
+       }
+      elsif ( $cnt_months == 1 )
+       {
+        $next_month = "02";
+        $prev_month = "12";
+       }
+      else
+       {
+        $prev_month = substr("0".($cnt_months - 1), -2, 2);
+        $next_month = substr("0".($cnt_months + 1), -2, 2);
+       }
+
+      print DAT " <a href=\"" . IG::GetHref('equipments',
+					  "$tv{ye}/manu$prev_month.htm").
+	  	       "\">$IG::months{$prev_month}[0]</a> ".
+
+	        $IG::months{$cnt_months}[0].
+
+	        " <a href=\"" . IG::GetHref('equipments',
+					  "$tv{ye}/manu$next_month.htm").
+		       "\">$IG::months{$next_month}[0]</a>\n";
+
+      print DAT HtmlFoot();
+      close (DAT);
+      chmod 0664, $mntn_month_file;
+     }
+
+    last if $err == 0 || $cnt_attempts == 4;
+   }
+
+  ## Registra i giorni mancanti alla prossima manutenzione
+  ## per creare il prossimo elaborato
+  open (DET, '>', $mntn_distance_file )
+    or die("Can't write on '$mntn_distance_file'.\n");
+  print DET "After $cnt_attempts attempts\n";
+  print DET "$at[$_][4] $at[$_][3]\n" for 1 .. $cnt_equipments;
+  close (DET);
+
+  LogD('Build planned maintenance');
+  IG::Redirect("equipments?action=show_mntn");
+ }
+
+############################################################################
+############################################################################
+sub _is_holiday
+ {
+  my ($day, $month) = @_; 
+  my $wday = IG::GetDayByDate( $day, $month, $IG::tv{year} );
+  my $hday = $day . $month;
+
+  return $wday            &&
+         $hday ne '1508' &&
+         $hday ne '0111' &&
+         $hday ne '0812' &&
+         $hday ne '2512' &&
+         $hday ne '2612' &&
+         $hday ne '0601' &&
+         $hday ne '0101' &&
+         $hday ne '2504' &&
+         $hday ne '0105'
+       ? 0
+       : 1;
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+         TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
+         IG::LastDocuments().
+         TaskFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub show_mntn
+ {
+  HtmlHead();
+  TaskHead( title => $lang{planned_maintenance});
+
+  HLayer( MkButton( text => $lang{calculate_maintenance},
+                    link => "equipments?action=plain_mntn") );
+
+  my $year = substr($tv{session_year},-2,2);
+
+  if (-e "$IG::htdocs_dir/$IG::default_lang{equipments}/$year/manu01.htm")
+   {
+    PrOut "<table border=1>";
+    for ('01'..'12')
+     {
+      PrOut "<td><a href=\"".
+			IG::GetHref('equipments',"$year/manu$_.htm").
+	    "\">" . $IG::months{$_}[0] . "</a></td>\n";
+     }
+    PrOut "</tr></table>\n";
+   }
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub Header 
+ {
+  HtmlHead( shortcuts => _short_cuts() );
+  TaskHead( title     => $lang{equipments_mng},
+            minwidth  => 600 );
+
+  HLayer(
+	 MkButton( text => $lang{new_equipment},
+	           link => "equipments?action=proto",
+                   privilege => CheckPrivilege("equipments_edit") ),
+
+         MkButton( text => $lang{delete_equipment},
+                   link => "equipments?action=delshow",
+                   privilege => CheckPrivilege("equipments_edit") ),
+
+         MkButton( text => $lang{planned_maintenance},
+                   link => "equipments?action=show_mntn" ),
+
+         MkButton( text => $lang{technical_datasheets},
+                   link => "equipments?action=datasheets" ),
+
+         MkButton( text => $lang{tickler},
+                   privilege => $IG::lang eq 'it',
+                   link => "tickler?action=findexec&amp;".
+                           "type=equipments&amp;".
+                           "date1=" . IG::GetDateByFormat(1,1,1999).
+                           "&amp;date2=" . IG::GetDateByFormat(31,12,2049) ),
+
+	 $page_selector
+	);
+ }
+
+#############################################################################
+#############################################################################
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }
+
+##########################################################################
+## Lang Item not used
+## $lang{documents_needed}

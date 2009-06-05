@@ -1,0 +1,674 @@
+#! /usr/bin/perl
+# Procedure: orders
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	proto		=> sub { CheckPrivilege('orders_edit') },
+		protoagg	=> sub { CheckPrivilege('orders_edit') },
+		protomodi	=> sub { CheckPrivilege('orders_edit') },
+		tipi		=> sub { CheckPrivilege('orders_view') },
+		ins		=> sub { CheckPrivilege('orders_alert')},
+		findshow	=> sub { CheckPrivilege('orders_view') },
+		findexec	=> sub { CheckPrivilege('orders_view') },
+		delshow		=> sub { CheckPrivilege('orders_edit') },
+		delexec		=> sub { CheckPrivilege('orders_edit') },
+		docview		=> sub { CheckPrivilege('orders_view') },
+		sign		=> sub { CheckPrivilege('orders_view') },
+		default_action	=> sub { CheckPrivilege('orders_view') });
+
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  my (	$query,
+	$alphabet_selector,
+	$page_selector ) = IG::MkProtocolList();
+
+  Header( $page_selector, $alphabet_selector );
+
+  my $base_link = "alphabet=$on{alphabet}&amp;".
+		  "view=$on{view}";
+
+  TaskListMenu
+   (
+	[ $lang{number},
+	  "order=id&amp;$base_link"],
+	[ $lang{vendor},
+	  "order=contactname&amp;$base_link"],
+	[ $lang{issue},
+	  "order=issue&amp;$base_link"],
+	[ $lang{due_date},
+	  "order=expire&amp;$base_link"],
+	[ $lang{delivery},
+	  "order=duedate&amp;$base_link"],
+	[ Img( src => "$IG::img_url/user.gif"),
+	  "action=tipi"],
+	[ $lang{request_reference},
+	  "order=note&amp;$base_link"],
+	[]
+   );
+
+  DbQuery( "SELECT orders.id, orders.issue, orders.docref, orders.contactname,".
+           " orders.note, orders.owner, orders.expire, orders.flag,".
+           " orders.duedate, orders.contactid, orders.npa, users.initial ".
+           "FROM orders ".
+           "LEFT JOIN users ON orders.owner=users.login ".
+           "WHERE $query" );
+
+  while ( my @row = FetchRow() )
+   {
+    $row[6] = CkDate($row[6]);
+    $row[6] = Blush($row[6]) if IG::CompareDate($row[6]) <= 0;
+    $row[8] = $lang{opened_order} if !CkDate($row[8]);
+
+    my $ima = $row[7] eq 'S' ? Img( src   => "$IG::img_url/green.gif",
+				    title => $lang{processed_order} )
+            : $row[7] eq 'Q' ? Img( src   => "$IG::img_url/orange.gif",
+				    title => $lang{in_process_order} )
+	    :		       Img( src   => "$IG::img_url/red.gif",
+			            title => $lang{unprocessed_order} );
+
+    TaskListItem
+     (
+	[ParseLink($row[0])],
+	[$row[3]],
+	[$row[1],
+	 '',
+	 'nowrap'],
+	[$row[6],
+	 '',
+	 'nowrap'],
+	[$row[8],
+	 '',
+	 'nowrap'],
+	[$row[11]],
+	[MkLink($row[4])],
+	[$ima,
+	 "orders?action=ins&amp;".
+	        "id=$row[0]&amp;".
+	        "status=$row[7]&amp;".
+	        "pos=$on{pos}"]
+     );
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub docview
+ {
+  ## Change id if user request next or previous ID
+  $on{id} = IG::SearchProtocolId( direction => $on{change_id_to},
+                                  id        => $on{id} ) if $on{change_id_to};
+
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'r' ) || return;
+
+  ## retriew document info
+  DbQuery("SELECT *, expire-current_date ".
+	  "FROM orders WHERE id='".DbQuote($on{id})."'");
+  my @row = FetchRow();
+
+  IG::Warn( $lang{Err_nodocument} ) && return if !$row[0];
+  
+  ## adjust some values
+  my $days_to_expire = $row[11] > 0 ? $row[11] : '0';
+  $row[2] = MkLink($row[2]);
+  $row[4] = MkLink($row[4]);
+  $row[6] = CkDate($row[6]);
+  $row[6] = Blush($row[6]) if $row[11]<1;
+  $row[8] = $lang{opened_order} if !CkDate($row[8]);
+  $row[7] = $row[7] eq 'S' ? $lang{processed_order}
+	  : $row[7] eq 'Q' ? $lang{in_process_order}
+	  :		     $lang{unprocessed_order};
+
+  ## renders the page
+  Header();
+
+  IG::ShowProtocolInfo
+   ( id     => $row[0],
+     title  => $lang{orders_protocol},
+     fields => [( [ $lang{contact_name},
+                    "<a href=\"contacts?".
+                    "action=showrecord&amp;".
+                    "contactid=$row[9]\">".
+                    "$row[9] $row[3]</a>" ],
+                  [ $lang{referring},
+                    IG::UsrInf('name',$row[5]) ],
+                  [ $lang{document_reference},
+                    $row[2] ],
+                  [ $lang{issue},
+                    $row[1] ],
+                  [ $lang{document_integrity},
+                    IG::CkSign( id=>$row[0], owner=>$row[5] ) ],
+                  [ $lang{due_date},
+                    $row[6] ],
+                  [ $lang{status},
+                    $row[7] ],
+                  [ $lang{delivery},
+                    $row[8] ],
+                  [ $lang{archive_position},
+                    $row[10] ],
+                  [ $lang{days_to_expire},
+                    $days_to_expire ],
+                  [ $lang{notes},
+                    $row[4] ],
+                )] );
+
+  ## Related Documents
+  IG::RelatedTo( $on{id}, $row[9] );
+
+  TaskFoot(	comments	=> 'yes',
+		commentid	=> $on{id},
+		commentbackurl	=> "action=docview&amp;id=$on{id}");
+  HtmlFoot();
+  LogD($row[3], 'view', 'orders', $on{id});
+ }
+
+##############################################################################
+##############################################################################
+sub sign
+ {
+  my $sign;
+  ## find owner
+  DbQuery("select owner from orders where id='".DbQuote($on{id})."'");
+  my $owner = FetchRow();
+
+  $sign = IG::Sign(     id     => $on{id},
+                        action => 'update') if $owner eq $auth_user;
+
+  LogD('sign', 'update', 'orders', $on{id}) if $sign;
+  docview();
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+  
+         TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
+
+         IG::LastDocuments().
+
+         TaskFoot();
+ }
+
+##############################################################################
+##############################################################################
+sub tipi
+ {
+  DbQuery("SELECT owner,count(*) ".
+	  "FROM orders ".
+	  "where issue>='$tv{start_year}' and issue <='$tv{end_year}' ".
+	  "group by owner");
+  Header();
+  TaskListMenu( [$lang{rif}], [''] );
+
+  while (my @row = FetchRow())
+   {
+    TaskListItem( [ IG::UsrInf('name',$row[0]) ],
+                  [ $row[1]                    ]
+		);
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub proto
+ {
+  ## Check document accessibility
+  my $doc_status = IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' );
+  return if ! $doc_status;
+
+  HtmlHead();
+  TaskHead( title     => $lang{orders_protocol},
+            minwidth  => 500 );
+
+  FormHead( cgiaction => 'protoagg',
+            labelstyle=> 'width:130px',
+            autofocus => 'false' );
+
+  Input(    type      => 'text',
+            readonly  => $doc_status == -1 ? 0 : 1,
+	    show      => $lang{protocol_number},
+            validate  => { pattern   => '^(9\d\d\d\d\d.\d\d)*$',
+                           onerror   => $lang{Err_protocol} },
+	    name      => 'id' );
+
+  Input(    type      => 'label',
+            show      => 'File',
+            data      => IG::InputDocBox
+                          ( dir => $IG::htdocs_dir . $IG::S .
+                                   $IG::default_lang{orders} . $IG::S .
+                                   $IG::default_lang{templates} . $IG::S)
+       ) if !$on{print};
+
+  Input(    type      => 'logins',
+            readonly  => $doc_status == -1 ? 0 : 1,
+	    show      => $lang{rif},
+	    name      => 'owner');
+
+  Input(    type      => 'sendmode');
+
+  Input(    type      => 'contactfinder',
+            validate  => { mandatory => 'true' },
+	    extraselection => 1,
+	    show      => $lang{vendor});
+
+  Input(    type      => 'text',
+	    name      => 'docref',
+	    size      => 15,
+	    maxlen    => 15,
+            show      => $lang{order_reference});
+
+  Input(    type      => 'date',
+	    name      => 'issue',
+            validate  => { onerror   => $lang{Err_issue},
+                           mandatory => 'true' },
+	    value     => $tv{today},
+	    show      => $lang{issue});
+
+  Input(    type      => 'date',
+            validate  => { onerror   => $lang{Err_delivery},
+                           mandatory => 'false' },
+	    name      => 'duedate',
+	    show      => $lang{delivery});
+
+  Input(    type      => 'date',
+            validate  => { onerror   => $lang{Err_due_date},
+                           mandatory => 'true' },
+	    name      => 'expire',
+	    value     => $tv{end_year},
+	    show      => $lang{due_date});
+
+  Input(    name      => 'npa',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 50,
+            show      => $lang{archive_position});
+
+  Input(    type      => 'textarea',
+	    show      => $lang{request_reference},
+            style     => 'width:350px; height:60px;',
+	    name      => 'note');
+
+  Input(    type      => 'submit',
+	    name      => 'submit',
+            style     => 'margin-top:15px',
+	    show      => $lang{save});
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ { 
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  ## Validate Form values
+  push @IG::errmsg, IG::FormValidate(); 
+  proto() && return if @IG::errmsg;
+ 
+  ## insert into db
+  $on{id} ||= IG::MkLastNum('orders');
+
+  DbWrite( table            => 'orders',
+           action           => 'insert',
+           overwrite_clause => "id = '" . DbQuote($on{id}) . "'",
+           values           => [ $on{id},
+                                 $on{issue},
+                                 $on{docref},
+                                 $on{contactname},
+                                 $on{note},
+                                 $on{owner},
+                                 $on{expire},
+                                 'N',
+                                 $on{duedate},
+                                 $on{contactid},
+                                 $on{npa} ]
+         );
+
+  LogD('', 'insert', 'order', $on{id});
+
+  IG::BuildDoc();
+ }
+
+############################################################################
+############################################################################
+sub protomodi
+ {
+  DbQuery("SELECT * FROM orders where id='".DbQuote($on{id})."'");
+    (
+	$on{id},
+	$on{issue},
+	$on{docref},
+	$on{contactname},
+	$on{note},
+	$on{owner},
+	$on{expire},
+	$on{flag},
+	$on{duedate},
+	$on{contactid},
+	$on{npa}	) = FetchRow();
+
+  proto();
+ }
+
+#############################################################################
+#############################################################################
+sub ins
+ {
+  if    ($on{status} eq 'N')	{ $on{status}='Q' }
+  elsif ($on{status} eq 'Q')	{ $on{status}='S' }
+  else				{ $on{status}='N' }
+
+  QuoteParams();
+  DbQuery("update orders set flag = '$in{status}' where id='$in{id}'");
+
+  LogD("set flag status Flag=$on{status}", 'update', 'orders', $on{id});
+  IG::Redirect("orders?pos=$on{pos}");  
+ }
+
+#############################################################################
+#############################################################################
+sub delshow
+ {
+  Header();
+  TaskMsg( $lang{warn_before_delete}.Br(2).
+  
+	   FormHead( cgiaction => 'delexec',
+		     float     => 'left',
+		     onsubmit  => IG::JsConfirm( $lang{are_you_sure} ) ).
+
+	   Input(    type      => 'select',
+		     name      => 'id',
+		     style     => 'width: 350px',
+		     zerovalue => 'true',
+		     data      => "select id, id, contactname from orders ".
+			          "where issue>='$tv{start_year}'".
+			          " and issue<='$tv{end_year}' ".
+			          "order by id desc",
+		     show      => $lang{protocol_number}).
+
+	   Input(    type      => 'submit',
+		     show      => $lang{delete}).
+
+	   FormFoot()
+	   ,2);
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub delexec
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  DbQuery("delete from orders where id='".DbQuote($on{id})."'");
+  IG::TrashDoc($on{id});
+
+  LogD('', 'delete', 'orders', $on{id});
+  IG::Redirect("orders");
+ }
+
+#############################################################################
+#############################################################################
+sub findshow
+ {  
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer
+     ( bottom_space => 0,
+       right_layers
+        =>[(
+	    FormHead( name      => 'findnavi',
+		      method    => 'get',
+		      target    => 'mainf',
+		      cgiaction => 'findexec',
+		      autofocus => 'false',
+                      labelstyle=> 'border:0px; width:auto;',
+		      float     => 'left' ),
+
+	    Input(    type      => 'findable' ),
+
+	    Input(    type      => 'select',
+		      name      => 'method',
+		      data      =>[(['from',	 $lang{with_header}],
+				    ['id',	 $lang{with_protocol}],
+				    ['date', 	 $lang{with_date}],
+				    ['npa', 	 $lang{with_npa}],
+				    ['notes',    $lang{with_notes}])]),
+
+	    Input(    type      => 'text',
+		      name      => 'keytofind',
+                      focus     => 'true',
+                      value     => $IG::cookie{lastsearch},
+                      style     => 'width:100px; margin-right: -5px;',
+		      onblur    => "document.cookie='lastsearch=' + escape(this.value)"),
+
+	    Input(    type      => 'image',
+		      name      => $lang{find},
+		      src       => "$IG::img_url/${IG::tema}search.gif",
+		      alt       => $lang{find}),
+		      
+	    FormFoot()
+	  )]
+	 );
+   }
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub findexec
+ {
+  my $query;
+  my $counter = 0;
+
+  if ( $on{ajax_request} )
+   {
+    HttpHead( expires => '+30s' );
+
+    TaskMsg( Input( type      => 'button',
+                    float     => 'right',
+                    onclick   => "document.location = '".
+                                  "orders?".
+                                        "action=proto&amp;".
+                                        "contactid=$on{contactid}&amp;".
+                                        "backtoreferer=1';",
+                    show      => $lang{new_item},
+                    fieldstyle=> 'margin:0px',
+                    style     =>'margin:0px;font-size:10px; height:15px' ).
+
+	     Img(   src       => "$IG::img_url/mime_mini_order.png",
+                    style     => 'margin-right:2px',
+                    align     => 'absmiddle').
+
+             "<a href=\"orders\">$lang{orders}</a>"
+            ,7);
+   }
+  else
+   {
+    $IG::set_cookie{lastsearch} = $on{keytofind};
+    HtmlHead( shortcuts => _short_cuts());
+
+    TaskHead( title     => $lang{orders_protocol},
+              width     => '100%' );
+    HLayer(
+           MkButton( text => $lang{back_to_protocol},
+                     link => 'orders' ),
+
+           MkButton( text => $lang{new_protocol},
+                     link => "orders?action=proto" ),
+          );
+
+    TaskMsg("$lang{orders} - ".
+            "$lang{find}: <strong>$on{keytofind}</strong>", 4);
+   }
+
+  ## Build query
+  QuoteParams();
+  if ( $on{ajax_request} )
+   { $query = "orders.contactid = '$on{contactid}'"; }
+  elsif (length($on{keytofind}) < 2 )
+   {
+    $query = '1=0';
+    push @IG::errmsg, $lang{Err_find};
+   }
+  elsif ($on{method} eq 'id' || $on{keytofind} =~ /9\d\d\d\d\d\.\d\d/)
+   { $query = "orders.id ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'from')
+   { $query = "orders.contactname ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'npa')
+   { $query = "orders.npa ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'date')
+   {
+    $in{keytofind} = CkDate($on{keytofind});
+    $query = "orders.issue = '$in{keytofind}'";
+   }
+  elsif ($on{method} eq 'notes')
+   { $query = "orders.note ~* '$in{keytofind}'"; }
+
+  TaskListMenu (
+	[$lang{number}],
+	[$on{ajax_request} ? '' : $lang{vendor}],
+	[$lang{issue}],
+	[$lang{due_date}],
+	[$lang{delivery}],
+	[$lang{rif}],
+	[$lang{request_reference}],
+	[]
+		);
+
+  DbQuery( "SELECT orders.id, orders.issue, orders.docref, orders.contactname,".
+           " orders.note, orders.owner, orders.expire, orders.flag,".
+           " orders.duedate, orders.contactid, orders.npa,".
+           " orders.expire-current_date, users.initial ".
+           "FROM orders ".
+           "LEFT JOIN users ON orders.owner=users.login ".
+           "WHERE $query ".
+           "ORDER BY orders.issue desc, orders.id desc" );
+
+  while ( my @row = FetchRow() )
+    {
+     ++$counter;
+
+     $row[6] = CkDate($row[6]);
+     $row[6] = Blush($row[6]) if $row[11]<1;
+     $row[8] = $lang{opened_order} if !CkDate($row[8]); 
+
+     my $ima = $row[7] eq 'S' ? Img(	src=>"$IG::img_url/green.gif",
+					title=>$lang{processed_order} )
+             : $row[7] eq 'Q' ? Img(	src=>"$IG::img_url/orange.gif",
+               				title=>$lang{in_process_order} )
+             :                  Img(	src=>"$IG::img_url/red.gif",
+					title=>$lang{unprocessed_order} );
+
+      TaskListItem (
+	[ParseLink($row[0])],
+	[$on{ajax_request} ? '' : $row[3] ],
+	[$row[1]],
+	[$row[6],
+	 '',
+	 'nowrap'],
+	[$row[8],
+	 '',
+	 'nowrap'],
+	[$row[12]],
+	[MkLink($row[4])],
+	[$ima,
+	 "orders?action=ins&amp;".
+	        "id=$row[0]&amp;".
+	        "status=$row[7]&amp;".
+	        "pos=$on{pos}" ],
+	     );
+    }
+
+  if ( $on{ajax_request} )
+   {
+    TaskListFoot(7);
+   }
+  else
+   {
+    push @IG::errmsg, $lang{no_items} if !$counter && length($on{keytofind}) >1;
+    TaskListFoot();
+    TaskFoot();
+    HtmlFoot();
+    LogD( $IG::query_string, 'search', 'search_orders', undef);
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub Header 
+ {
+  my ( $page_selector, $alphabet_selector ) = @_;
+
+  HtmlHead( shortcuts => _short_cuts());
+  TaskHead( title     => $lang{orders_protocol},
+	    width     => '100%' );
+
+  HLayer(
+	 MkButton( text => $lang{back_to_list},
+	           link => 'orders',
+	           privilege => $on{action} eq 'docview'),
+
+         MkButton( text => $lang{new_protocol},
+                   link => 'orders?action=proto'),
+                   
+         MkButton( text => $lang{delete},
+                   link => 'orders?action=delshow'),
+
+         MkButton( text => $lang{reports},
+                   link => 'reports?table=orders',
+                   privilege => CheckPrivilege('orders_report') ),
+
+         MkButton( text => $lang{model_mng},
+                   link => 'docmaker?category=orders',
+                   privilege => CheckPrivilege('orders_template') ),
+
+         $page_selector
+        ) if !$on{print};
+
+  PrOut $alphabet_selector;
+ }
+
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }

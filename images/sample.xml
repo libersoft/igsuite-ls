@@ -1,0 +1,46 @@
+<chart>
+   <chart_type>bar</chart_type>
+<chart_data>
+  <row>
+         <null/>
+         <string>In fase di accettazione</string>
+         <string>2002</string>
+         <string>2003</string>
+         <string>2004</string>
+         <string>2001</string>
+         <string>2002</string>
+         <string>2003</string>
+         <string>2003</string>
+         <string>2004</string>
+         <string>2004</string>
+  </row>
+  <row>
+         <string>Region A</string>
+         <number>5</number>
+         <number>30</number>
+         <number>63</number>
+         <number>10</number>
+         <number>30</number>
+         <number>63</number>
+         <number>5</number>
+         <number>10</number>
+         <number>30</number>
+         <number>63</number>
+  </row>
+</chart_data>
+
+<chart_rect    x='120'
+               y='3'
+               width='120'
+               height='160'
+               positive_color='FFFFFF'
+               negative_color='FFFFFF'
+               positive_alpha='75'
+               negative_alpha='25'
+               />
+
+<legend_rect	x='500'
+                y='500'
+		/>
+
+</chart>

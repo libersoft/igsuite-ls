@@ -1,0 +1,788 @@
+#! /usr/bin/perl
+# Procedure: docmaker
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+## Set a right privilege name from category
+my $act = $on{category} eq 'email_msgs'
+          ? "webmail_template"
+          : "$on{category}_template";
+
+IG::DTable ( build_template     => sub { CheckPrivilege($act)},
+	     delexec	        => sub { CheckPrivilege($act)},
+	     import	        => sub { CheckPrivilege($act)},
+	     importagg	        => sub { CheckPrivilege($act)},
+	     proto	        => sub { CheckPrivilege($act)},
+	     view_html_template => sub { CheckPrivilege($act)},
+	     edit_html_template => sub { CheckPrivilege($act)},
+	     save_html_template => sub { CheckPrivilege($act)},
+	     edit_html_doc      => sub { CheckPrivilege() },
+	     save_html_doc      => sub { CheckPrivilege() },
+	     legend	        => sub { CheckPrivilege() },
+	     reparse	        => sub { CheckPrivilege() },
+	     default_action     => sub { CheckPrivilege() }
+	   );
+
+##############################################################################
+##############################################################################
+sub default_action
+ {
+  my $counter;
+  $on{category} ||= 'letters';
+  my $templatedir = $IG::htdocs_dir . ${S} .
+		    $IG::default_lang{$on{category}} . ${S} .
+		    $IG::default_lang{templates};
+
+  HtmlHead( shortcuts => _short_cuts() );
+  TaskHead( title     => "$lang{model_mng} - ".
+		         ucfirst( $IG::default_lang{$on{category}} ),
+	    minwidth  => 600 );
+
+  HLayer(
+         MkButton( text => $lang{new_template},
+                   link => "javascript:winPopUp('docmaker?action=proto&amp;".
+                           "category=$on{category}',400,200);" ),
+
+         MkButton( text => $lang{import_template},
+                   link => "javascript:winPopUp('docmaker?action=import&amp;".
+                           "category=$on{category}',400,220);" ),
+
+         MkButton( text => $lang{table_vars},
+                   link => "javascript:winPopUp('docmaker?".
+                           "action=legend',360,430);" ),
+
+         MkButton( text => $lang{new_protocol},
+                   privilege => $on{category} ne 'email_msgs',
+                   link => "$on{category}?action=proto")
+        );
+
+
+  ## show templates list
+  opendir (DIR, $templatedir)
+    or die("Can't open directory '$templatedir'.\n");
+  my @template_files = sort grep /\w+\.(html*|odt)$/, readdir DIR;
+  close(DIR);
+
+  TaskListMenu( [], [$lang{template_name}], []);
+
+  foreach ( @template_files )
+   {
+    my $escapedname = MkUrl($_);
+    my $template_href = IG::GetHref( $on{category},
+                                     "$IG::default_lang{templates}/$_" ).
+                        '" target="_blank';
+    
+    TaskListItem
+     (
+      [++$counter, $template_href],
+      [$_, $template_href],
+      [( $IG::plugin_conf{fckeditor}{webpath}
+         ? Img( src  => "$IG::img_url/edit.gif",
+                title=> $lang{edit},
+                width=> 16,
+                href => $_ =~ /\.odt$/
+                      ? $template_href
+                      : "docmaker?".
+                        "action=edit_html_template&amp;".
+                        "category=$on{category}&amp;".
+                        "templatename=$escapedname" )
+         : '').
+       Img( src     => "$IG::img_url/delete.gif",
+	    title   => $lang{delete_template},
+            width   => 16,
+            href    => "docmaker?".
+                       "action=delexec&amp;".
+		       "category=$on{category}&amp;".
+		       "templatename=$escapedname",
+	    onclick => IG::JsConfirm( $lang{are_you_sure} ) )],
+     );
+   }
+
+  TaskListFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub view_html_template
+ {
+  ## only html templates
+  my $filename = $IG::htdocs_dir                  . ${S} .
+                 $IG::default_lang{$on{category}} . ${S} .
+                 $IG::default_lang{templates}     . ${S} .
+                 $on{templatename};
+
+  ## print out the document
+  open (DAT, '<', $filename) or die("Can't read from '$filename'.\n");
+  binmode(DAT);
+  my $_temp_html = do { local $/; <DAT> };
+  close(DAT);
+
+  PrOut IG::DocHead(     type     => 'text/html',
+                         expires  => 'now' ).
+        IG::TextConvert( fromcode => 'auto',
+                         tocode   => $IG::lang_charset,
+                         text     => $_temp_html );
+ }
+
+#############################################################################
+#############################################################################
+sub edit_html_template
+ {
+  ## only html templates
+  my $template_content;
+  my $filename = $IG::htdocs_dir . ${S} .
+                 $IG::default_lang{$on{category}} . ${S} .
+                 $IG::default_lang{templates} . ${S} .
+                 $on{templatename};
+
+  ## read the document
+  open (DAT, '<', $filename) or die("Can't read from '$filename'.\n");
+  binmode(DAT);
+  $template_content .= $_ while <DAT>;
+  close(DAT);
+
+  HtmlHead( shortcuts => _show_legend_fields() );
+
+  TaskHead( title     => 'IGDocMaker',
+            width     => '100%');
+
+  FormHead( cgiaction => 'save_html_template',
+            labelstyle=> 'width: 140px');
+		
+  Input( type    => 'hidden',
+         name    => 'templatename');
+
+  Input( type    => 'hidden',
+         name    => 'category');
+
+  Input( type    => 'textarea',
+         name    => 'contents',
+         value   => $template_content,
+         style   => 'width:100%; height:420px;',
+         toolbar => 'IGExtended',
+         fckeditor_width  => '100%',
+         fieldstyle       => 'width:100%',
+         fckeditor_height => 420,
+         fckeditor        => 'active');
+
+  Input( type    => 'submit',
+         value   => $lang{update_document} );
+
+  Input( type    => 'button',
+         onclick => "document.location = 'docmaker?category=$on{category}';",
+         float   => 'left',
+         value   => $lang{cancel});
+
+  FormFoot();
+  TaskFoot();  
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub save_html_template
+ {
+  my $template_content;
+  my $filename = $IG::htdocs_dir . ${S} .
+                 $IG::default_lang{$on{category}} . ${S} .
+                 $IG::default_lang{templates} . ${S} .
+                 $on{templatename};
+
+  ## write the document
+  my $lck = AutoReleasedLock->new( resource => $filename );
+  open (DAT, '>', $filename) or die("Can't write on '$filename'.\n");
+  binmode(DAT);
+  print DAT $on{contents};
+  close(DAT);
+  chmod 0644, $filename;
+  
+  IG::Redirect("docmaker?category=$on{category}");
+ }
+
+#############################################################################
+#############################################################################
+sub edit_html_doc
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  ## retireve document info
+  my ($filename, $filedir, $fileproc) = IG::ProtocolToFile( $on{id} );
+  my $file_path = "$filedir${S}$filename";
+
+  ## read document content
+  my $document_content;
+  open (DAT, '<', $file_path)
+    or die("Can't read from '$file_path'.\n");
+  binmode(DAT);
+  $document_content .= $_ while <DAT>;
+  close(DAT);
+
+  HtmlHead( shortcuts => _show_legend_fields() );
+
+  TaskHead( title => "IGDocMaker - $lang{$fileproc} $on{id}",
+            width => '100%');
+
+  FormHead( cgiaction  => 'save_html_doc',
+            labelstyle => 'width: 140px');
+		
+  Input( type       => 'hidden',
+         name       => 'id');
+
+  Input( type       => 'textarea',
+         name       => 'contents',
+         value      => $document_content,
+         style      => 'width:100%; height:420px;',
+         toolbar    => 'IGExtended',
+         fckeditor_width  => '100%',
+         fieldstyle       => 'width:100%',
+         fckeditor_height => 420,
+         fckeditor        => 'active');
+
+  Input( type       => 'submit',
+         value      => $lang{update_document} );
+
+  Input( type       => 'button',
+         onclick    => "document.location = '$fileproc?action=docview&amp;id=$on{id}';",
+         float      => 'left',
+         value      => $lang{cancel});
+
+  FormFoot();
+  TaskFoot();  
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub save_html_doc
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  ## retireve document info
+  my ($filename, $filedir, $fileproc) = IG::ProtocolToFile( $on{id} );
+  my $file_path = "$filedir${S}$filename";
+
+  ## write the document
+  my $lck = AutoReleasedLock->new( resource => $file_path );
+  open (DAT, '>', $file_path) or die("Can't write on '$file_path'.\n");
+  binmode(DAT);
+  print DAT $on{contents};
+  close(DAT);
+  chmod 0644, $file_path;
+  
+  IG::Redirect("$fileproc?action=docview&amp;id=$on{id}");
+ }
+ 
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return TaskHead(	title=>$lang{new_template},
+			icon=>2,
+			width=>180).
+
+         FormHead(	cgiaction=>'build_template',
+	  	        method=>'post').
+
+         $lang{template_name}.
+
+	 Input (	type=>'text',
+			style=>'width:167px',
+			maxlen=>40,
+			name=>'templatename').
+
+         Input (	type=>'radio',
+                        show=>'Html',
+                        value=>'html',
+                        float=>'left',
+                        labelstyle=>'font-size:10px; width:auto; '.
+                                    'background:transparent; border:0px',
+                        name=>'template_format').
+
+         Input (	type=>'radio',
+                        value=>'odt',
+                        float=>'left',
+                        labelstyle=>'font-size:10px; width:auto; '.
+                                    'background:transparent; border:0px',
+                        show=>'Odt',
+                        name=>'template_format').
+
+         Input (	type=>'submit',
+                        float=>'right',
+			style=>'width:50px; font-size:10px',
+			value=>$lang{build}).
+
+	 Input (	type=>'hidden',
+			name=>'category').
+			
+         FormFoot().
+	 TaskFoot().
+
+         "<div style=\"line-height:5px\"><br></div>".
+
+         TaskHead( title=>$lang{last_documents},
+                   icon=>2,
+                   width=>180 ).
+
+         IG::LastDocuments().
+         TaskFoot();
+ }
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  HtmlHead();
+  TaskHead( title => "$lang{new_template} - ".
+		     ucfirst( $IG::default_lang{$on{category}} ),
+            icon  => 1,
+	    width => 350);
+
+  FormHead(	cgiaction=>'build_template',
+                onsubmit=>"setTimeout('self.close()',500);",
+                target=>'mainf',
+		method=>'post');
+  TaskMsg (
+		Input (	type=>'text',
+		        show=>$lang{template_name},
+			style=>'width:180px',
+			maxlen=>40,
+			name=>'templatename').
+
+                Input (	type=>'label',
+                        show=>$lang{template_format},
+                        data=> Input( type=>'radio',
+                                      show=>'Html',
+                                      value=>'html',
+                                      float=>'left',
+                                      labelstyle=>'width:auto; '.
+                                                  'background:transparent; '.
+                                                  'border:0px',
+                                      name=>'template_format').
+              
+                               Input( type=>'radio',
+                                      value=>'odt',
+                                      float=>'left',
+                                      labelstyle=>'width:auto; '.
+                                                  'background:transparent; '.
+                                                  'border:0px',
+                                      show=>'Odt',
+                                      name=>'template_format')).
+
+		Input (	type=>'submit',
+			style=>'margin:15px 0px 5px 5px;',
+			value=>$lang{build}).
+
+		Input (	type=>'hidden',
+			name=>'category'), 7);
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+##############################################################################
+##############################################################################
+sub import
+ {
+  HtmlHead();
+  TaskHead( title => "$lang{import_template} - ".
+		     ucfirst( $IG::default_lang{$on{category}} ),
+            icon  => 1,
+	    width => 370);
+
+  FormHead(	cgiaction => 'importagg',
+                onsubmit  => "setTimeout('self.close()',500);",
+                enctype   => 'multipart/form-data',
+                target    => 'mainf',
+		method    => 'post');
+
+  TaskMsg(      Input (	type=>'text',
+		        show=>$lang{template_name},
+			maxlen=>40,
+                        style=>'width:200px',
+			name=>'templatename').
+
+                Input (	type=>'file',
+                        name=>'upfile',
+                        style=>'width:200px',
+                        show=>$lang{import_filename} ).
+
+		Input (	type=>'submit',
+			style=>'margin:15px 0px 5px 5px;',
+			value=>$lang{import_template}).
+
+		Input (	type=>'hidden',
+			name=>'category'), 7);
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub importagg
+ {
+  if ($on{upfile})
+   {
+    my $template_dir = $IG::htdocs_dir . ${S}.
+                       $IG::default_lang{$on{category}} . ${S}.
+                       $IG::default_lang{templates} . ${S};
+
+    push @IG::errmsg,
+         IG::FileUpload( param_name    => 'upfile',
+			 target_dir    => $template_dir,
+			 target_file   => $on{templatename},
+			 allow_pattern => '\.(odt|html*)$',
+			 can_overwrite => 1
+                       );
+                       
+    chmod 0664, "$template_dir$on{templatename}";
+   }
+
+  LogD( "Import template $on{templatename}",
+        'import',
+        $on{category} );
+
+  default_action();
+ }
+
+##############################################################################
+##############################################################################
+sub legend
+ {
+  HtmlHead();
+
+  _show_legend_fields();
+
+  HtmlFoot();
+ }
+
+##############################################################################
+##############################################################################
+sub _show_legend_fields
+ {
+  my $html = TaskHead( title=>$lang{fields_legend},
+                       icon=>1).
+             ( $on{action} ne 'legend'
+               ? "<div style=\"padding:0px; border:2px solid $IG::clr{border_low};".
+                 "overflow:auto; width:180px; height:450px\">"
+               : "").
+             TaskListMenu (['Label'],['Value']);
+
+  for (qw( logo		contactid	contactname	email
+           address	city		zip		prov
+  	   header1	header2		header3		sendmode
+     	   tel		fax		docid		docowner
+  	   docissue	docexpire	startyear	endyear
+  	   today	function	priceshtable  	pricesvtable
+  	   employer ) )
+   {
+    $html .= TaskListItem( [$_, '', 'style="font-size:10px"' ],
+                           [$lang{"field_$_"}, '', 'style="font-size:10px"']);
+   }
+
+  $html .= TaskListFoot().
+           ( $on{action} ne 'legend' ? '</div>' : '').
+           TaskFoot();
+  
+  defined wantarray ? return $html : PrOut $html;
+ }
+
+##############################################################################
+##############################################################################
+sub build_template
+ {
+  ## strip extension from template name
+  $on{templatename} =~ s/^(.+)\.(htm|odt)$/$1/;
+
+  if (!$on{templatename} || $on{templatename}=~ /[^\w\d\_\s\']/g )
+   {
+    push @IG::errmsg, $lang{Err_template_name};
+    default_action();
+    return;
+   }
+
+  ## set a template document file name
+  my $template_file = $IG::htdocs_dir . ${S}.
+                      $IG::default_lang{$on{category}} . ${S}.
+                      $IG::default_lang{templates} . ${S}.
+                      $on{templatename}.
+                      ( $on{template_format} eq 'odt' ? '.odt' : '.htm' );
+
+  if ( $on{template_format} eq 'odt' )
+   {
+    ## copy a odt document template from an existing one
+    IG::FileCopy( "$IG::htdocs_dir${S}images${S}document_template.odt" ,
+                  $template_file );
+   }
+  else
+   {
+    if ( -e "$IG::htdocs${S}images${S}document_template.htm" )
+     {
+      ## copy the html document template directly from an existing one
+      IG::FileCopy( "$IG::htdocs_dir${S}images${S}document_template.htm" ,
+                    $template_file );
+     }
+    else
+     {
+      ## build a standard html document template
+      my $lck = AutoReleasedLock->new( resource => $template_file );
+
+      open (FH, '>', $template_file)
+        or die("Can't write to '$template_file' check permissions.\n");
+      binmode(FH);
+
+      print FH <<END;
+<html>
+<head>
+ <meta http-equiv="Content-Type" content="text/html; charset=$IG::lang_charset">
+ <title>{document_title}</title>
+ <STYLE>
+   <!--
+	\@page { size: 21cm 29.7cm; margin-left: 1.5cm; margin-right: 1.5cm; margin-top: 1.5cm; margin-bottom: 1.06cm }
+   -->
+ </STYLE>
+</head>
+<body bgcolor="#FFFFFF" style="width:21cm;">
+%%logo%%<br>
+<table BORDER=0 COLS=2 WIDTH="100%">
+<tr><td VALIGN=TOP><font size=-1>
+$IG::soc_address<br>
+$IG::soc_cap $IG::soc_city $IG::soc_prov <br>
+Tel $IG::soc_tel Fax $IG::soc_fax<br>
+E-mail: $IG::soc_email </font><br>
+</td>
+
+<td ALIGN=LEFT VALIGN=TOP NOWRAP><br><b>Spett.</b>
+<br><b>%%contactname%%</b>
+<br><b>%%address%%</b>
+<br><b>%%zip%% %%city%% %%prov%%</b></td>
+</tr>
+
+<tr>
+<td><br><b>$lang{from}: %%docowner%%</b></td>
+<td><br><b>$lang{to}: %%subcontactname%%</b></td>
+</tr>
+
+<tr>
+<td valign=bottom><br>%%sendmode%%</td>
+
+<td ALIGN=LEFT VALIGN=BOTTOM><b><u><font size=+1>$lang{rif} %%docid%%</font></u></b></td>
+</tr>
+</table>
+
+<br><br><br>
+<table BORDER CELLSPACING=0 COLS=1 WIDTH="100%" >
+<tr>
+<td><b>$lang{subject}: %%subject%%</b></td>
+</tr>
+</table>
+
+<br><br><br>
+<p>$lang{regards}
+<p>$IG::soc_city, %%docissue%%
+<br><br>
+<table BORDER=0 COLS=2 WIDTH="100%" >
+<tr>
+<td></td>
+
+<td><b>$IG::soc_name </b>
+<br><b>%%function%%</b></td>
+</tr>
+</table>
+</body></html>
+END
+      close (FH);
+      chmod 0644, $template_file;
+     }
+   }
+
+  LogD( "Create template $on{template_format}: $on{templatename}",
+        'insert',
+        $on{category} );
+
+  IG::Redirect("docmaker?category=$on{category}");
+ }
+
+#############################################################################
+#############################################################################
+sub delexec
+ {
+  IG::FileCopy( $IG::htdocs_dir . ${S}.
+                $IG::default_lang{$on{category}} . ${S}.
+                $IG::default_lang{templates} . ${S}.
+                $on{templatename},
+                
+		$IG::htdocs_dir . ${S}.
+		$IG::default_lang{basket} . ${S}.
+		$on{templatename},
+		
+		1 );
+
+  LogD( "Delete template: $on{templatename}", 'delete', $on{category});
+
+  IG::Redirect("docmaker?category=$on{category}");
+ }
+
+#############################################################################
+#############################################################################
+sub reparse
+ {
+  #XXX2FIX all text inserted should be encoded with the same document encoding.
+  require IG::Utils;
+  my ( $parsed_document, @unresolved );
+
+  $on{id} ||= $on{docid}; 
+
+  my ( $file_name,
+       $file_dir,
+       $file_proc ) = IG::ProtocolToFile( $on{docid} );
+
+  ## Check if user can edit this document types
+  if ( ! CheckPrivilege($file_proc . '_edit') )
+   {
+    IG::Warn( $lang{Err_privileges} );
+    return;
+   }
+
+  die("Nothinkg to reparse!\n") if !$file_name;
+
+  my $file_path   = $file_dir . $S . $file_name;
+  my $file_format = $file_name =~ /\.odt$/ ? 'odt' : 'htm';
+
+  ## Lock the document
+  my $lck = AutoReleasedLock->new( resource => $file_path );
+
+  if ( $file_format eq 'htm' )
+   {
+    ## read the template document
+    my $unparsed_document;
+    open (DAT, '<', $file_path)
+      or die("Can't read from document '$file_path'.\n");
+    binmode(DAT);
+    $unparsed_document .= $_ while <DAT>;
+    close(DAT);
+
+    ## parse the document
+    ( $parsed_document,
+      @unresolved ) = IG::ParseText( $unparsed_document );
+
+    ## overwrite document
+    open (DAT, '>', $file_path)
+      or die("Can't write to document '$file_path'.\n");
+    binmode(DAT);
+    print DAT $parsed_document;
+    close (DAT);
+   }
+  else
+   {
+    ## Parse as ODT file
+    no strict 'subs';
+    eval( "require Archive::Zip;" );
+    die("You have to install Archive::Zip module to parse ODT files!\n") if $@;
+
+    my $zip = new Archive::Zip;
+    die("Cannot open '$file_path'.\n")
+      if $zip->read($file_path) != Archive::Zip::AZ_OK;
+
+    ## parse xml text content
+    my $member   = $zip->removeMember('content.xml');
+    my $xml_text = $member->contents();
+    ($parsed_document, @unresolved) = IG::ParseText( $xml_text );
+    $zip->addString($parsed_document, 'content.xml');
+
+    unless ( $zip->overwrite() == Archive::Zip::AZ_OK )
+     { die( "Can't overwrite on '$file_path'.\n" ); }    
+   }
+
+  if (!@unresolved)
+   {
+    IG::Redirect("$on{backto}?action=docview&amp;id=$on{docid}");
+   }
+  else
+   {
+    ## Ask for unresolved fields
+    HtmlHead();
+    TaskHead( title    => 'IGDocMaker',
+              minwidth => 500);
+              
+    TaskMsg($lang{Err_incomplete_parsing},4);
+
+    FormHead(	cgiaction=>'reparse',
+		labelstyle=>'width: 140px');
+
+    Input (	type=>'hidden',
+		name=>'backto');
+
+    Input (	type=>'hidden',
+		name=>'docid');
+    Br();
+
+    for ( @unresolved )
+     {
+      my $label = ucfirst($_);
+         $label =~ s/\_/ /g;
+
+      Input (	type=>'textarea',
+		name=>'igsuite_' . lc($_),
+		show=>$label,
+		style=>'width:350px; height:20px;' );
+     }
+    Br(2);
+
+    Input (type=>'submit',
+	   value=>$lang{process} );
+
+    FormFoot();
+    FormHead( 	formaction=>$on{backto},
+		cgiaction=>'docview');
+    Input (	type=>'hidden',
+		name=>'id');
+    Input (	type=>'submit',
+		float=>'left',
+		value=>$lang{cancel});
+    FormFoot();
+    TaskFoot();  
+    HtmlFoot();
+   }
+ }
+
+#############################################################################
+#############################################################################
+# Needed by langtool
+# $lang{field_logo}	 $lang{field_contactid}		$lang{field_contactname}
+# $lang{field_email} 	 $lang{field_address}		$lang{field_city}
+# $lang{field_zip}	 $lang{field_prov}		$lang{field_header1}
+# $lang{field_header2}	 $lang{field_header3}		$lang{field_sendmode}
+# $lang{field_tel}	 $lang{field_fax}		$lang{field_docid}
+# $lang{field_docowner}	 $lang{field_docissue}		$lang{field_docexpire}
+# $lang{field_startyear} $lang{field_endyear}		$lang{field_today}
+# $lang{field_function}	 $lang{field_priceshtable}	$lang{field_pricesvtable}
+# $lang{field_employer}
+
+1;
+

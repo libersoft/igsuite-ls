@@ -1,0 +1,1406 @@
+#! /usr/bin/perl
+# Procedure: users
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	proto		=> sub {    CheckPrivilege('sys_user_admin')
+					 || CheckPrivilege('users_new') },
+		protomodi	=> sub {    CheckPrivilege('sys_user_admin')
+					 || CheckPrivilege('users_edit') },
+		protoagg	=> sub {    CheckPrivilege('sys_user_admin')
+					 || CheckPrivilege('users_edit') },
+		privileges	=> sub { CheckPrivilege('sys_user_admin') },
+		privilegesagg	=> sub { CheckPrivilege('sys_user_admin') },
+		mkcard		=> sub { CheckPrivilege('users_view') },
+		hierarchy	=> sub { CheckPrivilege('users_view') },
+		delshow		=> sub { CheckPrivilege('sys_user_admin') },
+		delexec		=> sub { CheckPrivilege('sys_user_admin') },
+                exp2contacts    => sub { CheckPrivilege('contacts_edit') },
+                exp2contactsagg => sub { CheckPrivilege('contacts_edit') },
+		default_action	=> sub {    CheckPrivilege('sys_user_admin')
+					 || CheckPrivilege('users_view') } );
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+         TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
+         IG::LastDocuments().
+         TaskFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub hierarchy
+ {
+  my (%personnel, %elemento, $cnt_users, $fontsz);
+
+  ## Who is not a boss?
+  my @row;
+  DbQuery("select hierarchycode, hierarchyref from users ".
+	  "where hierarchycode<>'' and status<>'2'");
+  $personnel{$row[1]}++ while @row = FetchRow();
+
+  ## Who is the boss, from who are we starting?
+  if (!$on{theboss})
+   {
+    DbQuery("select userid from users ".
+	    "where hierarchycode<>'' and hierarchyref='' and status<>'2'");
+    ($on{theboss})= FetchRow();
+   }
+
+  ## It's no possible to show hierarchy without a boss
+  if (!$on{theboss})
+   {
+    HtmlHead();
+    TaskHead(	title=>"$IG::soc_name - $lang{hierarchy} $tv{today}",
+		align=>'center');
+    TaskMsg("If you want create a Hierarchy look at this ".
+	    "<a href=\"http://www.igsuite.org/cgi-bin/igwiki?name=faq15\" target=\"_top\">".
+	    "Documentation</a>", 2 );
+    TaskFoot();
+    HtmlFoot();
+    return;
+   }
+
+  my $conn = DbQuery("select userid, name, hierarchycode, function ".
+		     "from users where hierarchycode<>'' and status<>'2' ".
+		     "order by function, name");
+
+  while (my @row = FetchRow($conn))
+   {
+    $fontsz = $row[0] eq $on{theboss} ? '14pt' : '10pt';
+    $row[3] =~ s/\s/<br>/;
+    ++$cnt_users;
+
+    DbQuery("select userid, name, function from users ".
+	    "where hierarchyref='$row[2]' and status<>'2' ".
+	    "order by function, name");
+
+    if ($personnel{$row[2]})
+     {
+      $elemento{$row[0]}
+        = "<table border=0>
+	   <td colspan=".(($personnel{$row[2]}*2)-1)."
+	    style=\"background:#EEEEEE; font-weight:bold;
+	            font-size:$fontsz; text-align:center;
+	            vertical-align:top\" nowrap>
+	   <a href=\"users?action=hierarchy&amp;theboss=$row[0]\">
+	    $row[1]
+	   </a><br>$row[3]
+	   </td></tr>
+	   <td colspan=".(($personnel{$row[2]}*2)-1)." bgcolor=black></td></tr>
+	   <td valign=top nowrap>\n";
+     }
+
+    while (my @row2 = FetchRow())
+     { $elemento{$row[0]} .= "^$row2[0]^"; }
+
+    if ($personnel{$row[2]})
+     {
+      $elemento{$row[0]} .= "\n</td></tr></table>";
+     }
+    else
+     {
+      $elemento{$row[0]} = "<span style=\"font-size:10px\">".
+			   "<strong>$row[1]</strong><br>".
+			   "$row[3]</span><br><br>\n";
+     }
+   }
+
+  my $counter;
+  while ($elemento{$on{theboss}} =~ s/\^(\w+)\^/$elemento{$1}/)
+   {
+    if (++$counter > $cnt_users)
+     {
+      IG::Warn( "There is a Loop in you user hierarchy! ".
+                "check responsibles" ) && return;
+     }
+   }
+
+  $elemento{$on{theboss}} =~ s/(<\/tr><\/table>)(<table border\=0>)/$1<\/td><td bgcolor\=black> <\/td><td valign\=top>$2/g;
+
+  ## Show hierarchy
+  HtmlHead();
+  TaskHead( title => "$IG::soc_name - $lang{hierarchy} $tv{today}",
+	    align => 'center' );
+  TaskMsg( $elemento{$on{theboss}}, 2 );
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  $on{alphabet}	     ||= 'all';
+  $on{order}         ||= 'name';
+  $on{sortdirection} ||= 'asc';
+  $on{status}	     ||= 1;
+
+  QuoteParams();
+  my $query = '1=1';
+  $query .= " and hierarchycode='$in{filter_type}'" if $in{filter_type};
+  $query .= " and substr(name,1,1)='$in{alphabet}'" if $in{alphabet} ne 'all';
+  $query .= " and status='$in{status}'"             if $in{status} != 3;
+
+  ## define per page view
+  my $base_url = "users?".
+		 "order=$on{order}&amp;".
+		 "status=$on{status}&amp;".
+		 "sortdirection=$on{sortdirection}&amp;".		 
+		 "filter_type=$on{filter_type}&amp;".
+		 "alphabet=$on{alphabet}";
+
+  my ( $limit,
+       $offset,
+       $page_selector ) = IG::MkTaskPaging( "select count(*) from users ".
+                                            "where $query",
+                                            $base_url );
+
+  DbQuery("select userid, name, hierarchycode,".
+          " company, function, status, login ".
+	  "from users ".
+	  "where $query ".
+	  "order by $in{order} $in{sortdirection} ".
+	  "limit $limit offset $offset");
+
+  Header( $page_selector );
+
+  ## Create alphabet index
+  IG::AlphabetSelector
+    (	param    => 'alphabet',
+	link     => "users?status=$on{status}",
+	filter   => Input( type     => 'select',
+			   onchange => "location.href = 'users?alphabet=$on{alphabet}&amp;status=' + ".
+			                                "this.options[this.selectedIndex].value;",
+			   data     => [([ 3, $lang{all_users}],
+			                 [ 1, $lang{all_active_users}],
+			                 [ 2, $lang{all_inactive_users}])],
+                           name     => 'status' )
+    );
+
+  TaskMsg("$lang{filter_set}: $lang{code}=$on{filter_type}",1) if $on{filter_type};
+
+  TaskListMenu ([$lang{user_id},	'order=userid'],
+		[$lang{contact_name},	'order=name'],
+		[$lang{company},	'order=company'],
+		[$lang{function},	'order=function'],
+		[$lang{code},		'order=hierarchycode'],
+	       );
+
+  while (my @row = FetchRow())
+   {
+    $row[6] ||= 'guest';
+    my $style = "style=\"color: gray; \"" if $row[5] == 2;
+
+    ## identify user types by different icons
+    my $user_icon = CheckPrivilege('sys_user_admin', $row[6]) ? 'user_admin.gif'
+		  : $row[6] ne 'guest' && $row[5] != 2	      ? 'user.gif'
+		  : 'user_guest.gif';
+ 
+    TaskListItem (
+	[Img( src=> "$IG::img_url/$user_icon",
+	      align=>'absmiddle',
+	      style=>'margin-right:2px') . $row[0],
+	 "users?action=protomodi&amp;userid=$row[0]",
+	 $style],
+	[$row[1],	'',"nowrap $style"],
+	[$row[3],	'',$style],	
+	[$row[4],	'',$style],
+	[$row[2],	"users?filter_type=$row[2]",$style],
+		 );
+   }
+
+  TaskListFoot();
+  Footer();
+ }
+
+##############################################################################
+##############################################################################
+sub exp2contacts
+ {
+  Header();
+  FormHead( labelstyle => 'width:320px;',
+            cgiaction  => 'exp2contactsagg');
+
+  Br(2);
+
+  Input ( show => $lang{privacy_narrow_gauge},
+          name => 'privacy',
+          type => 'checkbox' );
+
+  Input ( show => $lang{select_company_contact},
+          type => 'contactfinder');
+
+  Input ( show=>$lang{process},
+          style=>'margin-top:20px',
+          type=>'submit');
+                
+  FormFoot();
+  Footer();
+ }
+
+##############################################################################
+##############################################################################
+sub exp2contactsagg
+ { 
+  if (!$on{contactid})
+   {
+    push @IG::err_msg, $lang{Err_contact_name};
+    exp2contacts();
+    return;
+   }
+
+  ## Delete previous subcontacts
+  DbQuery("delete from contacts ".
+          "where master='".DbQuote($on{contactid})."'");
+
+  ## Export all IG users info
+  my $conn = DbQuery( query => "select name, address, city, zip, prov,".
+                               " jobphone, birthday, personalphone,".
+                               " mobilephone, email, function ".
+                               "from users where status<>'2'" );
+
+  while( my ( $name,
+              $address,
+              $city,
+              $zip,
+              $prov,
+              $jobphone,
+              $birthday,
+              $personalphone,
+              $mobilephone,
+              $email,
+              $function ) = FetchRow($conn) )
+   {
+    ## Quote values
+    $name          = DbQuote( uc($name) );
+    my $nospace = $name;
+       $nospace =~ s/\.|\-|\'| //g;
+
+    #XXX2DEVELOPE we should check all params lenght  
+    $address       = DbQuote($address);
+    $city          = DbQuote($city);
+    $zip           = DbQuote($zip);
+    $prov          = DbQuote($prov);
+    $jobphone      = DbQuote( substr($jobphone,0,20) );
+    $birthday      = DbQuote($birthday);
+    $personalphone = DbQuote( substr($personalphone,0,20) );
+    $mobilephone   = DbQuote( substr($mobilephone,0,20) );
+    $email         = DbQuote($email);
+    $function      = DbQuote($function);
+
+    ## generate an unique contact id
+    DbQuery( $IG::db_driver eq 'sqlite'
+                         ? "SELECT MAX(contactid) FROM contacts"
+                         : "SELECT MAX(lpad(contactid,10,'0')) FROM contacts");
+
+    my $new_id = FetchRow();
+    $new_id = 1000 if $new_id < 1000;
+    $new_id +=1; ## increase id && delete 00000
+
+    if ( $on{privacy} )
+     {
+      DbQuery("insert into contacts".
+              " (contactname, tel1, tel2, tel3, email, note, master,".
+              " contactid, owner, nospace) ". 
+              "values".
+              " ('$name', '$jobphone', '$personalphone', '$mobilephone', '$email',".
+              " '$function', '".DbQuote($on{contactid})."', '$new_id',".
+              " '$auth_user', '$nospace')");
+     }
+    else
+     {
+      DbQuery("insert into contacts".
+              " (contactname, address1, city1, zip1, prov1, tel1, birthdate,".
+              " tel2, tel3, email, note, master, contactid, owner, nospace) ". 
+              "values".
+              " ('$name', '$address', '$city', '$zip', '$prov', '$jobphone',".
+              " '$birthday', '$personalphone', '$mobilephone', '$email',".
+              " '$function', '".DbQuote($on{contactid})."', '$new_id',".
+              " '$auth_user', '$nospace')");
+     }
+   }
+   
+  IG::Redirect("contacts?".
+               "action=showrecord&amp;".
+               "default_pane=4&amp;".
+               "contactid=$on{contactid}" );
+ }
+
+##############################################################################
+##############################################################################
+sub privileges
+ {
+  my $maxid = 0;
+  my $lasttitle;
+  my $cnt = 0;
+
+  HtmlHead();
+  TaskHead( title     => $lang{privileges_mng},
+	    minwidth  => 500 );
+
+  FormHead( cgiaction => 'privileges',
+	    name      => 'navi');
+
+  TaskMsg( Input( type	   => 'logins',
+		  show	   => $lang{user},
+		  onchange => 'document.navi.submit();',
+		  name	   => 'login'),
+           7 );
+
+  FormFoot();
+
+  FormHead( cgiaction => 'privilegesagg',
+            name      => 'privileges',
+	    ckchanges => 'true' );
+
+  PrOut "<table".
+        " style=\"font-size:11px; margin-top:15px\"".
+        " border=1".
+        " cellspacing=0".
+        " cellpadding=3>".
+        "<td valign=\"top\">";
+
+  foreach (sort keys %IG::privileges)
+   {
+    next unless $IG::privileges{$_}[0];
+    $maxid = $IG::privileges{$_}[0] if $IG::privileges{$_}[0] > $maxid;
+
+    my $privilege_name = uc($_);
+       $privilege_name =~ s/^([^\_]+)\_(.+)/$2/;
+    my $title = $1;
+       $privilege_name =~ s/\_/ /g;
+
+    if (    $title ne $lasttitle
+         && (    !$IG::privileges{$_}[1]
+              || -e "$IG::cgi_dir${S}$IG::privileges{$_}[1]" )
+       )
+     {
+      if ($lasttitle)
+       {
+        PrOut "</table></td>";
+        if ($cnt==5) { PrOut "</tr>"; $cnt=0; }
+        PrOut "<td width=\"25%\" valign=\"top\">";
+       }
+
+      PrOut "<span style=\"color:#ff0000; font-weight:bold\">$title</span>".
+	    "<table style=\"width:100%; font-size:10px\">";
+      $lasttitle = $title;
+      $cnt++;
+     }
+
+    if (   !$IG::privileges{$_}[1]
+        || -e "$IG::cgi_dir${S}$IG::privileges{$_}[1]" )
+     {
+      PrOut "<tr><td style=\"font-size:10px; background:$IG::clr{bg_link}\">".
+            "$privilege_name</td>".
+            "<td style=\"width:20px; background:$IG::clr{bg_list}\">".
+            Input( type     => 'checkbox',
+                   name     => "per$IG::privileges{$_}[0]",
+                   override => 1,
+                   checked  => length( IG::UsrInf('igprivileges',$on{login}) ) < $IG::privileges{$_}[0]
+                            ?  0
+                            : substr( IG::UsrInf('igprivileges',$on{login}),
+                                      $IG::privileges{$_}[0],
+                                      1 )
+                  ).
+            "</td></tr>";
+     }
+    else
+     {
+      Input( type  => 'hidden',
+             name  => "per$IG::privileges{$_}[0]",
+             value => '0');
+     }
+   }
+
+  PrOut '</table></td></tr></table><br>';
+
+  Input( type=>'hidden', name=>'maxid', value=>$maxid);
+  Input( type=>'hidden', name=>'login');
+  Input( type=>'hidden', name=>'userid');
+
+  Input( type    => 'reset',
+         value   => $lang{restore} );
+
+  Input( type    => 'button',
+         onclick => 'UnCheckAll()',
+         float   => 'left',
+         value   => $lang{unselect_values} );
+
+  Input( type    => 'submit',
+         value   => $lang{save},
+         float   => 'left' );
+
+  ## A Java script to check all checkbox in a click
+  PrOut <<END;
+  <script language="JavaScript">
+   <!--
+   function UnCheckAll()
+   {
+      for (var i=0;i<document.privileges.elements.length;i++)
+      {
+         var e = document.privileges.elements[i];
+         e.checked = false;
+      }
+   }
+   //-->
+  </script>
+END
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+##############################################################################
+##############################################################################
+sub privilegesagg
+ {
+  my $privileges;
+  for ( 0..$on{maxid} )
+   {
+    $privileges .= $on{"per$_"} eq 'on' ? '1' : '0';
+   }
+
+  if (!$on{userid})
+   {
+    DbQuery("select userid from users where login='".DbQuote($on{login})."'");
+    $on{userid} = FetchRow(); 
+   }
+
+  DbQuery("update users set igprivileges='$privileges' ".
+	  "where login='".DbQuote($on{login})."'");
+
+  LogD('change user privileges', 'update', 'users', $on{userid});
+
+  IG::Redirect("users?action=protomodi&amp;userid=$on{userid}");
+ }
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  my %ajax_req;
+  require IG::Utils;
+
+  ## Set Ajax requests
+  if ( $on{userid} && CheckPrivilege('igforms_view') )
+   {
+    $ajax_req{getpersonalizedfieldslist} = "igforms?".
+                                           "action=build_form_mask&amp;".
+				           "igformid=users&amp;".
+				           "recordid=$on{userid}";
+   }
+
+  ## Set a user photo
+  my $photo_url = $on{userid} && -e $IG::cgi_dir . $IG::S .
+                                    'data'  . $IG::S .
+                                    'photo' . $IG::S .
+                                    'users' . $IG::S .
+                                    "$on{userid}.jpg"
+                ? "docview?action=photo_view&amp;".
+                          "photo_type=users&amp;".
+                          "photo_name=$on{userid}.jpg"
+                : "$IG::img_url/nobody.jpg";
+
+  HtmlHead( shortcuts => _short_cuts(),
+            ajax_req  => \%ajax_req );
+
+  TaskHead( title     => $lang{personal_card} );
+
+  HLayer
+   (
+    MkButton( text      => $lang{privileges_mng},
+              privilege => CheckPrivilege('sys_user_admin') && $on{login},
+              link      => "users?action=privileges&amp;".
+                                 "login=$on{login}&amp;".
+	                         "userid=$on{userid}" ),
+
+    MkButton( text      => $lang{back_to_list},
+              link      => 'users' ),
+
+    MkButton( text      => $lang{employment_status},
+              link      => "stato?flpers=$on{userid}",
+              privilege => CheckPrivilege('users_status_view') ),
+
+    MkButton( text      => $lang{make_card},
+              link      => "javascript:winPopUp('users?action=mkcard&amp;".
+                           "userid=$on{userid}',420,300,'Card')" ),
+
+    MkButton( text      => $lang{delete},
+              link      => "users?action=delshow&amp;id=$on{userid}",
+              privilege => CheckPrivilege('users_new') )
+   ) if $on{userid};
+
+
+  FormHead( cgiaction => 'protoagg',
+            name      => 'usersform',
+            ckchanges => 'true',
+            method    => 'post',
+            labelstyle=> 'width:150px;',
+            enctype   => 'multipart/form-data');
+
+  Input(    type      => 'hidden',
+            name      => 'lastpwdchange');
+  Input(    type      => 'hidden',
+            name      => 'lastsync',
+            value     => $tv{today});
+  Input(    type      => 'hidden',
+            name      => 'privileges',
+            value     => '0000000011111010110100010000111111111111111111'.
+                         '1011111100011111111111011001111111010110101111'.
+                         '101100011111111111111111100000011111111111' );
+
+  ##################################################################
+  ## Start Tab Pane
+
+  my $panel = Input( show     => $lang{status},
+                     type     => 'select',
+                     name     => 'status',
+                     style    => 'width:250px',
+                     data     => [([1, $lang{user_enabled}],
+                                   [2, $lang{user_disabled}],)]).
+
+              Input( show     => $lang{user_id},
+                     validate => { onerror   => $lang{Err_user_id},
+                     	           mandatory => 'true' },
+                     type     => 'text',
+                     name     => 'userid',
+                     style    => 'width:250px',
+                     maxlen   => 10).
+
+              Input( show     => $lang{contact_name},
+                     type     => 'text',
+                     name     => 'name',
+                     validate => { onerror   => $lang{Err_contact_name},
+                     	           mandatory => 'true' },
+                     maxlen   => 60,
+                     style    => 'width:250px').
+
+              Input( show     => $lang{initial},
+                     type     => 'text',
+                     name     => 'initial',
+                     validate => { mandatory => 'true' },
+                     maxlen   => 5,
+                     style    => 'width:250px').
+
+              Input( show     => $lang{protocol_initial},
+                     type     => 'text',
+                     name     => 'acronym',
+                     style    => 'width:250px',
+                     maxlen   => 10).
+
+              Input( show     => $lang{function},
+                     type     => 'text',
+                     name     => 'function',
+                     style    => 'width:250px',
+                     maxlen   => 100).
+
+	      Input( show     => $lang{notes},
+	             type     => 'textarea',
+	             style    => 'width:250px; height:120px;',
+	             labelstyle=>'width:150px; height:120px;',
+	             name     => 'note' );
+
+  ## this is the form to insert a user photo
+  $panel
+   = HLayer
+      ( intra_space => 0,
+	valign      => 'top',
+	left_layers => [($panel)],
+	right_layers
+	  => [( TaskMsg
+	         ( Img(   src     => $photo_url =~ /nobody/
+                                  ?  $photo_url
+                                  :  $photo_url . "&amp;width=150",
+                          href    => $photo_url,
+	                  id      => 'userphoto',
+	                  width   => 150,
+	                  title   => 'Only JPG files').
+	                      
+                   ( $on{userid}
+                     ? Input( type    => 'file', 
+                              size    => 5,
+                              style   => 'width: 140px;',
+                              name    => 'upfile' )
+                     : '')
+                          
+                   ,4 )
+             )]
+      );
+
+  ## identifying info ###################################################
+  my $panel0 = Input( show     => $lang{address},
+                      type     => 'text',
+                      name     => 'address',
+                      maxlen   => 50,
+                      size     => 50).
+
+               Img(   href     => IG::MkMapLink( zip     => $on{zip},
+                                                 address => $on{address},
+                                                 city    => $on{city} ),
+                      title    => 'maps.google.com',
+                      style    => 'margin-top:3px;width:20px',
+                      src      => "$IG::img_url/map.png" ).
+
+               Input( show     => $lang{city},
+                      type     => 'text',
+                      name     => 'city',
+                      size     => 50,
+                      maxlen   => 30).
+
+               Input( show     => $lang{zip_code},
+                      type     => 'text',
+                      name     => 'zip',
+                      size     => 50,
+                      maxlen   => 5).
+
+               Input( show     => $lang{province},
+                      type     => 'text',
+                      name     => 'prov',
+                      size     => 50,
+                      maxlen   => 2).
+
+               Input( show     => $lang{phone_number},
+                      type     => 'phonenumber',
+                      name     => 'personalphone',
+                      size     => 50,
+                      maxlen   => 25).
+
+               Input( show     => $lang{mobile_phone},
+                      type     => 'mobilephone',
+                      name     => 'mobilephone',
+                      size     => 50,
+                      maxlen   => 25).
+
+               Input( show     => $lang{extension},
+                      type     => 'phonenumber',
+                      name     => 'jobphone',
+                      maxlen   => 25,
+                      size     => 50).
+
+               Input( show     => $lang{fuel_card},
+                      type     => 'text',
+                      name     => 'fuelcardid',
+                      size     => 50,
+                      maxlen   => 10).
+
+               Input( show     => $lang{tax_id_number},
+                      type     => 'text',
+                      name     => 'taxid',
+                      size     => 50,
+                      maxlen   => 20).
+                      
+               Input( show     => $lang{birth_date},
+                      type     => 'date',
+                      validate => { onerror   => $lang{Err_birthday_date},
+                                    mandatory => 'false' },
+                      name     => 'birthday',
+                      size     => 50);
+
+
+  ## job info ###############################################################
+  my $panel1 = Input( show     => $lang{company},
+                      type     => 'text',
+                      name     => 'company',
+                      maxlen   => 70,
+                      style    => 'width:350px').
+
+               Input( show     => $lang{emplacement},
+                      type     => 'text',
+                      name     => 'hierarchycode',
+                      style    => 'width:350px',
+                      maxlen   => 10).
+
+               Input( show     => $lang{referring},
+                      type     => 'text',
+                      name     => 'hierarchyref',
+                      style    => 'width:350px',
+                      maxlen   => 10).
+
+               Input( show     => $lang{employment_date},
+                      type     => 'date',
+                      validate => { onerror   => $lang{Err_employment},
+                                    mandatory => 'false' },
+                      name     => 'assumption',
+                      style    => 'width:350px').
+
+               Input( show     => $lang{dismissal},
+                      type     => 'date',
+                      validate => { onerror   => $lang{Err_dismissal_date},
+                                    mandatory => 'false' },
+                      name     => 'dismissal',
+                      style    => 'width:350px').
+
+               Input( show     => $lang{contract_type},
+                      type     => 'text',
+                      name     => 'contracttype',
+                      maxlen   => 100,
+                      style    => 'width:350px').
+
+               Input( show     => $lang{level},
+                      type     => 'text',
+                      name     => 'level',
+                      maxlen   => 5,
+                      style    => 'width:350px').
+
+               Input( show     => $lang{last_sanitary_inspection},
+                      type     => 'date',
+                      validate => { onerror   => $lang{Err_health_check},
+                                    mandatory => 'false' },
+                      name     => 'lasthealthck',
+                      style    => 'width:350px').
+
+               Input( show     => $lang{inspection_frequency},
+                      type     => 'select',
+                      name     => 'healthckfreq',
+                      data     => [( [90,   $lang{every_three_months}],
+                                     [180,  $lang{every_six_months}],
+                                     [365,  $lang{yearly}],
+                                     [730,  $lang{biennial}],
+                                     [1825, $lang{every_five_years}] )]).
+
+               Input( show     => $lang{health_opinion},
+                      type     => 'select',
+                      name     => 'healthopinion',
+                      zerovalue=> 'true',
+                      data     => [( 'Idoneo',
+				     'Non idoneo',
+				     'Temporaneamente non idoneo',
+				     'Idoneo con prescrizione')]); #XXX2TRANSLATE
+
+  ## personal info #########################################################
+  my $panel2 = Input( show     => $lang{drive_licence},
+                      type     => 'text',
+                      name     => 'doc2id',
+                      size     => 50,
+                      maxlen   => 20).
+
+               Input( show     => $lang{type},
+                      type     => 'text',
+                      name     => 'doc2type',
+                      size     => 50,
+                      maxlen   => 10).
+
+               Input( show     => $lang{due_date},
+                      validate => { onerror   => "$lang{Err_due_date} - ".
+                                                 "$lang{drive_licence}",
+                                    mandatory => 'false' },
+                      type     => 'date',
+                      name     => 'doc2expire',
+                      size     => 50).
+
+               Input( show     => $lang{personal_document},
+                      type     => 'text',
+                      containerstyle => 'padding-top:10px',
+                      name     => 'doc1id',
+                      size     => 50,
+                      maxlen   => 20).
+
+               Input( show     => $lang{due_date},
+                      validate => { onerror   => "$lang{Err_due_date} - ".
+                                                 "$lang{personal_document}",
+                                    mandatory => 'false' },
+                      type     => 'date',
+                      name     => 'doc1expire',
+                      size     => 50).
+
+               Input( show     => $lang{special_drive_licence},
+                      containerstyle => 'padding-top:10px',
+                      type     => 'text',
+                      name     => 'doc3id',
+                      size     => 50,
+                      maxlen   => 20).
+
+               Input( show     => $lang{type},
+                      type     => 'text',
+                      name     => 'doc3type',
+                      size     => 50,
+                      maxlen   => 10).
+
+               Input( show     => $lang{due_date},
+                      validate => { onerror   => "$lang{Err_due_date} - ".
+                                                 "$lang{special_drive_licence}",
+                                    mandatory => 'false' },
+                      type     => 'date',
+                      name     => 'doc3expire',
+                      size     => 50);
+
+
+  ## professional capacities ###############################################
+  my $panel3_1 = Input( type       => 'textarea',
+                        fieldstyle => 'width:550px;',
+                        style      => 'width:100%; height:200px;',
+                        name       => 'jobtitles');
+
+  my $panel3_2 = Input( type       => 'textarea',
+                        fieldstyle => 'width:550px;',
+                        style      => 'width:100%; height:200px;',
+                        name       => 'jobexperiences');
+
+  my $panel3_3 = Input( type       => 'textarea',
+                        fieldstyle => 'width:550px;',
+                        style      => 'width:100%; height:200px;',
+                        name       => 'jobformation');
+
+  my $panel3 = IG::TabPane
+               ( data   => [( [$lang{qualifications},   $panel3_1],
+		 	      [$lang{job_experience},   $panel3_2],
+		 	      [$lang{job_formation},    $panel3_3] )],
+		 width         => 570,
+		 height        => 230,
+		 padding       => 10,
+		 margin_top    => 5,
+		 margin_bottom => 1,
+		 name          => 'subtab3',
+               );
+
+  ## File Repository ####################################################
+  my $panel4 = "<iframe frameborder=\"0\"".
+               " style=\"padding:0px; width:100%; height:290px;\"".
+               " src=\"\" id=\"files\" name=\"myframe\">".
+               "</iframe>";
+
+  my $panel4_action = "\$('files').src='filemanager?".
+                      "repid=$on{userid}&amp;repapp=users'";
+
+
+  ## these panels are reserved to user admins ##############################
+  my ( $panel6, $panel6_sub1, $panel6_sub2,
+       $panel6_sub3, $panel6_sub4, $panel7 );
+
+  if ( CheckPrivilege('sys_user_admin') )
+   {
+    $panel6_sub1 = Input( show     => 'Login',
+                          type     => 'text',
+                          name     => 'login',
+                          validate => { pattern   => '^[A-Za-z\_][A-Za-z0-9\_\.\-]{1,31}$',
+                                        onerror   => $lang{Err_username},
+                                        mandatory => 'false' },
+                          size     => 50,
+                          maxlen   => 32 ).
+
+          	   Input( show     => 'Password',
+          	          type     => 'password',
+          	          name     => 'passwd',
+          	          size     => 50,
+          	          maxlen   => 72 ).
+
+                   Input( show     => $lang{account_expiration_date},
+                          validate => { mandatory => 'false' },
+                          type     => 'date',
+                          name     => 'statusdate').
+
+                   Input( show     => 'Hosts allow',
+                          type     => 'textarea',
+                          name     => 'hostsallow',
+                          labelstyle=> 'width:150px; height:95px',
+                          style    => 'width:330px; height:80px');
+
+    $panel6_sub4 = Input( show     => 'IGSync account',
+                          type     => 'label',
+                          labelstyle=> 'background-color:transparent; '.
+	        		       'border:0px').
+
+	  	   Input( show     => 'Otp Password',
+	  	          type     => 'password',
+	  	          name     => 'isosyncpwd',
+	  	          size     => 50,
+	  	          maxlen   => 20);
+
+    $panel6_sub2 = Input( show     => 'Pop3 login',
+                          type     => 'text',
+                          name     => 'pop3login',
+                          style    => 'width:330px;',
+                          maxlen   => 50).
+
+                   Input( show     => 'Pop3 password',
+                          type     => 'password',
+                          name     => 'pop3pwd',
+                          style    => 'width:330px;',
+                          maxlen   => 20).
+
+ 		   Input( show     => $lang{email},
+ 		          type     => 'email',
+ 		          name     => 'email',
+ 		          validate => { mandatory => 'false' },
+ 		          style    => 'width:330px;',
+ 		          maxlen   => 50).
+
+                   Input( show     => $lang{email_identities},
+                          type     => 'textarea',
+                          name     => 'emailfrom',
+                          wrap     => 'off',
+                          caption  => $lang{identity_info_help},
+                          labelstyle=> 'width:150px; height:95px',
+                          style    => 'font-size:10px; width:330px; height:80px');
+
+    $panel6_sub3 = Input( show     => $lang{email_signature},
+                          type     => 'textarea',
+                          wrap     => 'soft',
+                          name     => 'signature',
+                          style    => 'width:350px; height:160px',
+                          labelstyle=>'width:150px; height:175px' );
+
+    $panel6 = IG::TabPane
+               ( data   => [( [$lang{igsuite_account},   $panel6_sub1],
+		 	      [$lang{igwebmail_account}, $panel6_sub2],
+		 	      [$lang{email_signature},   $panel6_sub3],
+		 	      ['IGSync Account',	 $panel6_sub4] )],
+		 width         => 550,
+		 height        => 195,
+		 padding       => 5,
+		 margin_top    => 1,
+		 margin_bottom => 1,
+		 name          => 'subtab6',
+               );
+
+
+    DbQuery("select users_groups_link.groupid from users_groups_link ".
+            "left join users_groups ".
+            "on users_groups.groupid = users_groups_link.groupid ".
+            "where users_groups_link.userid='".DbQuote($on{login})."' ".
+            "order by users_groups.name");
+    $on{groups} .= "$_\n" while $_ = FetchRow();
+
+
+    ## users groups #########################################################                  
+    $panel7 = Input( type      => 'multiselect',
+	             style     => 'height:200px; width:200px;',
+	             show      => $lang{user_groups},
+	             labelstyle=> 'width:auto',
+	             label1    => $lang{available_groups},
+	             label2    => $lang{belong_groups},
+	             data      => 'select groupid, name from users_groups '.
+                                  'order by name',
+	             name      => 'groups');
+   }
+  else
+   {
+    Input( type => 'hiddens',
+           data => { login      => '',
+                     passwd     => '',
+                     statusdate => '',
+                     hostsallow => '',
+                     isosyncpwd => '',
+		     pop3login  => '',
+		     pop3pwd    => '',
+		     email      => '',
+		     emailfrom  => '',
+		     signature  => '',
+		     groups     => '',
+		   } );
+
+   }
+
+  ## personalized fields ###################################################   
+  my $panel8 = [ $lang{personalized_fields},
+                 $on{userid} && CheckPrivilege('igforms_view') ? '&nbsp;' : '',
+                 "getpersonalizedfieldslist".
+                 "(['NO_CACHE'],['primarytab_content8'])" ];
+
+
+  ## Build Tab Pane
+  IG::TabPane(	data       => [([ $lang{identity_info},           $panel  ],
+                                [ $lang{identifying_info},        $panel0 ],
+                                [ $lang{job_info},                $panel1 ],
+                                [ $lang{personal_info},           $panel2 ],
+                                [ $lang{professional_capacities}, $panel3 ],
+                                [ $lang{open_repository},
+                                  ( $on{userid}
+                                    ? ( $panel4, $panel4_action )
+                                    : ( '','') ) ],
+                                [ $lang{account_info},            $panel6 ],
+                                [ $lang{user_groups},             $panel7 ],
+                                  $panel8 )],
+		width      => 650,
+		height     => 320,
+                margin_top => 15,
+                padding    => 15,
+		name       => 'primarytab' );
+
+  ## End Tab Pane
+  ###################################################################
+
+
+  Input( type    => 'submit',
+         onclick => CheckPrivilege('sys_user_admin')
+                 ?  "if (!usersform.login.value || !usersform.passwd.value)".
+		    " alert('" . IG::JsQuote($lang{Err_nologin}) . "')"
+                 :  '',
+         show    => $lang{save} );
+
+  Input( type    => 'reset',
+         float   => 'left',
+         show    => $lang{restore} );
+         
+  Input( type    => 'button',
+         float   => 'right',
+         onclick => "document.location='users';",
+         show    => $lang{cancel} );
+
+  FormFoot();
+
+  TaskFoot();
+  HtmlFoot();
+  LogD($on{name}, 'view', 'users', $on{userid}) if $on{userid};
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  ## Store user photo file
+  push @IG::errmsg,
+       IG::FileUpload( param_name	=> 'upfile',
+		       target_dir	=> $IG::cgi_dir. $IG::S.
+					   'data'.       $IG::S.
+					   'photo'.      $IG::S.
+					   'users'.      $IG::S,
+		       can_overwrite	=> 'true',
+		       target_file	=> "$on{userid}.jpg" ) if $on{userid};
+
+  if ($on{userid} && $on{login})
+   {
+    DbQuery("select userid, login from users ".
+	    "where userid='" .DbQuote($on{userid}). "'".
+	    " or login='". DbQuote($on{login}) . "'");
+    while ( my ($userid, $login) = FetchRow() )
+     {
+      if (   ($userid eq $on{userid} && $login && $login ne $on{login})
+	  || ($userid ne $on{userid} && $login && $login eq $on{login})
+         )
+       {
+        push @IG::errmsg, "You can't change an IGSuite user login or try ".
+                          "to use a Login already used by another user";
+       }
+     }
+   }
+
+  ## Validate Form values
+  push @IG::errmsg, IG::FormValidate();
+  proto() && return if @IG::errmsg;
+
+  $on{mobilephone}        =~ s/[^\+\d\s]//g;
+  $on{function}	          = uc($on{function});
+  $on{lastpwdchange}    ||= $tv{empty_date};
+  $on{statusdate}       ||= $tv{empty_date};
+
+  $on{hostsallow}         =~ s/[^0-9a-z\.\/\*\n]/\n/g;
+  1 while $on{hostsallow} =~ s/\n\n/\n/g;
+
+  QuoteParams();
+  DbQuery(query=>[( "DELETE FROM users where userid = '$in{userid}'",
+
+		    "INSERT INTO users VALUES ('$in{name}', '$in{userid}',".
+		    " '$in{hierarchycode}', '$in{address}', '$in{city}',".
+		    " '$in{zip}', '$in{prov}', '$in{taxid}', '$in{company}',".
+		    " '$in{hierarchyref}', '$in{level}', '$in{assumption}',".
+		    " '$in{contracttype}', '$in{function}', '$in{jobtitles}',".
+		    " '$in{jobexperiences}', '$in{jobphone}', '$in{doc1id}',".
+		    " '$in{doc1expire}', '$in{doc2id}', '$in{doc2type}',".
+		    " '$in{doc2expire}', '$in{birthday}', '$in{personalphone}',".
+		    " '$in{mobilephone}', '$in{signature}', '$in{status}',".
+		    " '$in{statusdate}', '$in{fuelcardid}', '$in{login}',".
+		    " '$in{passwd}', '$in{initial}', '$in{acronym}',".
+		    " '$in{privileges}', '$in{email}', '$in{doc3id}',".
+		    " '$in{doc3type}', '$in{doc3expire}', '$in{pop3login}',".
+		    " '$in{pop3pwd}', '$in{healthopinion}',".
+		    " '$in{lasthealthck}', $in{healthckfreq},".
+		    " '$in{jobformation}', '$in{isosyncpwd}',".
+		    " '$in{lastsync}', '$in{lastpwdchange}',".
+		    " '$in{note}', '$in{dismissal}', '$in{emailfrom}',".
+		    " '$in{hostsallow}' )"
+		  )] );
+
+  ## Create Filemanager User Home directory
+  if ($on{login} && !(-e "$IG::htdocs_dir${S}$IG::default_lang{home}${S}$on{login}"))
+   {
+    mkdir("$IG::htdocs_dir${S}$IG::default_lang{home}${S}$on{login}", 0777)
+        or die("Can't make user home dir in ".
+               "'$IG::htdocs_dir${S}$IG::default_lang{home}${S}$on{login}'.\n");
+   }
+
+  ## Create System User Home directory
+  if ($on{login} && !(-e IG::UserDir( $on{login} ) ) )
+   {
+    mkdir IG::UserDir( $on{login} ),0777
+      or die("Can't make user home dir.\n");
+   }
+   
+  ## Insert group (only if we are an user admin)
+  if ( $in{login} && CheckPrivilege('sys_user_admin') )
+   {
+    DbQuery("delete from users_groups_link where userid='$in{login}'");
+    for (split /\r*\n/, $on{groups})
+     {
+      my $uid = MkId(15);
+
+      DbQuery("insert into users_groups_link values".
+              " ('$uid', '$in{login}', '$_')");
+     }
+   }
+
+  ## Update Apache authentication file
+  if ( $ENV{APACHE_CONFIGURED_BY_IGSUITE} )
+   {
+    require IG::Utils;
+    IG::HtPasswd( htaccess_file => $IG::cgi_dir.$S.
+                                   'data'.$S.
+                                   'apache'.$S.
+                                   'igsuite_users.db',
+                  login         => $on{login},
+                  password      => $on{passwd}
+                ) or die("Can't update Apache accounts database in ".
+                         "to insert user $on{login} login account.\n");
+   }
+
+  LogD('', 'insert', 'users', $on{userid});
+  IG::Redirect('users');
+ }
+
+##############################################################################
+##############################################################################
+sub protomodi
+ {
+  DbQuery("SELECT * FROM users where userid='".DbQuote($on{userid})."'");
+  (	$on{name},
+	$on{userid},
+	$on{hierarchycode},
+	$on{address},
+	$on{city},
+	$on{zip},
+	$on{prov},
+	$on{taxid},
+	$on{company},
+	$on{hierarchyref},
+	$on{level},
+	$on{assumption},
+	$on{contracttype},
+	$on{function},
+	$on{jobtitles},
+	$on{jobexperiences},
+	$on{jobphone},
+	$on{doc1id},
+	$on{doc1expire},
+	$on{doc2id},
+	$on{doc2type},
+	$on{doc2expire},
+	$on{birthday},
+	$on{personalphone},
+	$on{mobilephone},
+	$on{signature},
+	$on{status},
+	$on{statusdate},
+	$on{fuelcardid},
+	$on{login},
+	$on{passwd},
+	$on{initial},
+	$on{acronym},
+	$on{privileges},
+	$on{email},
+	$on{doc3id},
+	$on{doc3type},
+	$on{doc3expire},
+	$on{pop3login},
+	$on{pop3pwd},
+	$on{healthopinion},
+	$on{lasthealthck},
+	$on{healthckfreq},
+	$on{jobformation},
+	$on{isosyncpwd},
+	$on{lastsync},
+	$on{lastpwdchange},
+	$on{note},
+	$on{dismissal},
+	$on{emailfrom},
+	$on{hostsallow} ) = FetchRow();
+
+  ## exists?
+  IG::Warn($lang{Err_nodocument}) && return 0 if !$on{name};
+  ## action?
+  $on{action} ne 'mkcard' ? proto() : return 1;
+ }
+
+##############################################################################
+##############################################################################
+sub mkcard
+ {
+  ## load values
+  protomodi() || return;
+
+  IG::FileCopy( "$IG::htdocs_dir${S}images${S}logo.gif",
+                "$IG::cgi_dir${S}data${S}photo${S}users${S}logo.gif",
+                0
+              ) if  ! -e "$IG::cgi_dir${S}data${S}photo${S}users${S}logo.gif"
+                   && -e "$IG::htdocs_dir${S}images${S}logo.gif";
+
+  my $logo_file  = -e "$IG::cgi_dir${S}data${S}photo${S}users${S}logo.gif"
+                 ? "docview?action=photo_view&amp;".
+                          "photo_type=users&amp;".
+                          "photo_name=logo.gif&amp;".
+                          "width=315"
+                 : "$IG::img_url/logo.gif";
+
+  my $logo       = Img( href  => "javascript:self.print();",
+                        src   => $logo_file,
+                        title => $IG::soc_name,
+                        style => "width: 84mm;" );
+
+  my $user_photo = Img( src   => "docview?action=photo_view&amp;".
+                                         "photo_type=users&amp;".
+                                         "photo_name=$on{userid}.jpg&amp;".
+                                         "width=110",
+                        style => "width:30mm" );
+
+  $on{email}   &&= "<span style=\"font-size:10px\">$on{email}</span><br>";
+  $IG::clr{bg}   = '#FFFFFF';
+  $IG::clr{font} = '#000000';
+  HtmlHead();
+
+  PrOut <<END;
+<table width=\"100%\" cellspacing=0 cellpadding=0>
+ <td width=\"100%\" height=\"100%\" align=\"center\" valign=\"center\">
+  <table cellspacing=0 cellpadding=0 style="background:#FFFFFF; width: 85mm; border:1px solid #000000" cellspacing=0 cellpadding=0>
+   <td>
+    <table cellspacing=1 cellpadding=0 width="100%">
+     <td colspan=2 bgcolor="#DDDDDD">
+      $logo
+     </td></tr>
+     <td>
+      <span style=\"font-size:15px; font-weight:bold\">$on{name}</span><br>
+      <span style=\"font-size:10px\">$on{email}</span><hr>
+      <span style=\"font-size:12px\">$on{company}</span><br>
+      <span style=\"font-size:10px\">$on{function}</span><br>
+      <span style=\"font-size:9px\">$lang{birth_date}: $on{birthday}</span>
+     </td>
+     <td align="right">
+      $user_photo
+
+     </td></tr>
+     <td colspan=2 style="border-top: 1px solid #666666; background-color:#DDDDDD; font-size:9px; line-height:1.2;">
+       $IG::soc_name - $IG::soc_address $IG::soc_city $IG::soc_cap $IG::soc_prov<br>
+       Tel. $IG::soc_tel - Fax. $IG::soc_fax
+     </td></tr>
+    </table>
+   </td></tr>
+  </table>
+ </td></tr>
+</table>
+END
+  Img( src   => "$IG::img_url/printable_stampa.gif",
+       href  => 'javascript:self.print()',
+       class => 'noprint');
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub delshow
+ {
+  Header();
+  TaskMsg("<strong>$lang{alert_on_delete}</strong>".
+	  Br(2).
+	  FormHead(cgiaction=>'delexec',
+		   float=>'left',
+		   onsubmitask=>$lang{are_you_sure} ).
+
+	  Input (type=>'select',
+		 name=>'id',
+		 zerovalue=>'true',
+		 style=>'width: 350px',
+		 data=>'SELECT userid, userid, name FROM users ORDER BY name',
+		 show=>$lang{user}).
+
+	  Input (type=>'submit',
+		 show=>$lang{delete}).
+
+	  FormFoot(),2);
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub delexec
+ {
+  DbQuery("delete from users where userid='".DbQuote($on{id})."'");
+
+  LogD('', 'delete', 'users', $on{id});
+
+  IG::Redirect('users');
+ } 
+
+##############################################################################
+##############################################################################
+sub Header 
+ {
+  my ($page_selector) = @_;
+
+  HtmlHead( shortcuts => _short_cuts());
+  TaskHead( title     => $lang{users_mng},
+            minwidth  => 650,
+            width     => '100%');
+
+  HLayer(
+         MkButton( text      => $lang{add},
+                   link      => 'users?action=proto',
+                   privilege => CheckPrivilege('users_new') ),
+
+
+
+         MkButton( text      => $lang{employment_status},
+                   link      => 'stato',
+                   privilege => CheckPrivilege('users_status_view') ),
+
+         MkButton( text      => $lang{hierarchy},
+                   link      => 'users?action=hierarchy'),
+
+         MkButton( text      => $lang{user_groups},
+                   link      => 'users_groups',
+                   privilege => CheckPrivilege('users_groups_view') ),
+
+         MkButton( text      => $lang{polls},
+                   link      => 'polls'),
+
+         MkButton( text      => $lang{export_to_contacts},
+                   link      => 'users?action=exp2contacts',
+                   privilege => CheckPrivilege('contacts_edit') ),
+
+         $page_selector
+	);
+ }
+
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }
+

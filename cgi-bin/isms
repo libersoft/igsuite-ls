@@ -1,0 +1,1006 @@
+#! /usr/bin/perl
+# Procedure: isms
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+## define command line options
+BEGIN
+ {
+  sub setargv
+   {
+    ## define commandline parameters
+    return (	'to:s'		=>\$IG::on{receiver},
+		'action:s'	=>\$IG::on{action},
+		'auth_user:s'	=>\$IG::auth_user,
+		'body:s'	=>\$IG::on{text_msg},
+	   ); 
+   }
+ }
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+## Only an iguser can access to this script
+IG::DTable(	sendisms	=> sub { CheckPrivilege(); },
+		moveisms	=> sub { CheckPrivilege(); },
+		isms_sent	=> sub { CheckPrivilege(); },
+		isms_deleted	=> sub { CheckPrivilege(); },
+		isms_arrived	=> sub { CheckPrivilege(); },
+		composemessage	=> sub { CheckPrivilege(); },
+		default_action	=> sub { CheckPrivilege(); } );
+
+############################################################################
+############################################################################
+sub default_action { isms_arrived() }
+sub isms_arrived
+ {
+  my ($text_msg, $formato_msg, $formato_msg2, $col, $bo, $event_icon, $fromtime);
+  my $afteraweek  = IG::SumDate(0,0,0,7);
+  my $afteramonth = IG::SumDate(0,0,0,30);
+  my $before3days = IG::SumDate(0,0,0,-3);
+
+  HtmlHead(	expire  => 600,
+                title   => $lang{isms_arrived},
+		onevent => $on{recheck}
+                        ?  'onload="if (parent.chkmsg && parent.chkmsg.ajaxUpdate) '.
+			             'parent.chkmsg.ajaxUpdate()"'
+			:  '' );
+ 
+  TaskHead(	width => '100%',
+		title => 'IGMsg' );
+
+
+  _isms_console() if !$on{print};
+
+  HLayer( left_layers =>
+           [( Input( type  => 'select', 
+                     value => "isms?action=isms_arrived",
+                     name  => 'folder',
+                     data  => { "isms?action=isms_arrived"
+                                   => $lang{isms_arrived},
+		                "isms?action=isms_sent"
+		                   => $lang{isms_sent},
+			        "isms?action=isms_deleted"
+			           => $lang{isms_deleted}},
+                     onchange=> "location.href = this.options[this.selectedIndex].value")
+            )],
+
+	 right_layers =>
+	   [( FormHead( cgiaction => 'moveisms',
+	                onsubmit  => IG::JsConfirm( $lang{are_you_sure} ),
+	                name      => 'proto'),
+
+              Input( type      => 'select',
+                     style     => 'width: 130px',
+                     zerovalue => 'true',
+                     onchange  => 'submit()',
+                     value     => '',
+                     override  => 'true',
+                     data      => { trash         => $lang{move_to_basket},
+                     	            todo          => $lang{move_to_todo},
+                     	          },
+                     name      => 'ismsaction' ),
+
+              Img(   src       => "$IG::img_url/arrow_link.gif",
+                     width     => 13,
+                     height    => 18,
+                     style     => "float:right; position:relative; top:10px; margin:0px 6px -1px 0;")
+
+            )] ) if !$on{print};
+
+
+  TaskListMenu(	[$lang{sender}],
+		["$lang{date} $lang{hour}"],
+		[$lang{message},'','width=100%'],
+		['<div style="width:36px;"></div>'],
+		[ Input(name	=> 'allbox',
+			value	=> 0,
+			override=> 1,
+			onclick	=> 'CheckAll()',
+			type	=> 'checkbox')],
+		);
+
+  ### Visualizza i messaggi provenienti dall'agenda
+  my $gi = $tv{day}+0;
+  my $mi = $tv{month}+0;
+  my $day = IG::GetDayByDate( $tv{day}, $tv{month}, $tv{year} );
+
+  DbQuery("SELECT calendar.starttime, calendar.endtime, calendar.eventtext,".
+	  " calendar.eventid, calendar.fromuser, calendar.touser,".
+	  " calendar.contactid, calendar.eventtype, contacts.contactname,".
+	  " contacts.tel1 ".
+	  "FROM calendar left join contacts ".
+	  "ON calendar.eventid = contacts.contactid ".
+	  "WHERE".
+	  " calendar.showbyisms=1 and".
+	  " calendar.startdate<='$tv{today}' and".
+	  " (calendar.repeatend>='$tv{today}' or calendar.repeatend is null) and".
+	  " (calendar.touser='$auth_user' or calendar.touser='all') and".
+	  " (calendar.day=$gi or calendar.day=0) and".
+	  " (calendar.month=$mi or calendar.month=0) and".
+	  " (calendar.year=$tv{year} or calendar.year=0) and".
+	  " (calendar.weekday=$day or calendar.weekday=8) ".
+	  "ORDER BY calendar.starttime");
+
+  while ( my @row = FetchRow() )
+   {
+    my $img_title;
+    if ( $row[6] )
+     {
+      $row[2] = "<a href=\"contacts?action=showrecord&amp;contactid=$row[6]\">".
+		"$row[8]</a> $row[2]";
+
+      $img_title = "$lang{phone_number}: $row[9]" if $row[9];
+     }
+
+    ## Visualizza un icona a seconda dell'evento
+    $event_icon = $row[7]==2 ? Img( src=>"$IG::img_url/telephone.png",
+                                    width=>16,
+				    title=>$img_title )
+		: $row[7]==3 ? Img( src=>"$IG::img_url/email.png",
+                                    width=>16,
+				    title=>$img_title )
+		: $row[7]==4 ? Img( src=>"$IG::img_url/group.gif",
+                                    width=>16,
+				    title=> $img_title )
+		:              Img( src=>"$IG::img_url/clock.gif",
+                                    width=>16,
+				    title=> $img_title );
+
+    $fromtime = $row[7] != 5
+	      ? "$lang{to_time} ".
+		substr('0'.$row[0],-4,2).
+		":".
+		substr($row[0],-2,2)
+	      : '';
+
+    TaskListItem (
+	[IG::UsrInf('name',$row[4]),
+	 '',
+	 "style=\"color:$col; font-weight:bold;\" nowrap"],
+	["$tv{hours}:$tv{minuts} $tv{today}",
+	 '',
+	 "style=\"font-size:10px; color:gray;\" nowrap"],
+	["$lang{calendar_event} $fromtime - $row[2]",
+	 '',
+	 "style=\"color:red\""],
+	["$event_icon"],
+	[Img(	src   => "$IG::img_url/delete.gif",
+                width => 16,
+		title => $lang{delete},
+		href  => "isms?".
+		         "action=moveisms&amp;".
+		         "ismsaction=trash&amp;".
+		         "id=$row[3]&amp;".
+		         "type=event",
+	        onclick=> IG::JsConfirm( $lang{are_you_sure} ) ),
+	 ],
+		);
+   }
+
+  ## show users messages
+  DbQuery("SELECT isms.id, isms.date, isms.sender, isms.receiver,".
+          " isms.body, isms.status, isms.time, isms.type, users.jobphone ".
+          "FROM isms ".
+          "LEFT JOIN users ".
+          "ON isms.sender = users.login ".
+	  "WHERE isms.receiver='$auth_user'".
+	  " and isms.status<>'D'".
+	  " and isms.status<>'A' ".
+	  "ORDER BY isms.id desc");
+
+  while (my @row = FetchRow())
+   { 
+    $row[4] = _MkLinkSkipHtml( $row[4] );
+
+    $col = $row[7] eq 'T' ? 'green' : 'black';
+    $bo  = $row[5] eq 'R' ? '' : 'style="font-weight:bold;"';
+
+    TaskListItem (
+	[ (IG::UsrInf('name',$row[2]) || 'Guest'),
+	  '',
+	  "style=\"white-space:nowrap; color:$col; font-weight:bold;\""],
+	[ "$row[6],
+	  $row[1]",
+	  '',
+	  "style=\"white-space:nowrap; font-size:10px; color:gray;\""],
+	[ $row[4],
+	  '',
+	  $bo],
+	[ ($row[2] ne 'guest'
+	   ? Img( src   => "$IG::img_url/replymsg.png",
+                  width => 16,
+		  title => $lang{reply_isms},
+		  href  => "isms?msgtoreply=$row[0]&amp;usertoreply=$row[2]" )
+	   : '' ).
+	  ($row[8] && $IG::plugin_conf{voip}{protocol}
+	   ? Img( src   => "$IG::img_url/telephone.png",
+                  width => 16,
+	          title => $lang{place_a_call},
+	          href  => $IG::plugin_conf{voip}{protocol}.
+	                   $IG::plugin_conf{voip}{prefix}.
+	                   $row[8] )
+           : '' )
+        ],
+	[ Input( type  => 'checkbox',
+		 name  => 'message_ids',
+		 value => $row[0])]
+		 );
+   }
+
+  ## update messages as read
+  DbQuery("UPDATE isms set status='R' ".
+	  "where receiver='$auth_user'".
+	  " and status<>'R' and status<>'D' and status<>'A'");
+
+
+
+  ## show system messages #XXX2TRANSLATE
+  ##########################################################################
+
+  if ( $IG::lang eq 'it' && $IG::db_driver ne 'sqlite' )
+   {
+    ################################################Scadenza assicurazione
+    if (CheckPrivilege("equipments_alert"))
+     {
+      DbQuery("SELECT id, description, date3 FROM equipments ".
+  	    "WHERE status=0 and date3<'$afteraweek'");
+      while (my @row = FetchRow())
+       {
+        _sysmsg("E' in scadenza l'assicurazione del mezzo $row[1] Mat.<a href=\"equipments?action=protomodi&amp;id=$row[0]\">$row[0]</a> per il $row[2]");
+       }
+     }
+    ################################################Scadenza bollo
+    if (CheckPrivilege("equipments_alert"))
+     {
+      DbQuery("SELECT id, description, date2 FROM equipments ".
+  	    "WHERE status=0 and date2<'$afteramonth'");
+      while (my @row = FetchRow())
+       {
+        _sysmsg("E' in scadenza il pagamento del bollo del mezzo $row[1] Mat.<a href=\"equipments?action=protomodi&amp;id=$row[0]\">$row[0]</a> per il $row[2]");
+       }
+     }
+    ################################################Revisioni motorizzazione
+    if (CheckPrivilege("equipments_alert"))
+     {
+      DbQuery("SELECT id, description, date0 FROM equipments ".
+  	    "WHERE status=0 and date0<'$afteraweek'");
+      while (my @row = FetchRow())
+       {
+        _sysmsg("Revisione del mezzo $row[1] Mat.<a href=\"equipments?action=protomodi&amp;id=$row[0]\">$row[0]</a> per il $row[2]");
+       }
+     }
+    ################################################Revisione tachigrafo
+    if (CheckPrivilege("equipments_alert"))
+     {
+      DbQuery("SELECT id, description, date1 FROM equipments ".
+  	    "WHERE status=0 and date1 < '$afteraweek'");
+      while (my @row = FetchRow())
+       {
+        _sysmsg("Revisione al tachigrafo del mezzo $row[1] Mat.<a href=\"equipments?action=protomodi&amp;id=$row[0]\">$row[0]</a> per il $row[2]");
+       }
+     }
+    ################################################Scadenza VIA
+    if (CheckPrivilege("equipments_alert"))
+     {
+      DbQuery("SELECT id, description, date6 FROM equipments ".
+  	    "WHERE status=0 and date6 < '$afteraweek'");
+      while (my @row = FetchRow())
+       {
+        _sysmsg("Scadenza del foglio di Via del mezzo $row[1] Mat.<a href=\"equipments?action=protomodi&amp;id=$row[0]\">$row[0]</a> per il $row[2]");
+       }
+     }
+    ################################################Scadenza Conto proprio
+    if (CheckPrivilege("equipments_alert"))
+     {
+      DbQuery("SELECT id, description, date7 FROM equipments ".
+  	    "WHERE status=0 and date7 < '$afteraweek'");
+      while (my @row = FetchRow())
+       {
+        _sysmsg("Scadenza del conto proprio del mezzo $row[1] Mat.<a href=\"equipments?action=protomodi&amp;id=$row[0]\">$row[0]</a> per il $row[2]");
+       }
+     }
+    ################################################Scadenza Conto terzi
+    if (CheckPrivilege("equipments_alert"))
+     {
+      DbQuery("SELECT id, description, date8 FROM equipments ".
+  	    "WHERE status=0 and date8 < '$afteraweek'");
+      while (my @row = FetchRow())
+       {
+        _sysmsg("Scadenza del conto terzi del mezzo $row[1] Mat.<a href=\"equipments?action=protomodi&amp;id=$row[0]\">$row[0]</a> per il $row[2]");
+       }
+     }
+    ################################################ fasi dei contratti
+    if (CheckPrivilege('contracts_view'))
+     {
+      DbQuery(	"SELECT contracts.id, contracts.contactname,".
+  		" contracts.issue, contracts_phases.name ".
+  		"FROM contracts LEFT JOIN contracts_phases ".
+  		"ON contracts.phase = contracts_phases.id ".
+  		"WHERE".
+  		" contracts_phases.owner='$auth_user' or".
+  		" contracts_phases.owner1='$auth_user'");
+  
+      while (my @row = FetchRow())
+       {
+        _sysmsg(MkLink("Il contratto n. $row[0] del $row[2] intestato a $row[1] risulta nella fase $row[3] di tua competenza"));
+       }
+     }
+    ###############################################riesame commerciale offerte
+    if (CheckPrivilege("contracts_revue_c"))
+     {
+      DbQuery("SELECT * FROM offers where flag1 ='' order by issue desc, id desc");
+      while (my @row = FetchRow())
+       {
+        _sysmsg(MkLink("L'offerta n. $row[0] del $row[1] intestata a $row[2] deve essere visionata da un punto di vista commerciale"));
+       }
+     }
+    ###############################################riesame tecnico offerte
+    if (CheckPrivilege("contracts_revue_t"))
+     {
+      DbQuery("SELECT * FROM offers where flag2 ='' order by issue desc, id desc");
+      while (my @row = FetchRow())
+       {
+        _sysmsg(MkLink("L'offerta n. $row[0] del $row[1] intestata a $row[2] deve essere visionata da un punto di vista tecnico"));
+       }
+     }
+    ###############################################riesame servizi offerte
+    if (CheckPrivilege("contracts_revue_s"))
+     {
+      DbQuery("SELECT * FROM offers where flag3 ='' order by issue desc, id desc");
+      while (my @row = FetchRow())
+       {
+        _sysmsg(MkLink("L'offerta n. $row[0] del $row[1] intestata a $row[2] deve essere visionata da un punto di vista organizzativo dei servizi"));
+       }
+     }
+    ############################################### Non conformita' esterne aperte
+    if (CheckPrivilege("nc_ext_alert"))
+     {
+      DbQuery("SELECT * FROM nc_ext where duedate>current_date ".
+  	    "order by issue desc");
+      while (my @row = FetchRow())
+       {
+        _sysmsg(MkLink("La Non conformità esterna n. $row[0] del $row[1] intestata a $row[2] non è ancora stata chiusa"));
+       }
+     }
+    ############################################### Non conformita' interne aperte
+    if (CheckPrivilege("nc_int_alert"))
+     {
+      DbQuery("SELECT * FROM nc_int where duedate>current_date ".
+  	    "order by issue desc");
+      while (my @row = FetchRow())
+       {
+        _sysmsg(MkLink("La Non conformità interna n.$row[0] del $row[1] intestata a $row[2] non è ancora stata chiusa"));
+       }
+     }
+    ############################################### To Do scaduti
+    if (CheckPrivilege("todo_alert"))
+     {
+      DbQuery("SELECT * FROM todo ".
+  	    "where (owner='$auth_user' or login='$auth_user')".
+  	    " and duedate<=current_date and status<>1 and progress<>100");
+      while (my @row = FetchRow())
+       {
+        if ($row[0] eq $auth_user && (!$row[7] || $row[7] eq $auth_user))
+         { _sysmsg("Il lavoro di tua proprietà n. <a href=\"todo?action=protomaster&amp;todoid=$row[1]\">$row[1]</a> risulta scaduto il $row[8]");}
+        elsif ($row[0] eq $auth_user)
+         { _sysmsg("Il lavoro di proprietà di ".IG::UsrInf('name',$row[7])." n. <a href=\"todo?action=protoslave&amp;todoid=$row[1]\">$row[1]</a> a te assegnato risulta scaduto il $row[8]");}
+        elsif ($row[7] eq $auth_user)
+         { _sysmsg("Il lavoro n. <a href=\"todo?action=protoslave&amp;todoid=$row[1]\">$row[1]</a> da te assegnato a ".IG::UsrInf('name',$row[0])." risulta scaduto il $row[8]");}
+       }
+     }
+    ## offers not accepted#########################################
+    DbQuery( "SELECT id, issue, contactname, days FROM offers ".
+  	     "WHERE owner='$auth_user'".
+  	     " and days<>0 and note = ''".
+  	     " and current_date-issue > days ".
+             "order by id" );
+    while ( my @row = FetchRow() )
+     {
+      my $_exit_link = "<a href=\"offers?action=markasnotaccepted&amp;".
+                                        "id=$row[0]&amp;".
+                                        "backtoreferer=1\"> [ ".
+                       $lang{mark_as_not_accepted}.
+                       ' ]</a>';
+
+      _sysmsg( MkLink( sprintf( $lang{alert_offer_notaccepted}, @row ) ).
+               $_exit_link );
+     }
+
+    ################################################ consegna ordini
+    if (CheckPrivilege("orders_alert"))
+     {
+      DbQuery("SELECT * FROM orders where duedate<current_date and flag='N' ".
+  	    "order by id");
+      while (my @row = FetchRow())
+       {
+        _sysmsg(MkLink("Non è stata ancora effettuata la consegna dell'ordine n. $row[0] del $row[1] con consegna pattuita per il $row[6] intestato a $row[3]"));
+       }
+     }
+    ################################################ documenti in archivio
+    if (CheckPrivilege("archive_alert"))
+     {
+      DbQuery("SELECT * FROM archive ".
+  	    "where expire-days<current_date and expire>current_date ".
+  	    "order by id");
+      while (my @row = FetchRow())
+       {
+        _sysmsg(MkLink("E' in scadenza il documento tipo $IG::docs_type{$row[7]} protocollo $row[0] del $row[2] intestato a $row[3] e scadente il $row[4]"));
+       }
+     }
+    ################################################Servizi in ritardo
+    if (CheckPrivilege("services_alert"))
+     {
+      DbQuery("SELECT opendate, humantime, contactname FROM services ".
+  	    "WHERE docref='' and opendate<='$before3days' order by opendate");
+      while (my @row = FetchRow())
+       {
+        _sysmsg("ATTENZIONE Il servizio richiesto da $row[2] il $row[0] alle ore $row[1] non è ancora stato effettuato");
+       }
+     }
+    ###############################################riesame commerciale contratti
+    if ( 0 && CheckPrivilege("contracts_revue_c"))
+     {
+      DbQuery("SELECT * FROM contracts where flag1 ='' order by id");
+      while (my @row = FetchRow())
+       {
+        _sysmsg(MkLink("Il contratto n. $row[0] del $row[1] intestata a $row[2] deve essere visionata da un punto di vista commerciale"));
+       }
+     }
+    ###############################################riesame tecnico contratti
+    if ( 0 && CheckPrivilege("contracts_revue_t"))
+     {
+      DbQuery("SELECT * FROM contracts where flag2 =''order by id");
+      while (my @row = FetchRow())
+       {
+        _sysmsg(MkLink("Il contratto n. $row[0] del $row[1] intestata a $row[2] deve essere visionata da un punto di vista tecnico"));
+       }
+     }
+    ###############################################riesame operativo contratti
+    if ( 0 && CheckPrivilege("contracts_revue_s"))
+     {
+      DbQuery("SELECT * FROM contracts where flag3 =''order by id");
+      while (my @row = FetchRow())
+       {
+        _sysmsg(MkLink("Il contratto n. $row[0] del $row[1] intestata a $row[2] deve essere visionata da un punto di vista di organizzazione servizi"));
+       }
+     }
+  
+    ################################################ Birthday alert
+    DbQuery("SELECT name, birthday, userid FROM users ".
+  	  "where status<>'2' and birthday <> '$tv{empty_date}'");
+    while (my @row = FetchRow())
+     {
+      if (    (IG::GetValuesByDate($row[1]))[0] == $tv{day}
+           && (IG::GetValuesByDate($row[1]))[1] == $tv{month} )
+       {
+        _sysmsg("Oggi è il compleanno di <b>$row[0]</b>\n");
+       }
+     }
+    ################################################Scadenza patenti autisti
+    if (CheckPrivilege("users_edit"))
+     {
+      DbQuery("SELECT name, doc2id, doc2type, doc2expire, userid ".
+  	    "FROM users WHERE doc2expire<='$afteramonth' and status<>'2'");
+      while (my @row = FetchRow())
+       {
+        _sysmsg("E' in scadenza la patente n. $row[1] intestata a <a href=\"users?action=protomodi&amp;userid=$row[4]\">$row[0]</a> del tipo $row[2] scadente il $row[3]\n");
+       }
+     }
+    ################################################Scadenza patenti speciali
+    if (CheckPrivilege("users_edit"))
+     {
+      DbQuery("SELECT name, doc3id, doc3type, doc3expire, userid ".
+  	    "FROM users WHERE doc3expire<='$afteramonth' and status<>'2'");
+      while (my @row = FetchRow())
+       {
+        _sysmsg("E' in scadenza la patente speciale n. $row[1] intestata a <a href=\"users?action=protomodi&amp;userid=$row[4]\">$row[0]</a> del tipo $row[2] scadente il $row[3]\n");
+       }
+     }
+   }
+  TaskListFoot();
+  FormFoot();
+  TaskFoot();
+
+  ## A Java script to check all checkbox in a click
+  PrOut <<FINE;
+  <script language="JavaScript">
+   <!--
+   function CheckAll()
+   {
+      for (var i=0;i<document.proto.elements.length;i++)
+      {
+         var e = document.proto.elements[i];
+         if (e.name != "allbox")
+            e.checked = document.proto.allbox.checked;
+      }
+   }
+   //-->
+  </script>
+FINE
+
+  HtmlFoot();
+  unlink "$IG::user_dir/isms";
+ }
+
+###########################################################################
+###########################################################################
+sub _sysmsg
+ {
+  my $msg =  shift;
+ 
+  TaskListItem (
+	[$lang{system},
+	 '',
+	 'style="color:red; font-weight:bold"'],
+	["$tv{hours}:$tv{minuts},
+	 $tv{today}",
+	 '',
+	 'style="white-space:nowrap; font-size:10px; color: gray"'],
+	[$msg],
+	[''],
+	[''],
+		 ); 
+ }
+
+###########################################################################
+###########################################################################
+sub isms_sent
+ {
+  my $group = $on{g} ? 'WW' : 'T';
+
+  ## Set per page view
+  my $base_query = "SELECT COUNT(*) FROM isms ".
+		   "where (sender='$auth_user' and receiver='$auth_user')".
+		   " or (sender='$auth_user' and status<>'A' and type<>'$group')";
+  my $base_url = "isms?action=isms_sent&amp;g=$on{g}";
+
+  my ( $limit,
+       $offset,
+       $page_selector ) = IG::MkTaskPaging($base_query, $base_url);
+
+  HtmlHead(	expire=>600,
+                title   => $lang{isms_sent} );
+
+  TaskHead(	width => '100%',
+		title => 'IGMsg' );
+
+  HLayer( left_layers =>
+           [( Input( type  => 'select', 
+                     value => "isms?action=isms_sent",
+                     name  => 'folder',
+                     data  => { "isms?action=isms_arrived"
+                                   => $lang{isms_arrived},
+		                "isms?action=isms_sent"
+		                   => $lang{isms_sent},
+			        "isms?action=isms_deleted"
+			           => $lang{isms_deleted}},
+                     onchange=> "location.href = this.options[this.selectedIndex].value")
+            )],
+
+	 right_layers =>
+	   [( $page_selector )]
+        );
+
+  TaskListMenu( [],
+		["$lang{date} $lang{hour}"],
+		[$lang{receiver}],
+		[$lang{message},'','width=100%'] );
+
+  DbQuery("SELECT * FROM isms ".
+	  "WHERE (sender='$auth_user' and receiver='$auth_user')".
+	  " or (sender='$auth_user' and status<>'A' and type<>'$group') ".
+	  "ORDER BY id desc ".
+	  "limit $limit offset $offset");
+  while (my @row = FetchRow())
+   {
+    my $colour;
+    my $icon;
+    $row[3] = IG::UsrInf('name',$row[3]);
+    $row[4] = _MkLinkSkipHtml( $row[4] );
+
+    if ($row[7] eq 'T')
+     { $colour = 'green';
+      if (!$on{g})
+       {
+        $row[3] = $lang{all};
+        $icon = Img(	href=>"isms?action=isms_sent&amp;g=y",
+                        width=>16,
+			src=>"$IG::img_url/email_go.png" );
+       }
+     }
+    else
+     { $colour = 'black' }
+
+    if (($row[5] eq 'R' || $row[5] eq 'D') && $row[3] ne $lang{all})
+     {
+      $icon = Img(	src=>"$IG::img_url/email_open.png",
+                        width=>16,
+			title=>$lang{message_read} );
+     }
+    elsif ($row[5] ne 'R' && $row[5] ne 'D' && $row[3] ne $lang{all})
+     {
+      $icon = Img(	src=>"$IG::img_url/email.png",
+                        width=>16,
+			title=> $lang{message_unread} );
+     }
+
+    TaskListItem (
+	[$icon,
+	 '',
+	 "align=center"],
+	["$row[1] $row[6]",
+	 '',
+	 "style=\"color:gray;\" nowrap"],
+	[$row[3],
+	 '',
+	 "style=\"color:$colour; font-weight:bold;\" nowrap"],
+	[$row[4]]
+		);
+   }
+  TaskListFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub composemessage
+ {
+  HtmlHead();
+  TaskHead( title => 'IGMsg',
+            width => '100%',
+            icon  => 1 );
+
+  _isms_console();
+
+  TaskFoot();
+  HtmlFoot();
+ }
+ 
+#############################################################################
+#############################################################################
+sub isms_deleted
+ {
+  my $group = $on{g} ? 'WW' : 'T';
+
+  ## Set per page view
+  my $base_query = "SELECT COUNT(*) FROM isms ".
+	           "where receiver='$auth_user' and status='D'";
+
+  my $base_url = "isms?action=isms_deleted";
+  my ( $limit,
+       $offset,
+       $page_selector ) = IG::MkTaskPaging( $base_query, $base_url );
+
+  HtmlHead(	expire=>600,
+                title=> $lang{isms_deleted} );
+  FormHead(	name=>'navi',
+		float=>'left');
+
+  TaskHead(	width => '100%',
+		title => 'IGMsg' );
+
+  HLayer( left_layers =>
+           [( Input( type  => 'select', 
+                     value => "isms?action=isms_deleted",
+                     name  => 'folder',
+                     data  => { "isms?action=isms_arrived"
+                                   => $lang{isms_arrived},
+		                "isms?action=isms_sent"
+		                   => $lang{isms_sent},
+			        "isms?action=isms_deleted"
+			           => $lang{isms_deleted}},
+                     onchange=> "location.href = this.options[this.selectedIndex].value")
+            )],
+
+	 right_layers =>
+	   [( $page_selector )]
+        );
+
+  TaskListMenu( [],
+		["$lang{date} $lang{hour}"],
+		[$lang{sender}],
+		[$lang{message},'','width=100%'] );
+
+  DbQuery("SELECT * FROM isms where receiver='$auth_user' and status='D' ".
+	  "ORDER BY id desc ".
+	  "limit $limit offset $offset");
+  while (my @row = FetchRow())
+   {
+    my $icon;
+    my $colour;
+
+    $row[2] = IG::UsrInf('name',$row[2]);
+    $row[4] = _MkLinkSkipHtml( $row[4] );
+    $colour = $row[7] eq 'T' ? 'green' : 'black';
+    $icon = Img( src=>"$IG::img_url/email_open.png",
+                  width=>16,
+		  title=>$lang{message_read});
+
+    TaskListItem (
+	[$icon,
+	 '',
+	 "align=center"],
+	["$row[1] $row[6]",
+	 '',
+	 "style=\"color:gray;\" nowrap"],
+	[$row[2],
+	 '',
+	 "style=\"color:$colour; font-weight:bold;\" nowrap"],
+	[$row[4],
+	 '',
+	 '']
+		);
+   }
+
+  TaskListFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+###########################################################################
+###########################################################################
+sub moveisms
+ {
+  my @ids = ref($on{message_ids}) eq 'ARRAY'
+	  ? @{$on{message_ids}}
+	  : ($on{message_ids}) ;
+
+  if ( $on{message_ids} )
+   {
+    my $query;
+    $query .= " or id='$_'" for @ids; 
+    DbQuery("UPDATE isms set status='D' where 1=0$query");
+   }
+  else
+   {
+    if ($on{type} eq 'event')
+     {
+      DbQuery("UPDATE calendar set showbyisms=0 ".
+	      "where eventid='".DbQuote($on{id})."' and touser='$auth_user'");
+     }
+    else
+     {
+      DbQuery("UPDATE isms set status='D' where id='".DbQuote($on{id})."'");
+     }
+   }
+
+  if ($on{ismsaction} eq 'todo')
+   {
+    for (@ids)
+     {
+      next if ! $_;
+      DbQuery("select date, sender, body from isms ".
+              "where id = '".DbQuote($_)."'");
+      my ($date, $sender, $body) = FetchRow();
+      my $todotext = IG::UsrInf('name',$sender).": $body";
+      DbQuery("SELECT todoid FROM todo ORDER BY todoid desc");
+      my $todoid = FetchRow();
+      $todoid ||= 100000001;
+      ++$todoid;
+
+      DbQuery( "INSERT INTO todo VALUES ('$auth_user', '$todoid',".
+		" '$date', '".CkDate('',1)."', 0, '".DbQuote($todotext)."',".
+		" 1, '$auth_user', '$tv{end_year}',".
+		" '', 0, '', 0, '', 0, '')");
+     }
+   }
+
+  isms_arrived();
+ }
+
+###########################################################################
+###########################################################################
+sub _isms_console
+ {
+  my ($texttoreply, $sendertoreply, $msg_area, $buttons);
+
+  if ($on{msgtoreply})
+   {
+    my $conn =DbQuery( query => "SELECT body, sender from isms ".
+				"where id='".DbQuote($on{msgtoreply})."'");
+    ($texttoreply, $sendertoreply) = FetchRow($conn);
+   }
+
+  FormHead( method    => 'post',
+	    name      => 'sendmsg',
+            onsubmit  => "sendmsg.send.disabled = 'true';",
+	    cgiaction => 'sendisms');
+
+  Input(    type=>'hiddens',
+	    data=> { msgtoreply  => '',
+	             usertoreply => '',
+		     onsend      => ''  } );
+
+  ## set a message area
+  $msg_area = Input( type       => 'textarea',
+                     fieldstyle => 'width: 100%',
+                     style      => $on{action} eq 'composemessage'
+                                ?  'height:60px; width:100%;'
+                                :  'height:40px; width:100%;',
+                     name       => 'text_msg');
+
+  $msg_area .= ( "<div style=\"border:1px solid #999999\">".
+                 "<strong>$lang{answer_to}: </strong>".
+                 "<span style=\"font-size:10px; color:gray;\">".
+                 IG::UsrInf('name',$sendertoreply).": $texttoreply".
+                 "</span></div>"
+               ) if $texttoreply;
+
+  ## set actions button
+  if ($on{onsend}) 
+   {
+    $buttons = Input( type     => 'groupselector',
+                      value    => $on{usertoreply},
+                      style    => 'width:160px; font-size:10px;',
+                      labelstyle=>'width:auto',
+                      name     => 'receiver',
+                      show     => $lang{receiver},
+                      allvalue => 'true').
+
+               Input( type     => 'submit',
+                      name     => 'close',
+                      onclick  => 'self.close();',
+                      float    => 'right',
+                      style    => 'width:60px;',
+                      value    => $lang{close}).
+
+               Input( type     => 'submit',
+                      name     => 'send',
+                      float    => 'right',
+                      style    => 'width:60px;',
+                      value    => $lang{send});
+   }
+  else
+   {
+    $buttons = Input( type     => 'groupselector',
+                      value    => $on{usertoreply},
+                      style    => 'width:200px;',
+                      name     => 'receiver',
+                      allvalue => 'true').
+ 
+               Input( type     => 'submit',
+                      name     => 'cckey',
+                      style    => 'width:100px;',
+                      value    => 'Cc').
+
+               Input( type     => 'submit',
+                      name     => 'send',
+                      float    => 'left',
+                      style    => 'width:100px;',
+                      value    => $lang{send});
+   }
+
+  $buttons .= ( Input(  type     => 'checkbox',
+                        onlyfield=>'true',
+                        style    => 'margin-top:15px',
+                        name     => 'delprev',
+                        value    => 1,
+                        checked  => 1 ).
+                "<div style=\"padding-top:15px\">$lang{delete_isms}</div>"
+              ) if $on{msgtoreply};
+
+
+  TaskMsg( MkTable( style       => 'width:100%',
+                    cellspacing => 2,
+                    cellpadding => 2,
+                    style_c1_r  => 'width:100%',
+                    style_c2_r  => 'vertical-align:top',
+                    values      => $on{onsend}
+                                ?  [( [ $msg_area ], [ $buttons ] )]
+                                :  [( [ $msg_area, $buttons ] )]
+                  ),
+           4 );
+
+  FormFoot();
+ }
+
+###########################################################################
+###########################################################################
+sub sendisms
+ {
+  if ($on{text_msg})
+   {
+    $on{text_msg}=~ s/(\r|\n)/ /g;
+    if ($on{receiver} eq 'all')
+     {
+      DbQuery( $on{gs_groupid} && $on{gs_groupid} ne 'all'
+               ?  "SELECT users_groups_link.userid ".
+                  "FROM users_groups_link ".
+                  "LEFT JOIN users ".
+                  "ON users_groups_link.userid = users.login ".
+                  "WHERE users_groups_link.groupid = '".DbQuote($on{gs_groupid})."'".
+                  " and users.login <>'' and users.status<>'2'"
+
+               :  "select login from users where login<>'' and status<>'2'" );
+
+      while (my $receiver = FetchRow())
+       {
+        $on{receiver} = $receiver;
+
+        IG::SendIsms (	receiver	=> $receiver,
+			body		=> $on{text_msg},
+			type		=> $on{gs_groupid} && $on{gs_groupid} ne 'all'
+					?  '' : 'T');
+       }
+     }
+    else
+     {
+      IG::SendIsms (	receiver	=> $on{receiver},
+			body		=> $on{text_msg},
+			msgtoreply	=> $on{msgtoreply},
+			delrepliedmsg	=> $on{delprev}	);
+     }
+   }
+
+  $on{text_msg} = '' unless $on{cckey};
+  $on{msgtoreply} = $on{usertoreply} = '';
+  
+  if ( $on{onsend} eq 'close')
+   {
+    IG::AutoCloseTask();
+   }
+  else
+   {
+    isms_arrived();
+   }
+ }
+
+##############################################################################
+##############################################################################
+sub _MkLinkSkipHtml
+ {
+  my $text = shift;
+  
+  ## Finds noparse blocks and store them without parse
+  my $i = 0;
+  my @noparse;
+  $noparse[$i++] = $2
+    while $text =~ s/<(noparse|html)>(.+?)<\/\1>/\%\%NOPARSE$i\%\%/smi;
+
+  $text = MkLink($text);
+
+  ## restores noparse blocks
+  $i = 0;
+  $i++ while $text =~ s/\%\%NOPARSE$i\%\%/$noparse[$i]/smi;
+
+  return $text;
+ }
+
+##############################################################################
+##############################################################################
+sub help
+ {
+  PrOut <<END;
+
+IGMsgs - An IGSuite application
+Usage: isms [options]
+ -to <user>
+ -action <ig action>
+ -auth_user <user>
+ -body <message>
+
+Es. perl isms -to lucas -action sendisms -body 'Hello!'
+
+END
+ }
+

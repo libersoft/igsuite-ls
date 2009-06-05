@@ -1,0 +1,45 @@
+## IGSuite 4.0.0
+## Language: igfax_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+arrived_byfax		=>'Fax recebido',
+attempt_time		=>'Número de tentativas',
+ca			=>'Alla C.a.',
+cc			=>'Cópia carbono',
+cover_page		=>'Página de cobertura',
+delete_attach		=>'Apagar anexo',
+direction               =>'Direction',
+document_exist		=>'Documento existente',
+document_tosend		=>'Documento para enviar',
+edit_fax_notes          =>'Edit notes',
+Err_no_document_cover   =>'No document or cover page to send',
+Err_no_fax_number       =>'Você deve inserir um número de fax em seu contato antes de emiti-lo.',
+events_report		=>'Relatório de eventos',
+inner_fax		=>'Fax chegando',
+insert_tospool		=>'Inserir para saída do fax',
+max_5rows               =>'You can insert max 5 rows',
+multi_receivers         =>'Vários receptores',
+no_preview		=>'Nenhuma inspecção prévia disponível! Verifique o caminho no arquivo de configuração',
+normal_view             =>'Visualização normal',
+notify1			=>'Notificar quando a transmissão estiver terminada',
+notify2			=>'Não notificar',
+notify3			=>'Notificar se estiver rebobinado',
+notify_byemail		=>'Notificar por e-mail',
+outer_fax		=>'Fax saindo',
+pages_without_cover	=>'Páginas, sem cobertura',
+placed_call		=>'Ligações estabelecidas',
+probable_receiver	=>'Provável receptor',
+rotate_view             =>'Visualizar rotação',
+sendfax			=>'Enviar Fax',
+sendfax_ok		=>'Este fax está corretamente colocado na fila de saída de faxes',
+send_it_this_night      =>'Send it this night',
+single_receiver         =>'Simples receptor',
+to_be_seen		=>'e para CC',
+view_fax                =>'Verificar faxes',
+without_paper_fax	=>'Este faz foi enviado sem suporte a papel',
+   ));
+
+1;

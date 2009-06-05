@@ -1,0 +1,36 @@
+## IGSuite 4.0.0
+## Language: contracts_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+days_to_expire          =>'Days to expire',
+in_revision_contract    =>'In revision contract',
+contract_status		=>'Contract Status in this phase',
+active_contract		=>'Active Contract',
+inactive_contract	=>'Inactive Contract',
+Err_type_phase          =>'Selecteer contract type en fase',
+phase_manager		=>'Fase Manager',
+Err_contract_type	=>'Attentie: contract type niet ingevoerd',
+Err_phase_name		=>'Attentie: fase naam niet ingevoerd',
+Err_priority		=>'Attentie: prioriteit niet ingevoerd',
+no_other_revision	=>'Geen overige contracten revisie',
+next_revue		=>'Volgende Revue',
+contracts_protocol	=>'Contracten Protocol',
+new_contract		=>'Nieuw Contract',
+save_contract		=>'Opslaan in Contracten Protocol',
+new_phase		=>'Nieuw Fase',
+make_standard_phases	=>'Maak standaard fasen aan',
+contracts_phases	=>'Contracten Fasen',
+close_phase		=>'Sluit Fase',
+days_before_alert	=>'Dagen voor alert van verloop datum',
+phase_name		=>'Fase',
+contract_duration	=>'Duur',
+phase_bgcolor		=>'Fase Achtergrond keur',
+move_to_phase		=>'Verplaats naar Fase',
+change_duedate		=>'Wijzig verloop datum',
+  ));
+
+1;
+
+

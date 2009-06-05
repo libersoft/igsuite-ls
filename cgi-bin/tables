@@ -1,0 +1,237 @@
+#! /usr/bin/perl
+# Procedure: tables
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	proto		=> sub { CheckPrivilege('sys_user_admin') },
+		protoagg	=> sub { CheckPrivilege('sys_user_admin') },
+		protomodi	=> sub { CheckPrivilege('sys_user_admin') },
+		status		=> sub { CheckPrivilege('sys_user_admin') },
+		default_action	=> sub { CheckPrivilege('sys_user_admin') });
+
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  HtmlHead( title => $lang{tables_mng} );
+  TaskHead( title => $lang{tables_mng} );
+
+  FormHead( cgiaction=>'protoagg');
+
+  Input (type=>'hiddens',
+	 data=>{ table =>'', id =>''} );
+
+  Input (type=>'text',
+	 name=>'tablevalue',
+	 size=>50,
+	 maxlen=>200,
+	 show=>$lang{description});
+
+  Input (type=>'submit',
+         style=>'margin-top:20px',
+	 show=>$lang{save},
+	 name=>'submit');
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  if (!$on{tablevalue})
+   {
+    push @IG::errmsg, $lang{Err_description};
+    $lang{description} = Blush($lang{description});
+   }
+
+  proto() && return if @IG::errmsg;
+
+  if (!$on{id})
+   {
+    DbQuery("select max(id) from basic_tables ".
+	    "where tablename='".DbQuote($on{table})."'");
+
+    $on{id} = FetchRow();
+    $on{id}++;
+   }
+
+  LogD( "table:$on{table} tablevalue:$on{tablevalue}",
+	'edit',
+	'basic_tables',
+	$on{id});
+
+  QuoteParams();
+  DbQuery(query =>[( "delete from basic_tables ".
+		     "where id=$in{id} and tablename='$in{table}'",
+
+		     "INSERT INTO basic_tables VALUES ($in{id},".
+		     " '$in{table}','$in{tablevalue}',0)"
+		   )] );
+
+  IG::Redirect("tables?table=$on{table}");
+ }
+
+##############################################################################
+##############################################################################
+sub protomodi
+ {
+  QuoteParams();
+  DbQuery("SELECT id, tablevalue FROM basic_tables ".
+	  "where id=$in{id} and tablename='$in{table}'");
+
+  ($on{id}, $on{tablevalue}) = FetchRow();
+  proto();
+ }
+
+##############################################################################
+##############################################################################
+sub status
+ {
+  $on{status} = not($on{status});
+  $on{status} ||= '0';
+  
+  QuoteParams();
+  DbQuery("update basic_tables set status=$in{status} ".
+	  "where id=$in{id} and tablename='$in{table}'");
+
+  IG::Redirect("tables?table=$on{table}");
+ }
+
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  $on{table}		||= 'billing';
+  $on{order}		||= 'id';
+  $on{sortdirection}	||= $IG::list_order;
+  Header( minwidth=>'500px' );
+
+  TaskListMenu (
+		[$lang{number},		"order=id&amp;table=$on{table}"],
+		[$lang{description},	"order=tablevalue&amp;table=$on{table}"],
+		[]
+	       );
+
+  QuoteParams();
+  DbQuery("SELECT * FROM basic_tables ".
+	  "where tablename='$in{table}' ".
+	  "ORDER BY $in{order} $in{sortdirection}");
+  while (my @row = FetchRow())
+   {
+    if ($row[3])
+     { $row[2] = "<strike>$row[2]</strike>" }
+
+    TaskListItem
+     (
+      [$row[0],
+       "tables?".
+        "action=protomodi&amp;".
+        "table=$on{table}&amp;".
+        "id=$row[0]" ],
+      [$row[2],
+       "tables?".
+        "action=status&amp;".
+        "table=$on{table}&amp;".
+        "id=$row[0]&amp;".
+        "status=$row[3]",
+       "width=\"100%\"" ],
+      [Img( src=>"$IG::img_url/delete.gif",
+            title=>$lang{delete},
+            href=>"tables?".
+                  "action=status&amp;".
+                  "table=$on{table}&amp;".
+                  "id=$row[0]&amp;".
+                  "status=$row[3]" ).
+       Img( src=>"$IG::img_url/edit.gif",
+            title=>$lang{edit},
+            href=>"tables?".
+                  "action=protomodi&amp;".
+                  "table=$on{table}&amp;".
+                  "id=$row[0]" )]
+     );
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub Header
+ {
+  HtmlHead( title => $lang{tables_mng} );
+  TaskHead( title => $lang{tables_mng});
+
+  FormHead( name  => 'navi',
+	    float => 'left');
+
+  HLayer( MkButton( text => $lang{new_field},
+                    link => "tables?action=proto&amp;table=$on{table}"),
+
+          MkButton( text => $lang{update_list},
+                    link => "tables?table=$on{table}" ),
+                    
+	  '&nbsp;' x 8,
+
+	  Input ( name       => 'table',
+		  type       => 'select',
+		  show       => $lang{table},
+		  labelstyle => 'width:auto; background:transparent',
+		  onchange   => "window.location = 'tables?table=' + document.navi.table.options[document.navi.table.selectedIndex].value",
+		  data       =>{billing			  => $lang{tables_1},
+				economicsector		  => $lang{tables_2},
+				contactsource		  => $lang{tables_3},
+				confidence		  => $lang{tables_4},
+				contactvalue		  => $lang{tables_5},
+				economiczone		  => $lang{tables_6},
+				vendors_qualification	  => $lang{tables_7},
+				vendors_category	  => $lang{tables_8},
+				vendors_qualify_method	  => $lang{tables_9},
+				materials		  => $lang{tables_10},
+				services_type		  => $lang{tables_11},
+				services_priority	  => $lang{tables_12},
+				contracts_type		  => $lang{tables_13},
+				equipments_type		  => $lang{tables_14},
+				products_delivery_mode	  => $lang{tables_15},
+				products_delivery_time	  => $lang{tables_16},
+				products_packaging	  => $lang{tables_17},
+				todo_category		  => $lang{tables_18},
+				opportunities_source	  => $lang{tables_19},
+				opportunities_sales_stage => $lang{tables_20},
+				event_categories          => $lang{tables_21},
+				operative_functions       => $lang{tables_22},
+			} )
+	);
+  FormFoot();
+ }
+
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }

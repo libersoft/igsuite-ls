@@ -1,0 +1,46 @@
+## IGSuite 4.0.0
+## Language: docmaker_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+update_document         =>'Update document',
+build                   =>'Build',
+import_template		=>'Import template',
+template_format		=>'Template format',
+Err_template_name	=>'Ivalid template name',
+Err_incomplete_parsing	=>'Impossible to substitute some template fields, you need to procede manually',
+fields_legend		=>'Fields Legend',
+new_template		=>'Create a new template',
+delete_template		=>'Delete template',
+template_name		=>'Template name',
+table_vars		=>'Available fields table',
+regards			=>'Best regards',
+field_logo		=>'Your company logo',
+field_contactid		=>'Contact code',
+field_contactname	=>'Contact company name',
+field_email		=>'Contact E-mail address',
+field_address		=>'Contact address',
+field_city		=>'Contact city',
+field_zip		=>'Contact zip code',
+field_prov		=>'Contact Province',
+field_header1		=>'Complete operating center address',
+field_header2		=>'Complete legal situs address',
+field_header3		=>'Complete operations_headquarters address',
+field_sendmode		=>'Document send mode',
+field_tel		=>'Contact phone number',
+field_fax		=>'Contact fax number',
+field_docid		=>'Document protocol number',
+field_docowner		=>'Document owner',
+field_docissue		=>'Document issue date',
+field_docexpire		=>'Document expire date',
+field_startyear		=>'Start year date',
+field_endyear		=>'End year date',
+field_today		=>'Today date',
+field_function		=>'Your Company function',
+field_priceshtable	=>'Horizontal prices table',
+field_pricesvtable	=>'Vertical prices table',
+field_employer		=>'Contact company employer',
+   ));
+
+1;

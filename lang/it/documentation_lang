@@ -1,0 +1,12 @@
+## IGSuite 4.0.0
+## Language: quality_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+drafts			=>'Documenti in bozza',
+publish_mng		=>'Gestione pubblicazioni',
+new_document		=>'Nuovo documento',
+  ));
+
+1;

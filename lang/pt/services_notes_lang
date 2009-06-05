@@ -1,0 +1,15 @@
+## IGSuite 4.0.0
+## Language: services_notes_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+services_report		=>'Relatório de serviços',
+con1			=>'Bloquear serviço',
+con2			=>'Notas de serviços',
+con3			=>'Checagem de serviço',
+new_contact		=>'Novo contato',
+  ));
+
+1;

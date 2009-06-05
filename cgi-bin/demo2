@@ -1,0 +1,103 @@
+#! /usr/bin/perl
+# Procedure: demo2
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	file_convert	=> \&mychecks,
+		default_action  => \&mychecks);
+
+###########################################################################
+###########################################################################
+sub mychecks
+ {
+  ## Only an IG user can access to this demo
+  return CheckPrivilege() if !$IG::demo_version;
+
+  ## .... my stuff....
+
+  1;
+ }
+
+###########################################################################
+###########################################################################
+sub default_action
+ {
+  HtmlHead();
+  TaskHead( width	=> 500,
+	    title	=> 'IG Framework Demo - Input Form');
+
+  FormHead( cgiaction	=> 'file_convert',
+            name	=> 'upload_demo',
+	    enctype	=> 'multipart/form-data',
+	    method	=> 'post');
+
+  TaskMsg( Input( type  => 'text',
+		  label => 'New file name',
+		  style => 'width:130px',
+		  quickhelp => 'You can leave it blank',
+		  name  => 'newfilename').
+
+	   Input( name	=> 'myfile',
+		  label	=> 'Select your file',
+		  type	=> 'file' ).
+
+	   Input( type	=> 'submit',
+                  onclick=> IG::CallMeter('upload_demo.myfile.value'),
+		  float	=> 'left',
+	 	  label	=> 'Ok' )
+           ,4);
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+###########################################################################
+###########################################################################
+sub file_convert
+ {
+  default_action() && return if !$on{myfile};
+
+  HtmlHead();
+  TaskHead( width => 500,
+	    title => 'IG Framework Demo - Result page');
+
+  TaskMsg( IG::FileUpload( param_name	=> 'myfile',
+			  target_dir	=> $IG::temp_dir,
+			  target_file	=> $on{newfilename},
+			  overwrite	=> 'true',
+			  deny_pattern	=> '\.exe$',
+			  filter	=> \&ckcontent )); 
+  TaskFoot();
+  HtmlFoot();
+ }
+
+###########################################################################
+###########################################################################
+sub ckcontent
+ {
+  my $contents = shift;
+  my $content_type = (IG::FileStat($contents, 'content'))[0];
+  return $content_type =~ /text/ ? $contents : '';
+ }

@@ -1,0 +1,175 @@
+#! /usr/bin/perl
+# Procedure: help
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+#XXX2REWRITE
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+$IG::clr{bg} = $IG::clr{bg_task};
+
+IG::DTable (	protoagg	=> 1,
+                get_help        => 1,
+		default_action	=> 1);
+
+#############################################################################
+#############################################################################
+sub get_help
+ {
+  if ( $IG::use_internal_help )
+   {
+    default_action();
+   }
+  else
+   {
+    IG::Redirect( "http://www.igsuite.org/cgi-bin/igwiki/".
+                                                'ighelp_' .
+                                                $on{script} . '_' .
+                                                $on{scriptaction}.
+                                                '?ig=2&amp;'.
+                                                'template=template-help&amp;'.
+                                                'category=IGHelp' );
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  $on{script}       =~ s/[^a-zA-Z0-9\.\-\_]//g;
+  $on{scriptaction} =~ s/[^a-zA-Z0-9\.\-\_]//g;
+  my $helpname = $on{script} . "_" . $on{scriptaction} . "_" . $IG::lang;
+
+  if ($on{script} eq 'igsuite' && $on{scriptaction} eq 'default_action')
+   { ShowHelpToLogin(); }
+  elsif (CheckPrivilege('sys_help_edit'))
+   {
+    my $help_file = $IG::htdocs_dir . ${S}.
+                    $IG::default_lang{help_files} . ${S}.
+                    "$helpname.htm";
+
+    if ( -e $help_file )
+     {
+      open (DAT, '<', $help_file) or die("Can't open '$help_file'.\n");
+      $_ = <DAT>;
+      $_ = <DAT>;
+      $on{titolo} = $1 if /\<h2\>(.+)\<\/h2\>\<hr\>/g;
+      while(<DAT>)
+       {
+        last if /\<\/body\>\<\/html\>/g;
+        $on{testo} .= $_;
+       }
+      close(DAT);
+     }
+
+    HtmlHead();
+    FormHead(	cgiaction=>'protoagg');
+    Input (	type=>'hidden', name=>'script');
+    Input (	type=>'hidden', name=>'scriptaction');
+
+    Input (	show=>$lang{title},
+ 		type=>'text',
+		labelstyle=>'width:auto;',
+		name=>'titolo',
+		size=>50);
+
+    Input (	type=>'textarea',
+		fieldstyle=>'width:99%',
+		style=>'width:100%',
+		name=>'testo',
+		fckeditor=>'active',
+		rows=>14,
+		cols=>70);
+
+    Input (	type=>'submit',
+		value=>$lang{save} );
+
+    FormFoot();
+    HtmlFoot();
+   }
+  else
+   {
+    IG::Redirect("$IG::webpath/$IG::default_lang{help_files}/$helpname.htm");
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub protoagg
+ {
+  my $helpname = $on{script} .'_'. $on{scriptaction} .'_'. $IG::lang;
+  my $help_file = $IG::htdocs_dir . ${S}.
+                  $IG::default_lang{help_files} . ${S}.
+                  "$helpname.htm";
+
+  open (DAT, '>', $help_file) or die("Can't write to '$help_file'.\n");
+
+  print DAT "<html><head><title>$on{titolo}</title></head>".
+            "<body bgolor=white text=black>\n";
+  print DAT "<h2>$on{titolo}</h2><hr>\n";
+  print DAT "$on{testo}\n";
+  print DAT "<br><hr><p style=\"text-align:center;\">".
+	    "<form action=\"igsuite\">".
+	    "<input type=\"hidden\" name=\"action\" value=\"var\">".
+	    "<input type=\"submit\" name=\"Ok\" value=\"Ok\" onClick='self.close()'>".
+	    "</form></p></hr>";
+  print DAT "</body></html>\n";
+
+  close (DAT);
+  chmod 0664, $help_file;
+  IG::Redirect("$IG::webpath/$IG::default_lang{help_files}/$helpname.htm");
+ }
+
+#############################################################################
+#############################################################################
+sub ShowHelpToLogin
+ {
+  $IG::clr{bg} = "white";
+  HtmlHead( align=>'left');
+  PrOut <<FINE;
+<h2>IGSuite $IG::VERSION Login</h2><br>
+<b>T</b>o Login insert your own login and password. For the first connection
+insert the admin login specified in the configuration file during the
+installation.<br><br>
+
+<b>T</b>o change IGSuite language if it was not able to auto setting it,
+after login click to PREFERENCE and than to GLOBAL and choiche your
+language, or keep open this window and after login click
+<a href="preferences?action=prefs_global" target="_top">HERE</a>.<br><br>
+
+<b>B</b>e sure you have disable proxy use in the setting of your browser, because
+dynamic pages generated by IGSuite don't need it, and there is the possibility
+to have old dynamic pages stored in the proxy cache as result of
+queries.<br><br>
+
+<b>I</b>f you have problem to autenticate your self, pheraps you are using a
+browser without cookies feature or with cookies disables. Check it or
+contact your system administrator.
+<br><br>
+<form action="igsuite"><input type=hidden name=action value=var>
+<input type=submit name=Ok value=Continue onClick='self.close()'>
+</form>
+FINE
+  HtmlFoot();  
+ }
+ 

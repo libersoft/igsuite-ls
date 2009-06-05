@@ -1,0 +1,304 @@
+#! /usr/bin/perl
+# Procedure: rssticker
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+
+IG::DTable (	outputrsscontent => sub { CheckPrivilege() },
+		rssticker_js	 => sub { CheckPrivilege() } );
+
+#############################################################################
+#############################################################################
+sub outputrsscontent
+ {
+  my %rsslist =
+       ( "it" => "http://www.ansa.it/main/notizie/awnplus/topnews/synd/ansait_awnplus_topnews_medsynd_Today_Idx.xml",
+         "en" => "http://rss.cnn.com/rss/cnn_topstories.rss",
+         "es" => "http://www.elpais.es/rss.html",
+         "fr" => "http://www.lemonde.fr/rss/sequence/0,2-3208,1-0,0.xml",
+         "pt" => "http://feeds.folha.uol.com.br/folha/mundo/rss091.xml",
+         "nl" => "http://rss.cnn.com/rss/cnn_topstories.rss"
+        );
+
+  my $rssurl = $on{rssurl}
+               || IG::ConfigParam('igsuite.news_rss_url')
+               || $IG::plugin_conf{news}{rss_url} 
+               || $rsslist{ $IG::lang }
+               || die("Error: Can't find requested RSS in list.\n");
+               
+  my $localfile = $IG::temp_dir . $IG::S .  IG::Crypt($rssurl) . ".xml";
+
+  if ( ! -e $localfile )
+   {
+    ## if cache file doesn't exist
+    fetchfeed($rssurl, $localfile);
+   }
+  else
+   {
+    my $minutes = int( ( time - (stat($localfile))[9] ) /60 );
+    if ( $minutes > $on{cachetime} )
+     {
+      ##if age of cache file great than cache minutes setting
+      fetchfeed($rssurl, $localfile);
+     }
+   }
+
+  IG::HttpHead( type    => 'text/xml',
+                expires => '+1m' );
+
+  open(FH, '<', $localfile)
+    or die("Can't open '$localfile'.\n");
+  binmode(FH);
+  PrOut($_) while <FH>;
+
+  close(FH);
+ }
+
+#############################################################################
+#############################################################################
+sub fetchfeed
+ {
+  my ($rssurl, $localfile) = @_;
+  eval 'require LWP::UserAgent';
+
+  my $contents = $@
+               ? "<?xml version=\"1.0\"?><rss version=\"0.91\">".
+                 "<channel><title>IGSuite RssTicker</title>".
+                 "<item><title>You have to install the perl module".
+                 " LWP::UserAgent if you want to read world news.</title>".
+                 "<description>No UserAgent</description>".
+                 "<link><![CDATA[http://www.igsuite.org]]></link></item>".
+                 "</channel></rss>\n"
+               : wget($rssurl);
+ 
+  open(FH, '>', $localfile)
+    or die("Can't write on '$localfile'.\n");
+  print FH $contents;
+  close(FH);
+ }
+
+
+#############################################################################
+#############################################################################
+
+=head3 wget
+ 
+ Replace for LWP::Simple::get() that fails to fetch some RSS
+ 
+=cut
+
+sub wget
+ {
+  my $url = shift;
+  require LWP::UserAgent;
+  
+  # Create a user agent object
+  my $ua = LWP::UserAgent->new;
+  $ua->agent("IGSuite/$IG::VERSION ");
+
+  # Create a request
+  my $req = HTTP::Request->new(GET => $url);
+
+  # Pass request to the user agent and get a response back
+  my $res = $ua->request($req);
+
+  # Check the outcome of the response
+  if ($res->is_success) {
+      return $res->content;
+  }
+  else {
+      return "error: ".$res->status_line."\n";
+  }  
+ }
+
+
+#############################################################################
+#############################################################################
+sub rssticker_js
+ {
+  IG::DocHead( type       => 'text/javascript',
+               expires    => '+24h',
+               attachment => 'rssticker_js' );
+
+  PrOut <<END;
+/*
+ ======================================================================
+ RSS JavaScript Ticker object
+ Author: George at JavaScriptKit.com/ DynamicDrive.com
+ Created: Feb 5th, 2006. Updated: Feb 5th, 2006
+ ======================================================================
+*/
+
+function createAjaxObj()
+ {
+  var httprequest = false;
+  if ( window.XMLHttpRequest )
+   {
+    // if Mozilla, Safari etc
+    httprequest = new XMLHttpRequest();
+    if ( httprequest.overrideMimeType )
+     { httprequest.overrideMimeType('text/xml'); }
+   }
+  else if ( window.ActiveXObject )
+   {
+    // if IE
+    try { httprequest = new ActiveXObject("Msxml2.XMLHTTP"); } 
+    catch (e)
+     {
+      try { httprequest = new ActiveXObject("Microsoft.XMLHTTP"); }
+      catch (e) {}
+     }
+   }
+  return httprequest;
+ }
+
+
+// -------------------------------------------------------------------
+// Main RSS Ticker Object function
+// rss_ticker(RSS_id, cachetime, divId, divClass, delay, optionalswitch)
+// -------------------------------------------------------------------
+
+function rss_ticker(RSS_id, cachetime, divId, divClass, delay, optionalswitch)
+ {
+  //Array key indicating which RSS feed to display
+  this.RSS_id = RSS_id;
+  
+  //Time to cache feed, in minutes. 0=no cache.
+  this.cachetime = cachetime;
+  
+  //ID of ticker div to display information
+  this.tickerid = divId;
+  
+  //Delay between msg change, in miliseconds.
+  this.delay = delay;
+  
+  this.logicswitch = (typeof optionalswitch!="undefined")? optionalswitch : -1;
+
+  //Boolean to indicate whether mouse is currently over ticker
+  //(and pause it if it is)  
+  this.mouseoverBol = 0;
+  this.pointer = 0;
+
+  this.ajaxobj = createAjaxObj();
+  document.write('<div id="' +divId+ '" class="' +divClass+ '">Initializing ticker...</div>');
+  this.getAjaxcontent();
+ }
+
+
+// -------------------------------------------------------------------
+// getAjaxcontent()- Makes asynchronous GET request to "rssfetch"
+// with the supplied parameters
+// -------------------------------------------------------------------
+
+rss_ticker.prototype.getAjaxcontent = function()
+ {
+  if (this.ajaxobj)
+   {
+    var instanceOfTicker = this;
+    var parameters = "rssurl=" +encodeURIComponent(this.RSS_id)+ "&cachetime=" +this.cachetime+ "&bustcache=" +new Date().getTime();
+    this.ajaxobj.onreadystatechange = function() {instanceOfTicker.initialize()};
+    this.ajaxobj.open('GET', "$IG::cgi_url/rssticker?action=outputrsscontent&amp;"+parameters, true);
+    this.ajaxobj.send(null);
+   }
+ }
+
+
+// -------------------------------------------------------------------
+// initialize()- Initialize ticker method.
+// -Gets contents of RSS content and parse it using JavaScript DOM methods 
+// -------------------------------------------------------------------
+
+rss_ticker.prototype.initialize = function()
+ {
+  if ( this.ajaxobj.readyState == 4 )
+   {
+    //if request of file completed
+    if ( this.ajaxobj.status==200 )
+     {
+      //if request was successful
+      var xmldata = this.ajaxobj.responseXML;
+      if ( xmldata.getElementsByTagName("item").length==0 )
+       {
+        //if no <item> elements found in returned content
+        document.getElementById(this.tickerid).innerHTML = "<b>Error</b> fetching remote RSS feed!<br />"+this.ajaxobj.responseText;
+        return;
+       }
+      var instanceOfTicker = this;
+
+      //find channel title
+      this.feedtitle = xmldata.getElementsByTagName("channel");
+      this.feedtitle[0].setAttribute("ctitle", this.feedtitle[0].getElementsByTagName("title")[0].firstChild.nodeValue);
+
+      this.feeditems = xmldata.getElementsByTagName("item");
+
+      //Cycle through RSS XML object and store each peice
+      //of the item element as an attribute of the element
+      for (var i=0; i<this.feeditems.length; i++)
+       {
+        this.feeditems[i].setAttribute("ctitle", this.feeditems[i].getElementsByTagName("title")[0].firstChild.nodeValue);
+        this.feeditems[i].setAttribute("clink", this.feeditems[i].getElementsByTagName("link")[0].firstChild.nodeValue);
+        this.feeditems[i].setAttribute("cdescription", this.feeditems[i].getElementsByTagName("description")[0].firstChild.nodeValue);
+       }
+
+      document.getElementById(this.tickerid).onmouseover = function()
+       { instanceOfTicker.mouseoverBol=1 }
+      document.getElementById(this.tickerid).onmouseout = function()
+       { instanceOfTicker.mouseoverBol=0 }
+      this.rotatemsg()
+     }
+  }
+ }
+
+
+// -------------------------------------------------------------------
+// rotatemsg()- Rotate through RSS messages and displays them
+// -------------------------------------------------------------------
+
+rss_ticker.prototype.rotatemsg = function()
+ {
+  var instanceOfTicker = this;
+
+  //if mouse is currently over ticker, do nothing (pause it)
+  if ( this.mouseoverBol==1 )
+   {
+    setTimeout(function(){instanceOfTicker.rotatemsg()}, 100);
+   }
+  else
+   {
+    var tickerDiv = document.getElementById(this.tickerid);
+    var tickercontent = "<strong>" + this.feedtitle[0].getAttribute("ctitle") + "</strong><br />";
+    tickercontent += '<a href="'+this.feeditems[this.pointer].getAttribute("clink")+'">'+this.feeditems[this.pointer].getAttribute("ctitle")+'</a>';
+    if (this.logicswitch=="showdescription")
+     {
+      tickercontent +="<br />"+this.feeditems[this.pointer].getAttribute("cdescription");
+     }
+    tickerDiv.innerHTML = tickercontent;
+    this.pointer = (this.pointer<this.feeditems.length-1)? this.pointer+1 : 0;
+
+    //update container every delay set
+    setTimeout(function(){instanceOfTicker.rotatemsg()}, this.delay);
+   }
+ }
+END
+ }

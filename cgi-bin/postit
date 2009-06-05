@@ -1,0 +1,502 @@
+#! /usr/bin/perl
+# Procedure: postit
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	proto		=> sub { CheckPrivilege('postit_edit') },
+		protoagg	=> sub { CheckPrivilege('postit_edit') },
+		delexec		=> sub { CheckPrivilege('postit_edit') },
+		protomodi	=> sub { CheckPrivilege('postit_edit') },
+		findshow	=> sub { CheckPrivilege('postit_view') },
+		findexec	=> sub { CheckPrivilege('postit_view') },
+		gettitle	=> sub { CheckPrivilege('postit_edit') },
+		default_action	=> sub { CheckPrivilege('postit_view') }
+	   );
+
+##############################################################################
+##############################################################################
+sub default_action
+ {
+  my $category_link;
+  my $query;
+
+  Header();
+  QuoteParams();
+
+  if ( $on{filter} )
+   {
+    $query = "select * from postit where".
+	      " (owner='$auth_user' or sharemode='0') and".
+	      ($in{category} ne "all" ? " category='$in{category}' and" : "").
+	      " (link ~* '$in{filter}' or title ~* '$in{filter}' or".
+	      ($in{category} eq "all" || !$in{category} ? " category ~* '$in{filter}' or" : "").
+	      " description ~* '$in{filter}' ) order by category, title"
+   }
+  else
+   {
+    $query = "select * from postit where".
+	     " (owner='$auth_user' or sharemode='0')".
+	     ( $in{category} eq 'all' ? '' : " and category='$in{category}'" ).
+	     " order by category, title"
+   }
+
+  PrOut "<table width=\"100%\">";
+
+  DbQuery( $query );
+
+  while (my @row = FetchRow())
+   {
+    my $del_icon;
+    my $edit_icon;
+    $row[6] ||= $lang{personal_links};
+
+    ## set a valid target
+    my $href_link = IG::ParseLink($row[0]);
+
+    if ($href_link !~ /target\=/)
+     { $href_link =~ s/>/ target\=\"$row[5]\">/; }
+    else
+     { $href_link =~ s/target\=\"[^\"]+\"/target\=\"$row[5]\"/; }
+
+    if ($category_link ne $row[6])
+     {
+      PrOut "<tr><td colspan=5><br><h3>$row[6]</h3></td></tr>\n";
+      $category_link = $row[6];
+     }
+
+    if (    ($row[3] eq $auth_user || CheckPrivilege("user_admin") )
+         && !$on{print}
+       )
+     {
+      $del_icon = Img(	href  => "postit?action=delexec&amp;id=$row[4]",
+			src   => "$IG::img_url/delete.gif",
+			width => 16,
+			title => $lang{delete} );
+
+      $edit_icon = Img(	href  => "postit?action=protomodi&amp;id=$row[4]",
+			src   => "$IG::img_url/edit.gif",
+			width => 16,
+			title => $lang{edit} );
+     }
+  
+    PrOut "<tr>
+	   <td valign=\"top\"><img width=16 src=\"$IG::img_url/mime_mini_$row[2].png\"></td>
+	   <td valign=\"top\" style=\"border-bottom: 1px solid gray\">$href_link</td>
+	   <td valign=\"top\" style=\"border-bottom: 1px solid gray\" nowrap>";
+    PrOut "<img src=\"$IG::img_url/ratingon.gif\">" for 1 .. $row[9];
+    PrOut "<img src=\"$IG::img_url/ratingoff.gif\">" for ($row[9]+1) .. 5;
+    PrOut "</td>
+	   <td valign=\"top\" style=\"width: 60%; border-bottom: 1px solid gray\">$row[1]<br>$row[8] </td>
+	   <td valign=\"top\" nowrap>$edit_icon$del_icon</td></tr>\n";
+   }
+  PrOut "</table><br>\n";
+  Footer();
+ }
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  my %categories;
+
+  HtmlHead(	ajax_req => { gettitle => "postit?action=gettitle" } );
+
+  TaskHead(	title=>'IGPostIt',
+		icon=>1,
+		width=>500);
+
+  FormHead(	cgiaction=>'protoagg',
+		name=>'proto');
+
+  Input (	type=>'hidden',
+  		name=>'id');
+
+  Input (	show=>$lang{link_name},
+		onchange=>"gettitle(['url__' + getVal('link')], ['title'], 'GET'); return true;",
+  		type=>'text',
+                validate  => { onerror   => $lang{Err_nolink},
+                               mandatory => 'true' },
+		name=>'link',
+		style => 'width:300px',
+		size=>40);
+ 
+  Input (	show=>$lang{type},
+		style => 'width:300px',
+  		type=>'select',
+		value=>'attach',
+		onchange=>"linktype.src='$IG::img_url/mime_mini_' + this.options[this.selectedIndex].value + '.png';",
+		name=>'type',
+		data=>{ offer      => $lang{offers},
+			order      => $lang{orders},
+			letter     => $lang{letters},
+			fax        => 'Fax',
+			contract   => $lang{contracts},
+			document   => $lang{copyed_document},
+			executable => $lang{program},
+			http       => $lang{web_site},
+			file       => 'File',
+			wiki       => 'Wiki',
+			attach     => $lang{attachments} } );
+
+  Img(	id=>'linktype',
+        style=>'margin-top:3px',
+	src=>"$IG::img_url/mime_mini_attach.png" );
+
+  Input (	show=>'Rating',
+		type=>'select',
+		zerovalue=>'true',
+		style => 'width:300px',
+		name=>'rating',
+		data=>[(1..5)] );
+
+  Input (	show=>$lang{destination},
+  		type=>'select',
+		style => 'width:300px',
+		name=>'target',
+		data=>[(['mainf',	$lang{open_same_window}],
+			['_blank',	$lang{open_new_window}])]);
+
+  DbQuery("select category ".
+	  "from postit group by category order by category");
+  while (my @row = FetchRow())
+   { $categories{$row[0]} = $row[0] if $row[0]; }
+
+  ## we can't use a translated 'personal_link' category
+  delete $categories{personal_links};
+  $categories{$lang{personal_links}} = $lang{personal_links};
+
+  Input (	show=>$lang{category},
+  		type=>'combo',
+		style => 'width:280px',
+		value=>$lang{personal_links},
+		name=>'category',
+		data=>\%categories);
+
+  Input (	show=>$lang{reserve},
+		style => 'width:300px',
+		type=>'select',
+		name=>'sharemode',
+		data=>[(['0',$lang{public}],
+			['1',$lang{private}])] );
+
+  Input (	show=>$lang{title},
+  		type=>'textarea',
+		name=>'title',
+                validate  => { onerror   => $lang{Err_notitle},
+                               mandatory => 'true' },
+		style => 'width:300px; height:60px;' );
+
+  Input (	show=>$lang{description},
+  		type=>'textarea',
+		style => 'width:300px; height:60px;',
+		name=>'description' );
+
+  Input (	type=>'submit',
+		style=>'margin-top: 20px',
+  		value=>$lang{save_link});
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  ## Validate Form values
+  push @IG::errmsg, IG::FormValidate();
+
+  proto() && return if @IG::errmsg;
+
+  $on{sharemode} ||= '0';
+  $on{rating}	 ||= '0';
+  $on{category}    = '' if $on{category} eq $lang{personal_links};
+  $on{sharemode}   = 1 if !$on{category} && !CheckPrivilege('sys_user_admin');
+  $on{id}	 ||= MkId();
+  $on{link}        =~ s/^.*([EF123456789])(\d{5})\.(\d\d).*$/$1$2.$3/;
+  $on{link}  	   = "http://$on{link}"
+		     if $on{link} !~ /^https*\:\/\// && $on{type} eq 'http';
+
+  DbWrite( table            => 'postit',
+           action           => 'insert',
+           overwrite_clause => "id = '$on{id}' and owner = '$auth_user'",
+           values           => [ $on{link},
+                                 $on{title},
+                                 $on{type},
+                                 $auth_user,
+                                 $on{id},
+                                 $on{target},
+                                 $on{category},
+                                 $on{sharemode},
+                                 $on{description},
+                                 $on{rating} ] );
+
+  LogD($on{title}, 'insert', 'postit', $on{id});
+  IG::Redirect("postit?category=" . MkUrl($on{category}) );
+ }
+
+##############################################################################
+##############################################################################
+sub protomodi
+ {
+  DbQuery("select * from postit ".
+	  "where id = '".DbQuote($on{id})."' and owner = '$auth_user'");
+
+  (	$on{link},
+	$on{title},
+	$on{type},
+	$on{owner},
+	$on{id},
+	$on{target},
+	$on{category},
+	$on{sharemode},
+	$on{description},
+	$on{rating}	) = FetchRow();
+
+  proto();
+ }
+
+##############################################################################
+##############################################################################
+sub delexec
+ {
+  DbQuery("DELETE FROM postit ".
+          "where id = '".DbQuote($on{id})."' and owner = '$auth_user'");
+
+  LogD('', 'delete', 'postit', $on{id});
+
+  IG::Redirect("postit");
+ }
+
+##############################################################################
+##############################################################################
+sub _short_cuts
+ {
+  my %categories;
+  my $html = FormHead(	cgiaction=>'protoagg',
+			fieldstyle=>'margin:0px 0px 0px 0px; ',
+			labelstyle=>'margin:5px 0px 0px 0px; '.
+				    'font-size:10px; '.
+				    'background:transparent; '.
+				    'border:0px; '.
+				    'width:140px;',
+			name=>'proto').
+
+	     Input (	show=>$lang{link_name},
+  			type=>'text',
+			name=>'link',
+			style=>'width:140px').
+ 
+	     Input (	show=>$lang{type},
+			style=>'width:140px',
+  			type=>'select',
+			value=>'attach',
+			name=>'type',
+			data=>{ offer	=>	$lang{offers},
+				order	=>	$lang{orders},
+				letter	=>	$lang{letters},
+				fax	=>	'Fax',
+				contract=>	$lang{contracts},
+				document=>	$lang{copyed_document},
+				executable=>	$lang{program},
+				http	=>	$lang{web_site},
+				file	=>	'File',
+				wiki	=>	'Wiki',
+				attach	=>	$lang{attachments} } );
+	
+  DbQuery("select category ".
+	  "from postit group by category order by category");
+  while (my @row = FetchRow())
+   { $categories{$row[0]} = $row[0] if $row[0]; }
+
+  ## we can't use a translated 'personal_link' category
+  delete $categories{personal_links};
+  $categories{$lang{personal_links}} = $lang{personal_links};
+
+  $html .=   Input (	show=>$lang{category},
+  			type=>'combo',
+			style=>'width:120px',
+			value=>$lang{personal_links},
+			name=>'category',
+			data=>\%categories).
+
+	     Input (	show=>$lang{title},
+  			type=>'textarea',
+			name=>'title',
+			style=>'width:140px; height:60px;' ).
+
+	     Input (	type=>'submit',
+			style=>'margin-top: 10px',
+  			value=>$lang{save}).
+	     FormFoot();
+
+  $html = IG::QuickCreator().
+          TaskHead(	title=>$lang{new_item},
+			icon=>2,
+			width=>180).
+	  TaskMsg($html, 2).
+	  TaskFoot();
+  return $html;
+ }
+
+###########################################################################
+###########################################################################
+sub findshow
+ {
+  my ($description, %links, $id);
+
+  HtmlHead();
+  if ($auth_user ne "guest")
+   {
+    HLayer( bottom_space => 0,
+            left_layers=>[(
+		    FormHead (	name=>'navi',
+				float=>'left',
+				labelstyle=>"border:0px; width:auto;color:$IG::clr{font_menu_title}; background-color:$IG::clr{bg_menu_title}",
+				method=>'get',
+				target=>'mainf',
+				cgiaction=>'findexec'),
+
+		    Input (	name=>'id',
+				show=>$lang{personal_links},
+				type=>'select',
+				style=>'width:250px; font-size:10px;',
+				onchange=>"parent.mainf.location.href = 'postit?action=findexec&amp;id=' + document.navi.id.options[document.navi.id.selectedIndex].value",
+				data=>"select id, title from postit where owner='$auth_user' and category='' order by title"),
+
+		    Input (	name=>'Go',
+				show=>$lang{go},
+				type=>'submit'),
+		    FormFoot()
+			)],
+
+	    right_layers=>[(
+		    FormHead (	float=>'left',
+				labelstyle=>'border:0px; width:auto',
+				method=>'get',
+				target=>'mainf',
+				cgiaction=>'default_action').
+
+		    Input (	type=>'hidden',
+				name=>'category',
+				value=>'all').
+
+		    Input (	type=>"findable" ),
+
+		    Input (	name=>'filter',
+                                style=>'width:100px; margin-right: -5px;',
+                                type=>'text'),
+
+		    Input (	type=>'image',
+				name=>'find',
+				src=>"$IG::img_url/${IG::tema}search.gif",
+				alt=>$lang{find}),
+		    FormFoot(),
+		)]
+	 );
+   }
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub findexec
+ {
+  if (!$on{find})
+   {
+    DbQuery("select link from postit where id='".DbQuote($on{id})."'");
+    my ($postit_link) = FetchRow();
+    $postit_link = MkLink($postit_link);
+    $postit_link =~ /href\=\"([^\"]+)\"/;
+    IG::Redirect( $1 );
+   }
+ }
+
+############################################################################# 
+#############################################################################
+sub gettitle
+ {
+  HttpHead( expires => 'now' );
+  eval 'require LWP::Simple';
+  return if $@;
+  $on{url} = "http://" . $on{url} if $on{url} !~ /^http/;
+  my $page = LWP::Simple::get( $on{url} );
+  $page =~ /<title>([^<]+)<\/title>/smi;
+  PrOut $1;
+ }
+
+############################################################################# 
+#############################################################################
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }
+
+############################################################################# 
+#############################################################################
+sub Header
+ {
+  HtmlHead(shortcuts=>_short_cuts());
+  TaskHead(title=>'IGPostIt', width=>'100%');
+  return  if $on{print};
+
+  HLayer( bottom_space => 15,
+	  left_layers  =>
+	   [(
+             MkButton( text => $lang{new_item},
+                       link => "postit?action=proto&amp;category=".
+				( $on{category} eq 'all'
+				  ? ''
+				  : MkUrl($on{category})
+				) ),
+
+             MkButton( text => $lang{update_list},
+                       link => "postit" ),
+            )]
+	 );
+ 
+  TaskMsg ( FormHead(	float=>'left',
+			name=>'navi',
+			cgiaction=>'default_action').
+	    Input (	show=>$lang{category},
+			type=>'select',
+			allvalue=>'true',
+			zerovalue=>'true',
+			name=>"category",
+			data=>"select category from postit ".
+			      "group by category order by category").
+	    Input (	type=>'text',
+		        name=>'filter',
+		        style=>'width:150px',
+		        show=>$lang{find}).
+	    Input (	type=>'image',
+			name=>'find',
+			src=>"$IG::img_url/${IG::tema}search.gif",
+			alt=>$lang{find}).
+	    FormFoot(),7);
+
+ }

@@ -1,0 +1,24 @@
+## IGSuite 4.0.0
+## Language: opportunity_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+close_the_opportunity   => 'Close the opportunity',
+opportunity_closed	=> 'Opportunity Closed',
+opportunity_open	=> 'Opportunity Open',
+Err_enddate		=> 'Error in expected close date',
+Err_opportunity_name	=> 'Attention! you have to insert an opportunity name',
+Err_amount		=> 'Error in amount value',
+update_opportunity	=> 'Edit Opportunity',
+new_opportunity		=> 'New Opportunity',
+opportunity_name	=> 'Opportunity name',
+existing_business	=> 'Existing Business',
+new_business		=> 'New Business',
+probability		=> 'Probability',
+opportunity_source	=> 'Opportunity Source',
+sales_stage		=> 'Sales Stage',
+expected_close_date	=> 'Expected close date',
+   ));
+
+1;

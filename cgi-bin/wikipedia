@@ -1,0 +1,256 @@
+#! /usr/bin/perl
+# Procedure: wikipedia
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	findshow	=> sub { CheckPrivilege() },
+		findexec	=> sub { CheckPrivilege() },
+		default_action	=> sub { CheckPrivilege() } );
+
+############################################################################
+############################################################################
+sub default_action
+ {
+  findshow();
+ }
+
+############################################################################
+############################################################################
+sub findshow
+ {
+  HtmlHead();
+  HLayer( bottom_space => 0,
+          right_layers=>
+	  [( FormHead(	name=>'findnavi',
+			target=> $IG::plugin_conf{wikipedia}
+			      ?  'mainf'
+			      :  '_blank',
+			autofocus=>'false',
+			method=>'GET',
+			cgiaction=>'findexec',
+			formaction=> $IG::plugin_conf{wikipedia}
+			             ? ''
+			             : "http://www.wikipedia.org".
+			               "/search-redirect.php ",
+                        labelstyle=>'border:0px; width:auto;',
+			float=>'left' ),
+
+             Input (	type=>'hidden',
+                        name=>'language',
+                        override=>1,
+                        value=>$IG::lang,
+                        method=>'html'),
+
+             Input (	type=>'hidden',
+                        name=>'go',
+                        override=>1,
+                        value=>'Go',
+                        method=>'html'),
+
+	     Input (	type=>'findable' ),
+		
+	     Input (	type=>'text',
+			name=>'search',
+                        focus => 'true',
+			value=>$IG::cookie{lastsearch},
+                        style=>'width:200px; margin-right: -5px;',
+			onblur=>"document.cookie='lastsearch=' + escape(this.value)"),
+	
+	     Input (	type=>'image',
+			name=>'go',
+			src=>"$IG::img_url/${IG::tema}search.gif",
+			alt=>$lang{find}),
+			
+	     FormFoot())]
+	 );
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################ 
+sub findexec
+ {
+  my $counter;
+  #XXX2TEST
+
+  my $css = <<END;
+<STYLE type="text/css">
+<!--
+  .visualClear {
+    clear: both;
+  }
+
+  div.editsection {
+    float: right;
+    margin-left: 5px;
+  }
+
+  .toccolours {
+    border: 1px solid #aaa;
+    background-color: #f9f9f9;
+    padding: 5px;
+    font-size: 95%;
+  }
+
+/* thumbnails */
+  div.thumb {
+    margin-bottom: .5em;
+    border-style: solid;
+    border-color: white;
+    width: auto;
+  }
+ 
+  div.thumb div {
+    border: 1px solid #ccc;
+    padding: 3px !important;
+    background-color: #f9f9f9;
+    font-size: 94%;
+    text-align: center;
+    overflow: hidden;
+  }
+
+  div.thumb div a img {
+    border: 1px solid #ccc;
+  }
+
+  div.thumb div div.thumbcaption {
+    border: none;
+    text-align: left;
+    line-height: 1.4em;
+    padding: .3em 0 .1em 0;
+  }
+  
+  div.magnify {
+    float: right;
+    border: none !important;
+    background: none !important;
+  }
+  
+  div.magnify a, div.magnify img {
+    display: block;
+    border: none !important;
+    background: none !important;
+  }
+
+  div.tright {
+    clear: right;
+    float: right;
+    border-width: .5em 0 .8em 1.4em;
+  }
+
+  div.tleft {
+    float: left;
+    margin-right: .5em;
+    border-width: .5em 1.4em .8em 0;
+  }
+
+/*
+** content styles
+*/
+
+  #toc, .toc, .mw-warning {
+    border: 1px solid #aaa;
+    background-color: #f9f9f9;
+    padding: 5px;
+    font-size: 95%;
+  }
+
+  #toc h2, .toc h2 {
+    display: inline;
+    border: none;
+    padding: 0;
+    font-size: 100%;
+    font-weight: bold;
+  }
+
+  #toc #toctitle,
+  .toc #toctitle,
+  #toc .toctitle,
+  .toc .toctitle {
+    text-align: center;
+  }
+
+  #toc ul, .toc ul {
+    list-style-type: none;
+    list-style-image: none;
+    margin-left: 0;
+    padding-left: 0;
+    text-align: left;
+  }
+
+  #toc ul ul, .toc ul ul {
+    margin: 0 0 0 2em;
+  }
+
+  #toc .toctoggle, .toc .toctoggle {
+    font-size: 94%;
+  }
+-->
+</STYLE>
+END
+
+  require LWP::UserAgent;
+  my $ua = LWP::UserAgent->new;
+  $ua->agent("IGSuite/$IG::VERSION");
+
+  my $req = HTTP::Request->new(GET => "http://$IG::lang.wikipedia.org/wiki/".
+                                      "Special:Search/".
+                                      MkUrl($on{search}) );
+
+  my $r = $ua->request($req);
+
+  die("Can't connect to 'http://$IG::lang.wikipedia.org'.\n")
+    if ! $r->is_success;
+
+  $IG::tasksfontsize = '14px';
+  
+  HtmlHead( charset=>'utf-8',
+            css=>$css,
+            base_target=>'_blank',
+            base_href=>"http://$IG::lang.wikipedia.org/wiki/");
+
+  TaskHead( icon=>4,
+            title=>'Wikipedia - The Free Encyclopedia',
+            padding=>10);
+  
+  PrOut "<div style=\"position:relative; padding-top:5px;\">";
+  
+  HTitle( level => 1,
+          style => 'margin-bottom:20px',
+          title => ucfirst($on{search}) );
+
+  for (split /\n/, $r->content())
+   {
+    next if ! /<\!\-\- start content \-\->/ && !$counter;
+    $counter++;
+    next if $counter == 1;
+    PrOut "$_\n";
+    last if  /<\!\-\- end content \-\->/;
+   }
+  
+  PrOut "</div>";
+  TaskFoot();
+  HtmlFoot();
+ }
+ 

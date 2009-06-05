@@ -1,0 +1,577 @@
+#! /usr/bin/perl
+# Procedure: fax_sent
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	proto		=> sub { CheckPrivilege('fax_sent_edit') },
+		protoagg	=> sub { CheckPrivilege('fax_sent_edit') },
+		protomodi	=> sub { CheckPrivilege('fax_sent_edit') },
+		findshow	=> sub { CheckPrivilege('fax_sent_view') },
+		findexec	=> sub { CheckPrivilege('fax_sent_view') },
+		delshow		=> sub { CheckPrivilege('fax_sent_edit') },
+		delexec		=> sub { CheckPrivilege('fax_sent_edit') },
+		docview		=> sub { CheckPrivilege('fax_received_view') },
+		sign		=> sub { CheckPrivilege('fax_received_view') },
+		default_action	=> sub { CheckPrivilege('fax_sent_view') });
+
+
+##############################################################################
+##############################################################################
+sub default_action
+ {
+  my (	$query,
+	$alphabet_selector,
+	$page_selector ) = IG::MkProtocolList(); 
+
+  Header( $page_selector, $alphabet_selector );
+
+  my $base_link = "alphabet=$on{alphabet}&amp;".
+		  "view=$on{view}";
+
+  TaskListMenu
+   (
+    [$lang{number},		"order=id&amp;$base_link"],
+    [$lang{receiver},		"order=contactname&amp;$base_link"],
+    [$lang{phone_number},	"order=faxnumber&amp;$base_link"],
+    [$lang{date},		"order=issue&amp;$base_link"],
+    [$lang{hour},		"order=timeissue&amp;$base_link"],
+    [Img(src=>"$IG::img_url/user.gif")],
+    [$lang{notes},		"order=note&amp;$base_link"],
+    []
+   );
+
+  DbQuery("SELECT fax_sent.id, fax_sent.issue, fax_sent.contactname,".
+          " fax_sent.owner, fax_sent.note, fax_sent.faxnumber,".
+          " fax_sent.contactid, fax_sent.category, fax_sent.timeissue,".
+          " fax_sent.npa, fax_sent.docref, users.initial ".
+          "FROM fax_sent ".
+          "LEFT JOIN users ON fax_sent.owner=users.login ".
+          "WHERE $query");
+
+  while (my @row = FetchRow())
+   {
+    TaskListItem (
+	[ParseLink($row[0])],
+	[$row[2]],
+	[$row[5]],
+	[$row[1]],
+	[$row[8]],
+	[$row[11]],
+	[MkLink($row[4])],
+        [Img( src   => "$IG::img_url/mime_mini_word.png",
+              title => $lang{fax_report},
+              href  => "igfax?action=logs&amp;filter_key=$row[0]") ]
+		 );
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub docview
+ {
+  ## Change id if user request next or previous ID
+  $on{id} = IG::SearchProtocolId( direction => $on{change_id_to},
+                                  id        => $on{id} ) if $on{change_id_to};
+
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'r' ) || return;
+
+  ## retriew document info
+  DbQuery("SELECT * FROM fax_sent WHERE id='".DbQuote($on{id})."'");
+  my @row = FetchRow();
+
+  IG::Warn( $lang{Err_nodocument} ) && return if !$row[0];
+  
+  ## adjust some values
+  $row[4]  = MkLink($row[4]);
+  $row[10] = MkLink($row[10]);
+  
+  ## renders the page
+  Header();
+
+  IG::ShowProtocolInfo
+   ( id     => $row[0],
+     title  => $lang{fax_sent_protocol},
+     fields => [( [ $lang{contact_name},
+                    "<a href=\"contacts?".
+                    "action=showrecord&amp;".
+                    "contactid=$row[6]\">".
+                    "$row[6] $row[2]</a>" ],
+               [ $lang{sender},
+               	 IG::UsrInf('name',$row[3]) ],
+               [ $lang{type},
+               	 $IG::docs_type{$row[7]} ],
+               [ "$lang{date} - $lang{hour}",
+                 "$row[1] - $row[8]" ],
+               [ $lang{document_integrity},
+               	 IG::CkSign( id=>$row[0], owner=>$row[3] ) ],
+               [ $lang{fax_number},
+                 $row[5] ],
+               [ $lang{archive_position},
+                 $row[9] ],
+               [ $lang{document_reference},
+                 $row[10] ],
+               [ $lang{notes},
+               	 $row[4] ],
+	)] );
+
+  ## Related Documents
+  IG::RelatedTo( $on{id}, $row[6] );
+
+  TaskFoot(	comments	=> 'yes',
+		commentid	=> $on{id},
+		commentbackurl	=> "action=docview&amp;id=$on{id}");
+  HtmlFoot();
+  LogD($row[2], 'view', 'fax_sent', $on{id});
+ }
+
+##############################################################################
+##############################################################################
+sub sign
+ {
+  my $sign;
+  ## find owner
+  DbQuery("select owner from fax_sent where id='".DbQuote($on{id})."'");
+  my $owner = FetchRow();
+
+  $sign = IG::Sign(     id     => $on{id},
+                        action => 'update') if $owner eq $auth_user;
+
+  LogD('sign', 'update', 'fax_sent', $on{id}) if $sign;
+  docview();
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+         TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
+         IG::LastDocuments().
+         TaskFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub protomodi
+ {
+  DbQuery("select * from fax_sent where id='".DbQuote($on{id})."'");
+    (	$on{id},
+	$on{issue},
+	$on{contactname},
+	$on{owner},
+	$on{note},
+	$on{faxnumber},
+	$on{contactid},
+	$on{category},
+	$on{timeissue},
+	$on{npa},
+	$on{docref}	) = FetchRow();
+
+  proto();
+ }
+
+############################################################################
+############################################################################
+sub proto
+ {
+  ## Check document accessibility
+  my $doc_status = IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' );
+  return if ! $doc_status;
+
+  HtmlHead();
+  TaskHead( title    => $lang{fax_sent_protocol},
+            minwidth => 500 );
+
+  FormHead( cgiaction  => 'protoagg',
+            labelstyle => 'width:130px',
+            autofocus  => 'false' );
+
+  Input(    show     => $lang{protocol_number},
+	    validate => { pattern   => '^(6\d\d\d\d\d.\d\d)*$',
+                          onerror   => $lang{Err_protocol} },
+	    type     => 'text',
+            readonly => $doc_status == -1 ? 0 : 1,
+	    name     => 'id',
+	    maxlen   => 10,
+	    size     => 10);
+
+  Input(    show     => $lang{rif},
+            readonly => $doc_status == -1 ? 0 : 1,
+	    name     => 'owner',
+	    type     => 'logins');
+
+  Input(    show     => $lang{receiver},
+            validate => { mandatory => 'true' },
+	    type     => 'contactfinder');
+
+  Input(    type     => 'select',
+            validate => { mandatory => 'true' },
+	    name     => 'category',
+	    zerovalue=> 'true',
+	    show     => $lang{document_type},
+	    data     => \%IG::docs_type);
+
+  Input(    show     => $lang{issue},
+	    validate => { onerror   => $lang{Err_issue},
+	                  mandatory => 'true' },
+	    type     => 'date',
+	    value    => $tv{today},
+	    name     => 'issue');
+
+  Input(    show     => $lang{invoice_time},
+	    type     => 'text',
+	    value    => $tv{time},
+	    size     => 8,
+	    name     => 'timeissue');
+
+  Input(    type     => 'text',
+	    show     => $lang{phone_number},
+	    name     => 'faxnumber',
+	    size     => 20);
+
+  Input(    name      => 'npa',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 50,
+            show      => $lang{archive_position});
+
+  Input(    name      => 'docref',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 30,
+            show      => $lang{document_reference});
+
+  Input(    show     => $lang{notes},
+	    type     => 'textarea',
+	    style    => 'width:350px; height:60px;',
+	    name     => 'note');
+
+  Input(    type     => 'submit',
+	    style    => 'margin-top:20px',
+	    value    => $lang{save_fax});
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  ## Validate Form values
+  push @IG::errmsg, IG::FormValidate();
+  proto() && return if @IG::errmsg;
+
+  ## update database
+  $on{id} ||= IG::MkLastNum('fax_sent');
+
+  QuoteParams();
+  DbQuery(query=>[( "DELETE FROM fax_sent where id = '$in{id}'",
+
+		    "INSERT INTO fax_sent VALUES ('$in{id}', '$in{issue}',".
+		    " '$in{contactname}', '$in{owner}', '$in{note}',".
+		    " '$in{faxnumber}', $in{contactid}, '$in{category}',".
+		    " '$in{timeissue}', '$in{npa}', '$in{docref}')"
+		  )] );
+  LogD('','insert', 'fax_sent', $on{id});
+
+  IG::Redirect("fax_sent?action=docview&amp;id=$on{id}");
+ }
+
+#############################################################################
+#############################################################################
+sub findshow
+ {
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer
+     ( bottom_space => 0,
+       right_layers
+        =>[(
+	    FormHead(	name      => 'findnavi',
+			autofocus => 'false',
+			method    => 'get',
+			target    => 'mainf',
+			cgiaction => 'findexec',
+                        labelstyle=> 'border:0px; width:auto;',
+			float     => 'left' ),
+
+	    Input (	type      => 'findable' ),
+
+	    Input (	type      => 'select',
+			name      => 'method',
+			data      => [(['header',$lang{with_header}],
+				       ['id',	 $lang{with_protocol}],
+				       ['date',  $lang{with_date}],
+				       ['npa',   $lang{with_npa}],
+				       ['note',  $lang{with_notes}])]),
+
+	    Input (	type      => 'text',
+			name      => 'keytofind',
+			value     => $IG::cookie{lastsearch},
+                        focus     => 'true',
+                        style     => 'width:100px; margin-right: -5px;',
+                        onblur    => "document.cookie='lastsearch=' + escape(this.value)"),
+
+	    Input (	type      => 'image',
+			name      => $lang{find},
+			src       => "$IG::img_url/${IG::tema}search.gif",
+			alt       => $lang{find}),
+
+	    FormFoot()
+           )]
+	 );
+   }
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub findexec
+ {
+  my $query;
+
+  if ( $on{ajax_request} )
+   {
+    HttpHead( expires => '+30s' );
+
+    TaskMsg( Input( type      => 'button',
+                    float     => 'right',
+                    onclick   => "document.location = '".
+                                 "fax_sent?".
+                                        "action=proto&amp;".
+                                        "contactid=$on{contactid}&amp;".
+                                        "backtoreferer=1';",
+                    show      => $lang{new_item},
+                    fieldstyle=> 'margin:0px',
+                    style     => 'margin:0px;font-size:10px; height:15px' ).
+                    
+	     Img(   src       => "$IG::img_url/mime_mini_fax.png",
+                    style     => 'margin-right:2px',
+                    align     => 'absmiddle').
+
+             "<a href=\"fax_sent\">$lang{fax_sent}</a>"
+
+            ,7);
+   }
+  else
+   {
+    $IG::set_cookie{lastsearch}=$on{keytofind};
+    HtmlHead( shortcuts => _short_cuts());
+    TaskHead( title     => $lang{fax_sent},
+              width     => '100%' );
+    HLayer(
+            MkButton( text => $lang{back_to_protocol},
+                      link => 'fax_sent'),
+          );
+
+    TaskMsg( "$lang{fax_sent} - ".
+             "$lang{find}: <strong>$on{keytofind}</strong>",4);
+   }
+
+
+  ## Build query
+  QuoteParams();
+  if ( $on{ajax_request} )
+   {
+    $query = "fax_sent.contactid = '$in{contactid}'";
+   }   
+  elsif (length($on{keytofind}) < 2)
+   {
+    push @IG::errmsg, $lang{Err_find};
+    $query = "1 = 0";
+   }
+  elsif ($on{method} eq 'id' || $on{keytofind} =~ /6\d\d\d\d\d\.\d\d/)
+   {
+    $query = "fax_sent.id ~* '".DbQuote($on{keytofind})."'";
+   }
+  elsif ($on{method} eq 'date')
+   {
+    $on{keytofind} = CkDate($on{keytofind});
+    $query = "fax_sent.issue = '$on{keytofind}'";
+   }
+  elsif ($on{method} eq 'note')
+   {
+    $query = "fax_sent.note ~* '".DbQuote($on{keytofind})."'";
+   }
+  elsif ($on{method} eq 'npa')
+   {
+    $query = "fax_sent.npa ~* '".DbQuote($on{keytofind})."'";
+   }
+  elsif ($on{method} eq 'header')
+   {
+    $query = "fax_sent.contactname ~* '".DbQuote($on{keytofind})."'";
+   }
+
+  my $counter = 0;
+  TaskListMenu (
+	[$lang{number}],
+	[$on{ajax_request} ? '' : $lang{receiver}],
+	[$lang{phone_number}],
+	[$lang{issue}],
+	[$lang{rif}],
+	[$lang{notes}],
+	[]
+		);
+
+  DbQuery("SELECT * FROM fax_sent ".
+          "WHERE $query ".
+          "ORDER BY fax_sent.issue desc");
+
+  while ( my @row = FetchRow() )
+   {
+    ++$counter;
+
+    TaskListItem(
+	[ ParseLink($row[0])         ],
+	[ $on{ajax_request} ? '' :  $row[2] ],
+	[ $row[5]                    ],
+	[ $row[1], '', 'nowrap'      ],
+	[ IG::UsrInf('name',$row[3]) ],
+	[ MkLink($row[4])            ],
+        [Img( src   => "$IG::img_url/mime_mini_word.png",
+              title => $lang{fax_report},
+              href  => "igfax?action=logs&amp;filter_key=$row[0]") ]
+	        );
+   }
+
+  if ( $on{ajax_request} )
+   {
+    TaskListFoot(6);
+   }
+  else
+   {   
+    push @IG::errmsg, $lang{no_items} if !$counter && length($on{keytofind}) > 1;
+    TaskListFoot();
+    TaskFoot();
+    HtmlFoot();
+    LogD( $IG::query_string, 'search', 'search_fax_sent', undef);
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub delshow
+ {
+  Header();
+  TaskMsg( $lang{warn_before_delete}.Br(2).
+  
+	   FormHead( cgiaction => 'delexec',
+		     float     => 'left',
+		     onsubmit  => IG::JsConfirm( $lang{are_you_sure} ) ).
+
+	  Input(     type      => 'select',
+		     name      => 'id',
+		     style     => 'width: 350px',
+		     zerovalue => 'true',
+		     data      => "SELECT id, id, contactname ".
+		                  "FROM fax_sent ".
+			          "where issue>='$tv{start_year}'".
+			          " and issue<='$tv{end_year}' ".
+			          ( CheckPrivilege('sys_user_admin')
+			            ? ''
+			            : "and owner='$auth_user' ").
+                                  "ORDER BY id desc",
+                     show      => $lang{protocol_number}).
+
+	  Input(     type      => 'submit',
+		     show      => $lang{delete}).
+
+	  FormFoot(),2);
+  Footer();
+ }
+
+
+############################################################################
+############################################################################
+sub delexec
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  IG::TrashDoc($on{id});
+  DbQuery("delete from fax_sent where id='".DbQuote($on{id})."'");
+
+  LogD('', 'delete', 'fax_sent', $on{id});
+  IG::Redirect("fax_sent");
+ }
+
+#############################################################################
+#############################################################################
+sub Header
+ {
+  my ( $page_selector, $alphabet_selector ) = @_;
+
+  HtmlHead( shortcuts => _short_cuts());
+  TaskHead( title     => $lang{fax_sent_protocol},
+	    width     => '100%' );
+
+  HLayer(
+	 MkButton( text      => $lang{faxes_mng},
+	           link      => 'igfax',
+                   privilege => CheckPrivilege('igfax_view') ),
+                   
+	 MkButton( text      => $lang{new_protocol},
+	           link      => 'fax_sent?action=proto' ),
+
+         MkButton( text      => $lang{fax_received},
+                   link      => 'fax_received' ),
+
+         MkButton( text      => $lang{fax_sent},
+                   link      => 'fax_sent' ),
+
+         MkButton( text      => $lang{delete},
+                   link      => 'fax_sent?action=delshow',
+                   privilege => CheckPrivilege('fax_sent_edit') ),
+
+         MkButton( text      => $lang{reports},
+                   link      => 'reports?table=fax_sent',
+                   privilege => CheckPrivilege('fax_sent_report') ),
+
+         MkButton( text      => $lang{fax_report},
+                   link      => "igfax?action=logs&amp;filter_key=$on{id}",
+                   privilege => $on{id} && CheckPrivilege('igfax_view') ),
+
+	 $page_selector,
+	) if !$on{print};
+
+  PrOut $alphabet_selector;
+ }
+
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }

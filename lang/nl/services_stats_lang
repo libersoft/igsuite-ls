@@ -1,0 +1,25 @@
+## IGSuite 4.0.0
+## Language: services_stats_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+total_services_num	=>'Totaal service',
+total_services_month	=>'Totaal service op',
+time_average		=>'Gemiddelde planning’s tijd',
+week_charge		=>'Werk druk dagen van de week',
+services_requested	=>'Resultaat van de maandelijkse afgenomen diensten',
+max_services		=>'Max service op een dag',
+min_services		=>'Minimum services op een dag',
+day_average		=>'Gemiddelde services op een dag',
+week_end_services	=>'Totaal servervice op een vrije dag',
+byequipment_services	=>'Totaal service per gereedschap',
+total_services_months	=>'Totaal service over het afgelopen 13 maanden',
+average_services_months =>'Dag gemiddelde over het afgelopen 13 maanden',
+today_stats		=>'Status van vandaag',
+months_stats		=>'Status van',
+   ));
+
+1;
+
+

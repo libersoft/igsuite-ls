@@ -1,0 +1,182 @@
+#! /usr/bin/perl
+# Procedure: tiffedit
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+## Check if tiffcp is a valid application to edit tiff files
+if (! -e $IG::ext_app{tiffcp})
+ {
+  HtmlHead();
+  TaskHead();
+
+  TaskMsg( "Error: If you want to use this feature ".
+	   "ask to your administrator to set \$IG::ext_app{tiffcp} ".
+	   "parameter in IG configuration file",1);
+  TaskFoot();
+  HtmlFoot();
+ }
+else
+ {
+  IG::DTable (	show		=> sub { CheckPrivilege('archive_tiff') },
+		tiffagg		=> sub { CheckPrivilege('archive_tiff') },
+		default_action	=> sub { CheckPrivilege('archive_view') });
+ }
+
+
+##############################################################################
+##############################################################################
+sub default_action { IG::Redirect("archive"); }
+sub show
+ {
+  Header();
+  FormHead(cgiaction=>'tiffagg');
+  PrOut "<table class=\"tasklist\"><tr>
+	 <td class=\"menu\">$lang{source_doc}</td>
+	 <td class=\"menu\">Pagine</td></tr>\n";
+
+  for (1..4)
+   {
+    PrOut "<tr><td>";
+    Input (	type=>'text',
+		name=>"file$_",
+		size=>25,
+		maxlen=>10);
+
+    PrOut "</td><td>";
+    Input (	type=>'text',
+		name=>"pag$_",
+		size=>30);
+
+    PrOut "</td></tr>\n";
+   }
+
+  PrOut "<tr><td class=\"menu\">$lang{target_doc}</td><td><br></td></tr>\n";
+
+  PrOut "<tr><td>";
+  Input (	type=>'text',
+		name=>'file5',
+		size=>25,
+		maxlen=>10);
+
+  PrOut "</td><td>";
+  Input (	type    => 'submit',
+		onclick => IG::JsConfirm( $lang{are_you_sure} ),
+		value   => $lang{edit_doc});
+
+  PrOut "</td></tr></table>\n";
+  FormFoot();
+  Footer();
+  1;
+ }
+
+#############################################################################
+#############################################################################
+sub tiffagg
+ {
+  my ($source, $file);
+
+  push @IG::errmsg, $lang{Err_target_doc} if !$on{file5};
+
+  for my $t (1..5)
+   {
+    ## locates Tiff files
+    my $pid = $on{"file$t"};
+
+    $file = IG::ProtocolToFile( $pid );
+
+    push(@IG::errmsg,
+         "Your resource file path '$file' can't contain white spaces!\n")
+      if $file =~ / /;
+
+    push(@IG::errmsg,
+         "$lang{Err_nodoc} $pid") && next if !$file && $pid && $t != 5;
+    push(@IG::errmsg,
+         "Source $pid Is not a tiff file") if $file && $file !~ /\.tiff*$/;
+    push(@IG::errmsg,
+         $lang{Err_source_doc}) if $t==5 && !$source;
+
+    ## check pages to extract from tiff files
+    if ($on{"pag$t"})
+     {
+      my $pagg = $on{"pag$t"};
+
+      while ($pagg =~ /(\d*)\-(\d*)/)
+       {
+        my $str;
+        for ($1..$2) { $str.="$_,"; }
+        chop($str);
+        $pagg =~ s/(\d*)\-(\d*)/$str/;
+       }
+
+      $pagg =~ s/(\d*),/($1-1).","/eg; #sottrae un numero a tutta la serie
+      $pagg =~ s/(\d*)$/(($1-1)+0)/e;  #sottrae un numero all'ultimo elemento
+
+      if ($pagg =~ /^[0-9\,]+$/)
+       {
+        ## prepare tiffcp options
+        $source .= "$file,$pagg ";
+       }
+      else
+       { push @IG::errmsg, $lang{Err_pages_description}; }
+     }
+    else
+     {
+      ## prepare tiffcp options
+      if ($t < 5) { $source .= $file . " "; }
+     }
+   }
+
+  show() && return if @IG::errmsg;
+
+  ## merge tiff files
+  IG::SysExec( command   => $IG::ext_app{tiffcp},
+               arguments => [( (split / /, $source),
+                               "$IG::temp_dir${S}tiffedit-$auth_user" )]
+             ) or die("Can't execute '$IG::ext_app{tiffcp}'.\n");
+
+  IG::TrashDoc( $on{file5} );
+
+  IG::FileCopy( "$IG::temp_dir${S}tiffedit-$auth_user", $file, 1 )
+    or die("Can't move '$IG::temp_dir${S}tiffedit-$auth_user' file ".
+           " to '$file' Check permission - debug info: '$source'.\n");
+
+  Header();
+  TaskMsg($lang{ok_doc}.MkLink($on{file5}),1);
+  Footer();
+  LogD("$file with file/s $source", 'tiffedit');
+ }
+
+#############################################################################
+#############################################################################
+sub Header
+ {
+  HtmlHead();
+  TaskHead(title=>"$lang{edit_documents} Tif");
+ }
+
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }

@@ -1,0 +1,1925 @@
+#! /usr/bin/perl
+# Procedure: igfax
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+use IG::Hylafax;
+use IG::DocView;
+
+IG::MkEnv(__PACKAGE__);
+my $page_selector;
+
+## Where fax can be protocoled
+my %target_protocol = (	archive   =>	'archive_view',
+			contracts =>	'contracts_view',
+			igfax     =>    'igfax_edit',
+			letters   =>	'letters_view',
+			nc_ext    =>	'nc_ext_view',
+			nc_int    =>	'nc_int_view',
+			orders    =>	'orders_view',
+			offers    =>	'offers_view',
+			basket	  =>	'igfax_view',
+		      );
+
+## Target direcotry of new received fax
+my $fax_target_path = $IG::htdocs_dir . $IG::S .
+                      $IG::default_lang{fax_received};
+
+## Needed to convert an email address to a login
+my %users_conv = ();
+   $users_conv{IG::UsrInf('email',$_)} = IG::UsrInf('name',$_)
+                                         for keys %{IG::UsrInf()};
+
+## Set default parameters to connect to Hylafax by Hylafax.pm module
+$Hylafax::port  = $IG::hylafax_port  || 4559;
+$Hylafax::host  = $IG::hylafax_host  || $IG::server_name;
+$Hylafax::login = $IG::hylafax_login || $auth_user;
+$Hylafax::pwd   = $IG::hylafax_pwd   || IG::UsrInf('passwd');
+#XXX2DEVELOP - $Hylafax::debug option
+
+## Dispatch Table
+IG::DTable(	sendfaxagg	=> 1,
+		showdocfile	=> sub { CheckPrivilege('igfax_view') },
+		sendfax		=> sub { CheckPrivilege('igfax_send') },
+		sendigdoc	=> sub { CheckPrivilege('igfax_send') },
+		delfax		=> 1,
+		delfaxjob	=> sub { CheckPrivilege('igfax_send') },
+		outgoings	=> sub { CheckPrivilege('igfax_view') },
+		faxsent		=> sub { CheckPrivilege('igfax_view') },
+		logs		=> sub { CheckPrivilege('igfax_view') },
+		log_report	=> sub { CheckPrivilege('igfax_view') },
+		proto		=> sub { CheckPrivilege('igfax_view') },
+		protoagg	=> sub { CheckPrivilege('igfax_edit') },
+		protomodi	=> sub { CheckPrivilege('igfax_edit') },
+		faxstat		=> sub { CheckPrivilege('igfax_view') },
+		default_action	=> sub { CheckPrivilege('igfax_view') }
+          );
+
+##############################################################################
+##############################################################################
+sub logs
+ {
+  ## search/load hylafax log file
+  my $faxlog;
+  for ( "$IG::hylafax_dir/etc/xferlog",
+	"$IG::hylafax_dir/etc/xferfaxlog",
+	"$IG::hylafax_dir/log/xferlog",
+	"$IG::hylafax_dir/log/xferfaxlog" )
+   { ($faxlog = $_) && last if -e $_ }
+
+  die("Can't locate any Hylafax log file. ".
+      "I'm looking for \$IG::hylafax_dir/log/xferlog or ".
+      "\$IG::hylafax_dir/log/xferfaxlog. You can try to set a right ".
+      "\$IG::hylafax_dir in your igsuite.conf configuration file in ".
+      "order to find these log files.\n"
+     ) if !$faxlog;
+
+  open (DAT, '<', $faxlog) or die("Can't open '$faxlog' check permissions!\n");
+
+  ## first count how many row/record there are in the log file
+  my ($limit, $offset, $counter);
+  while (<DAT>)
+   {
+    next if /\tCALL\t/;
+    next if $on{filter_key} && ! /\Q$on{filter_key}\E/;
+    $counter++;
+   }
+
+  $on{pos} ||= 'last'; 
+  ( $limit,
+    $offset,
+    $page_selector ) = IG::MkTaskPaging( $counter,
+                                         "igfax?".
+                                           "action=logs&amp;".
+                                           "filter_key=$on{filter_key}" );
+
+  Header("IGFax - $lang{events_report}");
+
+  TaskMsg( HLayer( bottom_space => 0,
+                   left_layers => [( FormHead( cgiaction=>'logs'),
+
+                                     Input( type  => 'text',
+                                            show  => $lang{filter_set},
+                                            float => 'left',
+                                            name  => 'filter_key',
+                                            focus => 'true',
+                                            style => 'width:150px'),
+
+                                     Input( type  => 'submit',
+                                            float => 'left',
+                                            show  => 'Ok'),
+
+                                     FormFoot()
+                                   )],
+
+                  right_layers => [( $lang{fax_sent},
+                                     Img( src   => "$IG::img_url/bullet_out.gif",
+                                          style => 'border: 1px solid #CCCCCC;'.
+                                                   'margin-left: 3px',
+                                          width => 16,
+                                          title => $lang{fax_sent} ),
+
+                                     '&nbsp;'x5,
+                                     
+                                     $lang{fax_received},
+                                     Img( src   => "$IG::img_url/bullet_in.gif",
+                                          style => 'border: 1px solid #CCCCCC;'.
+                                                   'margin-left: 3px',
+                                          width => 16,
+                                          title => $lang{fax_received} ),
+                                  )]
+                 )
+           ,4 ) if !$on{print};
+
+  TaskListMenu
+   (	[$lang{date}],
+	[],
+	['Job'],
+	['Ref'],
+	[$lang{user}],
+	[$lang{phone_number}],
+	[$lang{pages}],
+	[''],
+	['Status'],
+	[]);
+
+  ## reload log file from start
+  seek(DAT, 0, 0);
+  $counter = 0;
+  while (<DAT>)
+   {
+    next if /\tCALL\t/;
+    next if $on{filter_key} && ! /\Q$on{filter_key}\E/;
+    next if ++$counter < ( $offset + 1 );
+    last if $counter   > ( $offset + $limit );
+
+    my %data = %{Hylafax::ParseLogRow($_)};
+    my $tag;
+
+    ## Try to link $data{commid} to fax_received protocol number
+    if (    $data{direction} eq 'RECV'
+         && -e "$IG::hylafax_dir${S}log${S}c$data{commid}")
+     {
+      open( LOG, '<', "$IG::hylafax_dir${S}log${S}c$data{commid}")
+        or die("Can't read '$IG::hylafax_dir${S}log${S}c$data{commid}'.\n");
+
+      while (<LOG>)
+       {
+        next if ! /(\d\d\d\d\d\d\.tif)/;
+        $tag = $1;
+        last;
+       }
+      close(LOG);
+
+      $tag &&= '7' . substr($tag, -9, 5) . '.' . $data{date_y};
+      $data{reason} .= ('Probably stored in ' . MkLink($tag) ) if $tag;
+     }
+
+    $data{date}   = IG::GetDateByFormat( $data{date_d},
+                                         $data{date_m},
+                                         $data{date_y});
+    $data{jobtag} = ParseLink( $data{jobtag} );
+    $data{reason} = 'OK' if !$data{reason} && $data{direction} eq 'SEND';
+    $data{direction} = Img( src   => $data{direction} eq 'SEND'
+                                  ?  "$IG::img_url/bullet_out.gif"
+                                  :  "$IG::img_url/bullet_in.gif",
+                            width => 16,
+                            title => $data{direction} ) if !$on{print};
+
+    my $log_link =  "javascript:winPopUp('igfax?action=log_report&amp;".
+                                               "id=$data{commid}&amp;".
+                                               "tag=$tag".
+                                         "',790,550,'faxreport')";
+
+    TaskListItem( ["$data{date} - $data{time}", $log_link, 'nowrap'],
+                  [$data{direction}],
+                  [$data{jobid}],
+                  [$data{jobtag}],
+                  [_senderToUserName( $data{sender} )],
+                  ["$data{dest_numb}<br>$data{dest_id}", '', 'nowrap'],
+                  [$data{pages}],
+                  [$data{conntime}],
+                  [$data{reason}],
+                  [Img( src   => "$IG::img_url/printable_stampa.gif",
+                        title => $lang{print},
+                        href  => $log_link )]
+                    );
+   }
+  close (DAT);
+  TaskListFoot();
+  Footer();
+ }
+
+##############################################################################
+##############################################################################
+sub log_report
+ {
+  my ($faxlog, %data );
+
+  die("You have to specify an id!\n") if !$on{id};
+
+  ## search/load hylafax log file
+  for ( "$IG::hylafax_dir/etc/xferlog",
+	"$IG::hylafax_dir/etc/xferfaxlog",
+	"$IG::hylafax_dir/log/xferlog",
+	"$IG::hylafax_dir/log/xferfaxlog" )
+   { ($faxlog = $_) && last if -e $_ }
+
+  die("Can't locate any Hylafax log file. ".
+      "I'm looking for \$IG::hylafax_dir/log/xferlog or ".
+      "\$IG::hylafax_dir/log/xferfaxlog. You can try to set a right ".
+      "\$IG::hylafax_dir in your igsuite.conf configuration file.\n"
+     ) if !$faxlog;
+
+  open (DAT, '<', $faxlog) or die("Can't open '$faxlog' check permissions!\n");
+  while (<DAT>)
+   {
+    next if /\tCALL\t/;
+    %data = %{Hylafax::ParseLogRow($_)};
+    next if $data{commid} ne $on{id};
+
+    ## Try to find other information
+    if ( -e "$IG::hylafax_dir${S}log${S}c$data{commid}" )
+     {
+      open( LOG, '<', "$IG::hylafax_dir${S}log${S}c$data{commid}")
+        or die("Can't read '$IG::hylafax_dir${S}log${S}c$data{commid}'.\n");
+
+      while (<LOG>)
+       {
+        $data{transaction_start} ||= $1 if $_ =~ /^([^\[]+)\:\s\[/;
+        $data{hylafax_version}     = $1 if $_ =~ /(hylafax.+)$/i;
+        $data{remote_fax}          = $1 if $_ =~ /remote fax equipment\:\s*(.+)$/i;
+        $data{transaction_end}     = $1 if $_ =~ /^([^\[]+)\:\s\[/;
+       }
+      $data{remote_fax} ||= $lang{unknown};
+      close(LOG);
+     }
+
+    ## convert email to user name
+    $data{date}   = IG::GetDateByFormat( $data{date_d},
+                                         $data{date_m},
+                                         $data{date_y});
+    $data{reason} = 'OK' if !$data{reason} && $data{direction} eq 'SEND';
+    $data{jobtag} ||= $on{tag};
+    $data{sender} = _senderToUserName( $data{sender} );
+
+    last;
+   }
+  close (DAT);
+
+  $IG::clr{bg} = '#FFFFFF';
+  HtmlHead();
+
+  Img( src     => "$IG::img_url/printable_stampa.gif",
+       onclick => 'self.print()',
+       style   => 'cursor:pointer',
+       class   => 'noprint');
+
+  PrOut <<END;
+<hr style="width: 20cm">
+<table style="width: 20cm"><tr>
+<td width="100%" valign="top">
+ <div style="font-size:18px; font-weight:bold;">IGFax $IG::VERSION</div>
+ $data{hylafax_version}<br>
+ Host $IG::server_name with $IG::OS
+</td>
+<td nowrap>
+ <strong>$lang{events_report}</strong><br>
+ $IG::soc_name<br>
+ $IG::soc_fax<br>
+ $IG::tv{today} - $IG::tv{time}
+</td>
+</tr></table>
+<hr style="width: 20cm"><br><br>
+<table style="width: 20cm"><td valign="top">
+<table style="width:100%">
+END
+
+  my $counter;
+  my %igfax_lang = (  date              => $lang{date},
+                      time              => $lang{local_time},
+                      commid            => 'ID',
+                      direction	        => $lang{direction},
+                      jobid             => 'Job ID',
+                      jobtag            => $lang{protocol_number},
+                      sender            => $lang{sender},
+                      dest_numb	        => $lang{fax_number},
+                      dest_id           => $lang{id},
+                      pages             => $lang{pages},
+                      transaction_start => 'Transaction start',
+                      transaction_end   => 'Transaction end',
+                      conntime          => 'Connection time',
+                      remote_fax        => 'Remote Hardware',
+                      reason            => $lang{status} );
+
+  for ( qw( date	      time              commid        direction
+            jobid             sender transaction_start        transaction_end
+            dest_id           conntime          remote_fax
+            jobtag dest_numb  pages	        reason ) )
+   {
+    PrOut "<tr><td><strong>$igfax_lang{$_}</strong></td>".
+          "<td>$data{$_}</td></tr>";
+   }
+
+  PrOut "</table></td><td valign=\"top\" align=\"right\">";
+       
+  Img( src   => "docview?action=page_view&amp;".
+                        "page=0&amp;".
+                        "protocol=$data{jobtag}&amp;".
+                        "width=400&amp;".
+                        "height=620",
+       style => 'margin:5px 20px 20px 10px; border: 1px dotted #CCCCCC;',
+       width => 400,
+       height=> 620 );
+
+  PrOut "</td></tr></table><hr style=\"width: 20cm\">";
+       
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub default_action { faxstat(); }
+
+#############################################################################
+#############################################################################
+sub faxstat
+ {
+  my ($limit, $offset);
+
+  ## emulate Hylafax command line 'faxstat -s'
+  if ($IG::request_method eq 'commandline')
+   {
+    my $status = Hylafax::PrintFaxStat();
+       $status =~ s/<br>/\n/g;
+    PrOut $status;
+    return;
+   }
+
+  ## Get new faxes from hylafax server
+  Hylafax::GetRecvq( $fax_target_path );
+
+  ## Build a select field to archive the fax inside an external protocol
+  my %item;
+  foreach (keys %target_protocol)
+   {
+    $item{$_} = ( $lang{$_} ||
+                  ucfirst($_) ) if CheckPrivilege($target_protocol{$_});
+   }
+
+  ## looks for new faxes to archive
+  opendir( DIR, $fax_target_path )
+    or die( "Can't open '$fax_target_path' ".
+	    "to read last fax received check permissions.\n");
+
+  my @fales = sort grep /^7\d\d\d\d\d\_\d\d\.tif$/, readdir DIR;
+  my $fax_counter = $#fales;
+  close (DIR);
+
+  ( $limit,
+    $offset,
+    $page_selector ) = IG::MkTaskPaging( $fax_counter,
+                                         "igfax?action=default_action" );
+
+  Header("IGFax - $lang{inner_fax}", '10; URL=igfax'); 
+  TaskMsg( Hylafax::PrintFaxStat(), 3);
+
+  TaskListMenu( [ $lang{number}            ],
+		[ $lang{sender}            ],
+		[ $lang{probable_receiver} ],
+		[ $lang{pages}             ],
+		[ $lang{date}              ],
+		[ $lang{hour}              ],
+		[ $lang{destination}       ] );
+
+  my $counter;
+  for my $i (reverse 0 .. $fax_counter)
+   {
+    next if ++$counter < ( $offset + 1 );
+    last if $counter   > ( $offset + $limit );
+
+    ## retrieve fax info
+    my @faxinfo = InfoFaxFile( $fax_target_path . $IG::S . $fales[$i] );
+
+    ## try to guess a receiver
+    my $prev_receiver =  ! IG::UsrInf('name',$faxinfo[8])
+                        || IG::UsrInf('status',$faxinfo[8]) == 2
+                      ? $lang{none}
+                      : IG::UsrInf('name',$faxinfo[8]);
+    TaskListItem
+     (
+      [$faxinfo[0],
+       ( CheckPrivilege('igfax_edit') || $faxinfo[6] eq $lang{copyed_document}
+	 ? "igfax?action=proto&amp;id=$faxinfo[0]"
+         : '' )],
+      [$faxinfo[6] .
+	 "<div style=\"color:#AAAAAA; font-size:10px\">" .
+	 "$lang{fax_number}: " .
+	 ($faxinfo[2] || $lang{unknown}) .
+	 "</div>"],
+      [$prev_receiver],
+      [$faxinfo[1]],
+      [IG::GetNiceDate(IG::GetValuesByDate($faxinfo[4]))],
+      [$faxinfo[5]],
+      [Input( type     => 'select',
+	      zerovalue=> 'true',
+	      style    => 'font-size:10px; width:90px',
+	      onchange => "this.options[this.selectedIndex].value == 'basket' ".
+		          " ? location.href = 'igfax?action=delfax&amp;id=$faxinfo[0]'".
+		          " : ".
+		              "location.href = this.options[this.selectedIndex].value + ".
+	  		      "'?action=proto".
+			      "&amp;contactid=$faxinfo[7]".
+			      "&amp;builddoc_choice=4".
+			      "&amp;builddoc_source4=$faxinfo[0]'",
+	      data     => \%item )],
+     );
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+
+         TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
+
+         IG::LastDocuments().
+         TaskFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub delfax
+ {
+  my $fax = $on{id};
+     $fax =~ s/\./\_/;
+
+  my @faxinfo = InfoFaxFile( $fax_target_path . $IG::S . "$fax.tif" );
+  
+  IG::TrashDoc($on{id}) if    $faxinfo[6] eq $lang{copyed_document}
+                           || CheckPrivilege('igfax_edit');
+
+  IG::Redirect('igfax');
+ }
+
+#############################################################################
+#############################################################################
+sub delfaxjob
+ {
+  die("No faxjob specified.\n") if !$on{job};
+
+  my %fx = Hylafax::InfoFaxJob($on{job}, 'sendq');
+     %fx = Hylafax::InfoFaxJob($on{job}, 'doneq') if !%fx;
+
+  die("Specified an empty fax job.\n") if !%fx;
+
+  ## Check Privileges
+  die("You don't have privileges to delete this fax.\n")
+    if  $fx{sender} &&
+	$fx{sender} ne $auth_user &&
+	!CheckPrivilege('sys_user_admin');
+
+  Hylafax::DeleteFaxJob($on{job}) or die("Can't delete fax job '$on{job}'\n");
+
+  LogD('', 'delete', 'faxjob', $on{job});
+
+  IG::BackToReferer( default => "igfax?action=outgoings" );
+ }
+
+#############################################################################
+#############################################################################
+sub outgoings
+ {
+  Header("IGFax - $lang{outer_fax}", '10; URL=igfax?action=outgoings');
+  TaskMsg(Hylafax::PrintFaxStat(),3);
+
+  TaskListMenu (	['Job'],
+  			[$lang{fax_sent}],
+			[$lang{sender}],
+			[$lang{receiver}],
+			[$lang{pages}],
+			[$lang{attempts}],
+			[$lang{status}],
+			['']   );
+
+  my @outgoings = reverse Hylafax::FaxOutGoing();
+  if (!$Hylafax::errmsg)
+   {
+    for ( @outgoings )
+     {
+      /^(\d+)\s+/ || die("Incompatible Hylafax version!.\n");
+      my $job = $1;
+      my %fx = Hylafax::InfoFaxJob($job, 'sendq');
+
+      TaskListItem (
+	[$job],
+	[MkLink($fx{jobtag})],	
+	[ _senderToUserName( $fx{mailaddr} || $fx{sender} ) ],
+	[(InfoFaxNum($fx{number}) )[1]],
+	["$fx{npages}:$fx{totpages}"],
+	["$fx{tottries}:$fx{maxtries}"],
+	[$fx{status}],
+	[ Img( src=>"$IG::img_url/delete.gif" ),
+	  "igfax?action=delfaxjob&amp;backtoreferer=1&amp;job=$job" ]
+		   );
+     }
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+##############################################################################
+##############################################################################
+sub faxsent
+ {
+  Header("IGFax - $lang{fax_sent}", '10; URL=igfax?action=faxsent');
+  TaskMsg(Hylafax::PrintFaxStat(),3);
+
+  TaskListMenu(	[ 'Job'           ],
+		[ $lang{fax_sent} ],
+		[ $lang{sender}   ],
+		[ $lang{receiver} ],
+		[ $lang{pages}    ],
+		[ $lang{attempts} ],
+		[ $lang{status}   ],
+		[ ''              ]  );
+
+  my @sent = reverse Hylafax::FaxDone();
+
+  if ( !$Hylafax::errmsg )
+   {
+    for ( @sent )
+     {
+      /^(\d+)\s+/ || die("Incompatible Hylafax version!\n");
+      my $job = $1;
+      my %fx = Hylafax::InfoFaxJob($job, 'doneq');
+
+      TaskListItem (
+	[$job],
+	[MkLink($fx{jobtag})],
+	[ _senderToUserName( $fx{mailaddr} || $fx{sender} ) ],
+	[(InfoFaxNum($fx{number}) )[1]],
+	["$fx{npages}:$fx{totpages}"],
+	["$fx{tottries}:$fx{maxtries}"],
+	[$fx{status} || 'OK'],
+	[ Img( src   => "$IG::img_url/delete.gif",
+	       title => $lang{delete},
+	       href  => "igfax?action=delfaxjob&amp;".
+	                      "job=$job&amp;".
+	                      "backtoreferer=1").
+          Img( src   => "$IG::img_url/mime_mini_word.png",
+               title => $lang{fax_report},
+               href  => "igfax?action=logs&amp;filter_key=$fx{jobtag}") ]
+		);
+     }
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+###############################################################################
+###############################################################################
+sub sendigdoc
+ {
+  my ($filename, $filedir, $fileproc) = IG::ProtocolToFile( $on{protocol} );
+
+  IG::Warn( $lang{Err_nodocument} ) && return if !$filename;
+  IG::Warn( $lang{Err_privileges} ) && return if !CheckPrivilege($fileproc.'_view');
+
+  IG::FileCopy( $filedir . ${S} . $filename,
+
+                $IG::htdocs_dir . ${S} .
+                $IG::default_lang{fax_sent} . ${S} . 
+                ".faxjob_$auth_user",
+
+                0);
+  sendfax();
+ }
+
+#############################################################################
+#############################################################################
+sub sendfax
+ {
+  require IG::Utils;
+  HtmlHead();
+                         
+  TaskHead( title    => 'IGFax - Hylafax Client',
+            icon     => 1,
+            minwidth => '530px');
+
+  Hylafax::PrintFaxStat();
+
+  FormHead(	enctype		=> 'multipart/form-data',
+		name		=> 'sendfax',
+		labelstyle	=> 'width:150px;',
+		cgiaction	=> 'sendfaxagg');
+
+  Input (	type		=> 'hidden',
+		name		=> 'onsend');
+
+
+  ############################################################
+  ## TABPANE START
+
+  my $panel2 = Input( type     => 'label',
+                      labelstyle=> 'font-size:10px; background-color:transparent; border:0',
+                      show     => $lang{single_receiver} ).
+
+               Input( type     => 'contactfinder',
+		      extraselection => 1,
+		      style    => 'width:250px',
+		      show     => $lang{contact_name}).
+
+	       Input( type     => 'checkbox',
+		      show     => $lang{fax_number},
+		      name     => 'sendbyfax').
+
+	       Input( type     => 'text',
+		      onchange => 'document.sendfax.sendbyfax.checked=true;',
+		      style    => 'width:250px',
+		      float    => 'left',
+		      pattern  => '^(\d|\s)+$|^$',
+		      name     => 'differentfaxnumber').
+
+	       Input( type     => 'checkbox',
+		      show     => $lang{email},
+		      name     => 'sendbyemail').
+
+	       Input( type     => 'email',
+		      onchange => 'document.sendfax.sendbyemail.checked=true;',
+		      style    => 'width:250px',
+		      float    => 'left',
+                      validate => { mandatory => 'false' },
+		      name     => 'emailaddress').
+
+               Input( type     => 'label',
+                      labelstyle=> 'font-size:10px; background-color:transparent; border:0',
+                      show     => $lang{multi_receivers} ).
+
+               Input( type     => 'select',
+		      show     => $lang{group_name},
+		      zerovalue=> 'true',
+		      style    => 'width:270px',
+		      name     => 'groupname',
+		      data     => "SELECT contactid, contactname ".
+			      	  "FROM contacts where category='group' ".
+				  "ORDER BY contactname");
+
+  my $panel0 = Input( type     => 'logins',
+		      show     => $lang{sender},
+		      style    => 'width:250px',
+		      name     => 'owner').
+
+               Input( name     => 'npa',
+                      type     => 'text',
+                      style    => 'width:250;',
+                      maxlen   => 50,
+                      show     => $lang{archive_position}).
+
+               Input( type     => 'select',
+		      name     => 'category',
+		      zerovalue=> 'true',
+		      focus    => 'true',
+                      validate => { mandatory => 'true' },
+		      style    => 'width:250px',			
+		      show     => $lang{document_type},
+		      data     => \%IG::docs_type).
+
+               Input( name     => 'docref',
+                      type     => 'text',
+                      style    => 'width:250;',
+                      maxlen   => 30,
+                      show     => $lang{document_reference});
+
+  ## Looking for a fax job to send
+  my $fax_job_dir = $IG::htdocs_dir . $IG::S .
+                    $IG::default_lang{fax_sent} . $IG::S;
+
+  if (-e "${fax_job_dir}.faxjob_$IG::remote_host")
+   {
+    ## In some cases as filename we need to use hostname instead of
+    ## user login so try to convert hostname to user login
+    if ( -e "${fax_job_dir}.faxjob_$auth_user" )
+     {
+      IG::FileUnlink("${fax_job_dir}.faxjob_$auth_user")
+        or die("Can't delete '${fax_job_dir}.faxjob_$auth_user'.\n");
+     }
+
+    rename("${fax_job_dir}.faxjob_$IG::remote_host",
+	   "${fax_job_dir}.faxjob_$auth_user")
+      or die("Can't rename '${fax_job_dir}.faxjob_$IG::remote_host'.\n");
+   }
+  elsif (-e "${fax_job_dir}.faxjob_$auth_user.pdf")
+   {
+    ## In some cases we need to use a ".pdf" extension for example
+    ## when we use PDFCreator. So try to convert hostname to user login
+    IG::FileUnlink("${fax_job_dir}.faxjob_$auth_user")
+      or die("Can't delete '${fax_job_dir}.faxjob_$auth_user'.\n");
+
+    rename("${fax_job_dir}.faxjob_$auth_user.pdf",
+	   "${fax_job_dir}.faxjob_$auth_user")
+	or die("Can't rename '${fax_job_dir}.faxjob_$auth_user.pdf'.\n");
+   }
+
+  ## Check if we have faxjob file in the canonical path
+  if (-e "${fax_job_dir}.faxjob_$auth_user")
+   {
+    ## show "document already present"
+    $panel0 .= Input( type       => 'hidden',
+		      name       => 'filename').
+
+	       Input( type       => 'label',
+		      show       => $lang{document_tosend},
+		      fieldstyle => 'border:1px dashed gray; width:250px;',
+		      data       => "<a href=\"igfax?action=showdocfile\"".
+			            " title=\"$lang{view_fax}\">".
+			            "$on{filename} $lang{document_exist}</a>");
+   }
+  else
+   {
+    ## ask user for a file to send
+    $panel0 .= Input( type       => 'file',
+		      name       => 'upfile',
+		      quickhelp  => 'Only Plain Text, PostScript, '.
+			            'TIFF Class F, or PDF',
+		      show       => $lang{document_tosend},
+		      size       => 20 );
+   }
+
+
+
+  my @data = ('now');
+  push(@data,"$_:00") for $tv{hours}+1 .. 24;
+
+  my $panel3 = Input( type       => 'select',
+		      show       => $lang{invoice_time},
+		      name       => 'timeissue',
+		      data       => \@data).
+
+	       Input( show       => $lang{priority},
+		      type       => 'select',
+		      name       => 'priority',
+		      data       => [([127, $lang{normal}],
+				      [63,  $lang{high}],
+				      [207, $lang{low}])]).
+	
+	       Input( type       => 'select',
+		      show       => $lang{attempt_time},
+		      name       => 'maxtries',
+		      data       => [(3,2,1)]).
+
+	       Input( type       => 'select',
+		      show       => $lang{placed_call},
+		      name       => 'maxdials',
+		      data       => [(12,11,10,9,8,7,6,5,4,3,2,1)]).
+
+	       Input( type     => 'select',
+		      style    => 'width:250px',
+		      show     => $lang{notify_byemail},
+		      data     => [(["done",	    $lang{notify1}],
+				    ["none",	    $lang{notify2}],
+				    ["done+requeue",$lang{notify3}])],
+		      name     => 'notify');
+
+  my $panel4 = TaskMsg( Hylafax::PrintFaxStat(), 3, '480px', '120px');
+
+  IG::TabPane( data    => [([$lang{sender},	     $panel0],
+                            [$lang{receiver},        $panel2],
+			    [$lang{property},	     $panel3],
+			    ['Hylafax Status',	     $panel4]
+			   )],
+                label_type => 1,
+		width  => 510,
+		height => 160 ); 
+
+  ## TABPANE END
+  #############################################################
+
+  Input( type       => 'checkbox',
+	 name       => 'cover',
+	 labelstyle => 'margin:10px 0 0 12px; width:auto; background:transparent; border:0;',
+	 fieldstyle => 'margin-top:15px',		
+	 show       => $lang{cover_page});
+
+  Img(   style      => "margin:15px 15px 0 0; float:right; width:80px; ",
+         src        => "$IG::img_url/mime_fax.gif" );
+
+  Input( type       => 'text',
+         labelstyle => 'margin-left:12px; width:150px;',
+	 show       => $lang{ca},
+	 maxlen     => 20,
+	 name       => 'subcontactnameca',
+	 size       => 30,
+	 maxlen     => 25 );
+
+  Input( type       => 'text',
+         labelstyle => 'margin-left:12px; width:150px;',
+	 show       => $lang{subject},
+	 name       => 'subject',
+	 size       => 30,
+	 maxlen     => 30);
+
+  Input( type       => 'text',
+         labelstyle => 'margin-left:12px; width:150px;',
+	 show       => $lang{pages_without_cover},
+	 name       => 'pages',
+	 size       => 3 );
+
+  Input( type       => 'textarea',
+	 wrap       => 'hard',
+	 caption    => $lang{max_5rows},
+	 fieldstyle => 'margin:5px 5px 5px 12px; clear:both;',
+	 name       => 'comments',
+	 rows       => 5,
+	 cols       => 70);
+
+  Input( type       => 'submit',
+         style      => 'margin-top:10px;',
+         name       => 'send_it',
+	 value      => $lang{insert_tospool});
+
+  Input( type       => 'submit',
+         style      => 'margin-top:10px;',
+         name       => 'send_it_later',
+         float      => 'left',
+	 show       => $lang{send_it_this_night});
+
+  Input( type       => 'submit',
+         style      => 'margin-top:10px;',
+	 float      => 'left',
+	 name       => 'deleteattach',
+	 value      => $lang{delete_attach}
+       ) if -e "${fax_job_dir}.faxjob_$auth_user";
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub sendfaxagg
+ {
+  my ( $cover, $counter, $_contactid, $_contactname, $_faxnumber );
+
+  ## if we have an attach delete request come back to send interface
+  my $fax_job_file = $IG::htdocs_dir . $S .
+                     $IG::default_lang{fax_sent} . $S .
+                     ".faxjob_$auth_user";
+
+  if ( $on{deleteattach} && -e $fax_job_file )
+   {
+    IG::FileUnlink( $fax_job_file )
+      or die("Can't delete fax document '$fax_job_file' ".
+             " Check file permission.\n");
+
+    sendfax();
+    return;
+   }
+
+  ## Upload fax file
+  push @IG::errmsg,
+       IG::FileUpload( param_name    => 'upfile',
+		       target_dir    => $IG::htdocs_dir . $IG::S .
+		                        $IG::default_lang{fax_sent},
+		       target_file   => ".faxjob_$auth_user",
+		       can_overwrite => 'true' );
+
+  ## Check if we have somethings to send
+  if ( !$on{cover} && ! -e $fax_job_file )
+   {
+    push @IG::errmsg, $lang{Err_no_document_cover};
+    $IG::attr{upfile}{blushed} = 1;
+    $IG::attr{cover}{blushed}  = 1;
+   }
+
+
+  ## Check contact name
+  ( push @IG::errmsg, IG::ContactFinder('receiver') ) if !$on{groupname};
+
+  ## Validate Form values
+  push @IG::errmsg, IG::FormValidate();
+  sendfax() && return if @IG::errmsg;
+ 
+  ## Make a new fax protocol for single or group sent
+  ## Only one protocol also in group case!
+  $on{id} = IG::MkLastNum('fax_sent');
+
+  ## Adjust time issue
+  if ( $on{send_it_later} )
+   {
+    ## send it today at 22:00 pm
+    $on{timeissue} = "$tv{year}$tv{month}$tv{day}2200";
+   }
+  else
+   {
+    $on{timeissue} =~ s/\://g;
+    $on{timeissue} = ( $tv{year}.
+                       $tv{month}.
+                       $tv{day}.
+                       $on{timeissue} ) if $on{timeissue} ne 'now';
+   }
+
+  ## Send a fax to a single or a group of contacts
+  if ( ! $on{groupname} )
+   {
+    ## single contact
+    DbQuery("select contactid, contactname, fax from contacts ".
+	    "where contactid = '".DbQuote($on{contactid})."'");
+   }
+  else
+   {
+    ## group of contact
+    DbQuery("select contacts.contactid, contacts.contactname, contacts.fax ".
+	    "from contacts, contacts_group ".
+	    "where contacts_group.groupid = '".DbQuote($on{groupname})."'".
+	    " and contacts.contactid = contacts_group.contactid");
+   }
+
+  while ( my @row = FetchRow() )
+   {
+    ( $_contactid, $_contactname, $_faxnumber ) = @row;
+    $counter++;
+
+    ## force different faxnumber if user has set it
+    $_faxnumber = $on{differentfaxnumber}
+                    if $on{differentfaxnumber} && !$on{groupname};
+    ## clean faxnumber from strange chars
+    $_faxnumber =~ s/\D//g;
+
+    ## exceptions
+    if (    !$on{groupname}
+         && !$_faxnumber
+         && ( !$on{sendbyemail} || ( $on{sendbyemail} && !$on{emailaddress} ) )
+       )
+     {
+      ## A single sent but we don't have a faxnumber
+      push @IG::errmsg, $lang{Err_no_fax_number};
+      sendfax();
+      return;
+     }
+    elsif ( !$_faxnumber )
+     {
+      ## a group sent but for this contact we haven't a faxnumber
+      ## skip it silently
+      next;
+     }
+
+    ## Make a cover fax if requested by user
+    ## In group case we make each time a new cover
+    ##  with different contact information
+    $cover = mkfaxcover( comments         => $on{comments},
+                         id               => $on{id},
+                         subject          => $on{subject},
+                         contactname      => $_contactname,
+                         subcontactnameca => $on{subcontactnameca},
+                         faxnumber        => $_faxnumber,
+                         owner            => $on{owner},
+                         pages            => $on{pages} ) if $on{cover};
+
+    # Send the Fax
+    if ( $on{sendbyfax} || $on{groupname} )
+     {
+      my %ris = Hylafax::SendFax
+                 (
+                  dialstring => $_faxnumber,
+                  tocompany  => $_contactname,
+                  touser     => $on{subcontactnameca},
+                  docfile    => $fax_job_file,
+                  coverfile  => $cover,
+                  jobinfo    => $on{id},
+                  maxdials   => $on{maxdials},
+                  maxtries   => $on{maxtries},
+                  modem      => $on{modem},
+                  schedpri   => $on{priority},
+                  notify     => $on{notify},
+                  notifyaddr => IG::UsrInf('email', $on{owner}),
+                  sendtime   => $on{timeissue}
+                );
+
+      die( "Fax send Failed: $ris{TRACE}" ) if !$ris{SUCCESS};
+     }
+   }
+
+
+  if ( $on{groupname} )
+   {
+    ## (re)build a faxcover for group sent with group name
+    ## we will use this faxcover only to identify the stored document
+    QuoteParams();
+    DbQuery("select contactname, contactid, fax from contacts ".
+	    "where contactid='$in{groupname}'");
+    ( $_contactname, $_contactid, $_faxnumber ) = FetchRow();
+
+    $cover = mkfaxcover( comments         => $on{comments},
+                         id               => $on{id},
+                         subject          => $on{subject},
+                         contactname      => $_contactname,
+                         faxnumber        => $_faxnumber,
+                         owner            => $on{owner},
+                         pages            => $on{pages} );
+   }
+
+  ## Insert the new protocol in the db
+  my $timeissue = !$on{timeissue} || $on{timeissue} eq 'now'
+                ? $IG::tv{time}
+                : substr($on{timeissue},-4,2). ':'.
+                  substr($on{timeissue},-2,2). ':'. '00';
+
+  DbWrite( overwrite_clause => "id = '".DbQuote($on{id})."'",
+           action           => 'insert',
+           table            => 'fax_sent',
+           values           => [ $on{id},
+                                 $tv{today},
+                                 $_contactname,
+                                 $on{owner},
+                                 $on{subject},
+                                 $_faxnumber,
+                                 $_contactid,
+                                 $on{category},
+                                 $timeissue,
+                                 $on{npa},
+                                 $on{docref} ]);
+
+  ## Check if directory fax exist for a new install or the first day of year
+  IG::CkProtocolDir('fax_sent', $tv{ye});
+
+  ## Check fax file type to store it
+  my $file_type = (IG::FileStat( $fax_job_file ))[0];
+
+  my $output_file = $IG::htdocs_dir . $S .
+                    $IG::default_lang{fax_sent} . $S .
+                    $tv{ye} . $S .
+                    IG::Crypt($on{id});
+
+  if ( $file_type =~ /tif/ && -e $IG::ext_app{tiff2pdf} )
+   {
+    ## try to convert tiff file to pdf
+    ## we need a pdf file to merge it with the cover by gs
+    my $pdf_job_file = $IG::htdocs_dir . $S .
+                       $IG::default_lang{fax_sent} . $S .
+                       ".faxjob_$auth_user.pdf";
+
+    if ( IG::SysExec( command   => $IG::ext_app{tiff2pdf},
+                      arguments => [( '-p', 'A4',
+                                      '-o', $pdf_job_file,
+                                            $fax_job_file )] )
+       )
+     {
+      IG::FileUnlink( $fax_job_file )
+        or die("Can't delete '$fax_job_file'.\n");
+      $fax_job_file = $pdf_job_file;
+      $file_type = 'pdf';
+     }
+   }
+      
+  ## store fax document (in pdf or postscript) and/or cover file
+  if ( (-e $cover && $file_type !~ /tif/ ) || $file_type =~ /postscript|pdf/ )
+   {
+    IG::Warn( "I sent your fax bat I can't store it because I need a valid ".
+              "\$IG::ext_app{gs} (ghostscript path) value in igsuite.conf file.".
+              " Tell it to your administrator"
+            ) && return if ! -e $IG::ext_app{gs};
+
+    ## store the fax and/or the cover in tif format
+    IG::SysExec( command   => $IG::ext_app{gs},
+                 arguments => [(
+                                '-dQUIET',
+                                '-dNOPAUSE',
+                                #'-dSAFER',
+	                        '-dBATCH',
+	                        '-sDEVICE=tiffg32d',
+	                        '-sPAPERSIZE=a4',
+	                        "-sOutputFile=$output_file.tif",
+	                        '-c','save',
+	                        'pop',
+	                        ( -e $cover
+	                           ? ('-f', $cover)
+	                           : ''),
+                                ($file_type =~ /postscript|pdf/
+                                   ? ('-f', $fax_job_file)
+                                   : ''),
+                               )]
+	       ) or die("Can't execute 'gs' application by calling ".
+	                "'$IG::ext_app{gs}' to store sent fax.\n");
+   }
+  else
+   {
+    ## In other cases try to store the fax as is but without cover page
+    ## Sorry we can't merge a postscript file (the cover)
+    ## with a tif or text file
+    my $ext = $file_type =~ /text\/plain/ ? 'txt'
+            : $file_type =~ /tif/ ? 'tif'
+            : die("It isn't a valid file type! Hylafax can send by fax only ".
+                  "postscript or pdf or tif or text file types. ".
+                  "What are you sending ?\n");
+
+    IG::FileCopy( $fax_job_file, "$output_file.$ext", 0);
+   }
+
+  ## Delete the fax job file if exists
+  if ( -e $fax_job_file )
+   {
+    IG::FileUnlink( $fax_job_file )
+      or die("Can't delete fax document '$fax_job_file'. ".
+             "Check file permission.\n");
+   }
+
+  ## Delete the cover fax file if exists
+  if ( -e $cover )
+   {
+    IG::FileUnlink( $cover )
+      or die("Can't delete fax cover '$cover'. ".
+             "Check file permission.\n");
+   }
+
+  LogD( "sent fax to $_contactname", 'insert', 'fax_sent', $on{id} );
+
+  if ($on{emailaddress} && $on{sendbyemail} && !$on{groupname})
+   {
+    IG::Redirect( "webmail?action=sendigdoc".
+		  "&amp;protocol=".	MkUrl($on{id}).
+		  "&amp;to=".		MkUrl($on{emailaddress}).
+		  "&amp;subject=".	MkUrl($on{subject}).
+		  "&amp;onsend=close".
+		  "&amp;contactid=".	MkUrl($_contactid) );
+   }
+  elsif ($on{onsend})
+   {
+    IG::AutoCloseTask( title => $lang{faxes_mng},
+                       msg   => $lang{sendfax_ok} );
+   }
+  else
+   {
+    outgoings();
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub showdocfile
+ {
+  ## check fax file type
+  my $file_path = $IG::htdocs_dir             . $IG::S .
+                  $IG::default_lang{fax_sent} . $IG::S .
+                  ".faxjob_$auth_user";
+  
+  my ( $file_type, $file_size ) = IG::FileStat( $file_path );
+
+  if ( $file_type =~ /postscript/ )
+   {
+    die( "I can't show you the document because I need a valid ".
+         "\$IG::ext_app{gs} value in igsuite.conf file.\n"
+       ) if ! -e $IG::ext_app{gs};
+
+    print STDOUT IG::DocHead( type       => 'application/pdf',
+                              expires    => 'now',
+                              attachment => 'FaxToSend.pdf' );
+
+    $|=1; ## to prevent cross output
+    IG::SysExec( command   => $IG::ext_app{gs},
+                 stdout    => 'active',
+                 arguments => [( '-q',
+	                         '-dNOPAUSE',
+	                         '-dBATCH',
+	                         '-sDEVICE=pdfwrite',
+	                         '-sPAPERSIZE=a4',
+	                         '-sOutputFile=-',
+	                         '-c', 'save', 'pop',
+	                         '-f', $file_path )]
+	       ) or die("Can't execute '$IG::ext_app{gw}' ".
+	                "to show you the document.\n");
+    $|=0;
+   }
+  else
+   {
+    ## it should be a pdf or a text file
+    IG::DocHead( type           => $file_type,
+                 content_length => $file_size,
+                 expires        => 'now' );
+
+    open( DOC, '<', $file_path )
+      or die("Can't read from file '$file_path'.\n");
+
+    binmode(DOC);
+    PrOut($_) while <DOC>;
+
+    close(DOC);
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub proto
+ {
+  ## to use "destination" choiche
+  $on{id} ||= $on{builddoc_source4};
+
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  my @faxinfo = InfoFaxFile( IG::ProtocolToFile($on{id}) );
+
+  ## Check privileges
+  if ( ! CheckPrivilege('igfax_' . ( $faxinfo[6] ne $lang{copyed_document}
+                                     ? 'edit'
+                                     : 'view' ) )
+     )
+   {
+    IG::Warn( $lang{Err_privileges} );
+    return;
+   }
+
+  ## Build a select field to archive the fax inside an external protocol
+  my %item;
+  foreach (keys %target_protocol)
+   {
+    next if /basket|igfax/;
+    $item{$_} = ( $lang{$_} ||
+                  ucfirst($_) ) if CheckPrivilege($target_protocol{$_});
+   }
+
+  $on{pages}        ||= $faxinfo[1];
+  $on{contactid}    ||= $faxinfo[7];
+  $on{subcontactid} ||= $faxinfo[9];
+
+  HtmlHead();
+  TaskHead( title       => "$lang{fax_received_protocol}: $on{id}",
+	    width       => 650 );
+
+  my $fax_link = "filemanager?action=openfile&amp;".
+		 "dir=/$IG::default_lang{fax_received}&amp;".
+		 "file=$faxinfo[3]";
+
+  my $fax_buttons = FormHead( cgiaction => 'delfax',
+                              name      => 'protodel' ).
+
+		    Input( type      => 'hidden',
+			   name      => 'id',
+			   value     => $on{id},
+			   override  => 1 ).
+
+		    Input( type      => 'submit',
+			   name      => 'delfax',
+			   float     => 'left',	
+			   onclick   => IG::JsConfirm( $lang{are_you_sure} ),
+			   show      => $lang{delete_fax}).
+
+		    FormFoot();
+
+  if (CheckPrivilege('igfax_edit'))
+   {
+    FormHead( cgiaction => 'protoagg',
+              name      => 'proto',
+              labelstyle=> 'width:120px',
+              onsubmit  => "proto.submit.disabled = 'true'; ".
+                           "protodel.delfax.disabled = 'true';" );
+
+    Input(    type      => 'hidden',
+	      name      => 'id',
+	      value     => $on{id},
+	      override  => 1 );
+
+    Input(    type      => 'hidden',
+	      name      => 'pages',
+	      value     => $faxinfo[1] );
+
+    Input(    type      => 'hidden',
+	      name      => 'faxfile',
+	      value     => $faxinfo[3]);
+
+    PrOut "<table style=\"margin-bottom:10px;\" cellpadding=3><tr><td width=350 valign=\"top\">"; 
+
+    Input(    type      => 'contactfinder',
+	      style     => 'width:180px',
+              falsecontactname => $on{contactid} ? 0 : 1,
+	      extraselection => 1,
+	      value     => $on{sender},
+	      show      => $lang{sender});
+
+    Input(    type      => 'select',
+	      name      => 'category',
+	      style     => 'width:200px',
+	      show      => $lang{document_type},
+	      zerovalue => 'true',
+              validate  => { mandatory => 'true' },
+	      data      => \%IG::docs_type );
+
+    Input(    name      => 'npa',
+              type      => 'text',
+              style     => 'width:200;',
+              maxlen    => 50,
+              show      => $lang{archive_position});
+
+    Input(    show      => $lang{cc},
+              name      => 'cc',
+	      size      => 8,
+	      type      => 'select',
+	      multiple  => 'yes',
+	      data      => "select login, name from users ".
+	                   "where login<>'' and status<>'2' order by name",
+	      labelstyle=> "height:130px; width:120px",
+	      style     => "width: 200px; height: 130px");
+
+    PrOut "</td><td valign=\"top\" width=320>"; 
+
+    Input(    type      => 'logins',
+	      name      => 'owner',
+	      style     => 'width:170px',
+	      value     => $faxinfo[8],
+	      show      => $lang{receiver});
+
+    Input(    type      => 'date',
+	      name      => 'issue',
+              validate  => { onerror   => $lang{Err_arrive},
+	                     mandatory => 'true' },
+	      value     => $faxinfo[4],
+	      show      => $lang{arrive_date});
+
+    Input(    type      => 'text',
+	      name      => 'timeissue',
+	      value     => $faxinfo[5],
+	      size      => 10,
+	      show      => $lang{arrive_time});
+
+    Input(    type      => 'text',
+	      name      => 'faxnumber',
+	      style     => 'width:100',
+	      value     => $faxinfo[2],
+	      show      => $lang{phone_number});
+
+    Input(    name      => 'docref',
+              type      => 'text',
+              style     => 'width:100;',
+              maxlen    => 30,
+              show      => $lang{document_reference});
+
+    Input(    type      => 'textarea',
+	      name      => 'note',
+	      labelstyle=> "height:60px; width:120px",
+	      style     => 'width:170px; height:50px;',
+	      show      => $lang{notes});
+
+    PrOut "</td></tr></table>";
+
+    Input(    type      => 'submit',
+	      name      => 'submit',
+	      show      => $lang{save_fax});
+
+    Input(    type      => 'select',
+	      float     => 'right',
+	      show      => $lang{save_asnew_protocol},
+	      zerovalue => 'true',
+	      labelstyle=> 'width:auto',
+	      onchange  => "location.href = this.options[this.selectedIndex].value + ".
+	        	    "'?action=proto".
+		            "&amp;contactid=$faxinfo[7]".
+		            "&amp;builddoc_choice=4".
+		            "&amp;builddoc_source4=$on{id}'",
+              data      => \%item );
+
+    FormFoot();
+   }
+
+  PrOut $fax_buttons;
+
+  ## Show Preview if possible
+  DocView::showdoc( id           => $on{id},
+                    pages	 => $on{pages},
+                    width        => 650,
+                    height       => 919);
+
+  TaskFoot();
+  HtmlFoot();
+  1;
+ } 
+
+#############################################################################
+#############################################################################
+sub protoagg
+ {
+  my $cc;
+
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  ## Contact name/id can't exists
+  if ($on{contactname})
+   { IG::ContactFinder() }
+  else
+   {
+    push @IG::errmsg, $lang{Err_contact_name};
+    $IG::attr{contactname}{blushed} = 1;
+   }
+
+  ## Validate Form values
+  push @IG::errmsg, IG::FormValidate();
+  proto() && return if @IG::errmsg;
+
+  $on{contactname} = uc($on{contactname});
+
+  ## Insert a new protocol into db
+  QuoteParams();
+  DbQuery( query =>[( "DELETE FROM fax_received where id = '$in{id}'",
+
+		      "INSERT INTO fax_received VALUES ('$in{id}',".
+		      " '$in{issue}', '$in{timeissue}', '$in{category}',".
+		      " '$in{faxnumber}', '$in{note}', '$in{contactname}',".
+		      " '$in{owner}', '$in{contactid}', '$in{npa}',".
+		      " '$in{docref}')",
+
+		      "UPDATE contacts set lastfaxowner='$in{owner}' ".
+		      "where contactid='$in{subcontactid}'",
+
+		      "UPDATE contacts set fax='$in{faxnumber}' ".
+		      "where contactid='$in{subcontactid}' and fax=''"
+		    )] );
+
+
+  ## Check if directory fax exists ( for a new install or the first day of year )
+  IG::CkProtocolDir('fax_received', $tv{ye});
+
+  ## store fax file
+  my ($ext) = $on{faxfile} =~ /(\.[^\.]+)$/;
+  IG::FileCopy(	$fax_target_path . $IG::S .
+                $on{faxfile},
+
+                $fax_target_path . $IG::S . $tv{ye} . $IG::S .
+                IG::Crypt( $on{id} ) . $ext,
+                
+		1 ) if -e $fax_target_path . $IG::S . $on{faxfile};
+
+  ## if we have an urgent service category, make a new service too
+  if ( $on{category} eq '005' && CheckPrivilege('services_view') )
+   {
+    IG::Redirect( "services?action=protoagg".
+		  "&amp;materials=2".
+		  "&amp;servicetype=1".
+		  "&amp;contactid=$on{contactid}".
+		  "&amp;contactname=$on{contactname}".
+		  "&amp;priority=4".
+		  "&amp;opendate=".$tv{today} );
+   }
+  else
+   {
+    my @cc = $on{cc}
+           ? ( ref($on{cc}) eq 'ARRAY' ? @{$on{cc}} : ($on{cc}) )
+           : ();
+
+    ## there are other receivers
+    if ($cc[0]) 
+     {
+      $cc .= IG::UsrInf('name',$_).' ' for @cc;
+      $cc = " - $lang{to_be_seen} : " . $cc;
+     }
+
+    my $text = "$IG::docs_type{$on{category}} $lang{arrived_byfax} $on{id} ".
+		"- $lang{sender}: $on{contactname} ".
+		"- $lang{receiver}: ". IG::UsrInf('name',$on{owner}).
+		" - $lang{date}: $on{issue}, $on{timeissue}".
+		$cc.
+		"<noparse><a href=\"javascript:winPopUp('fax_received?action=editnotes&amp;id=$on{id}',350,160,'EditNotes');\">".
+		" [ $lang{edit_fax_notes} ]".
+		"</a></noparse>";
+
+    ## send an isms to the receivers (user+cc)
+    for my $isms_receiver ( $on{owner}, @cc )
+     {
+      IG::SendIsms( receiver => $isms_receiver,
+		    body     => $text );
+     }
+
+    IG::Redirect('igfax');
+   }
+
+  LogD( "stored Fax from $on{faxnumber} to $on{owner} $cc",
+	'insert',
+	'fax_received',
+	$on{id} );
+ }
+
+#############################################################################
+#############################################################################
+sub protomodi
+ {
+  DbQuery("select * from fax_received where id='".DbQuote($on{id})."'");
+
+  (	$on{id},
+	$on{issue},
+	$on{timeissue},
+	$on{category},
+	$on{faxnumber},
+	$on{note},
+	$on{contactname},
+	$on{owner},
+	$on{contactid},
+	$on{npa},
+	$on{docref}		) = FetchRow();
+
+  proto();
+ }
+
+#############################################################################
+#############################################################################
+sub InfoFaxFile
+ {
+  my $faxfile = shift;
+
+  ## Collect fax infos
+  my (	$pages,
+	$faxnumber,
+	$date,
+	$time)		= Hylafax::FaxInfo($faxfile);
+
+  my (	$contactid,
+	$sender,
+	$lastfaxowner,
+	$subcontactid ) = InfoFaxNum($faxnumber);
+
+  ## adjust the file name (protocol number)
+  my $filename = $faxfile;
+     $filename =~ s/.+(\d\d\d\d\d\d)\_(\d\d)(\.tif)$/$1\.$2/;
+  $faxfile =~ s/.+(\d\d\d\d\d\d\_\d\d\.tif)$/$1/;
+
+  return ( $filename, $pages, $faxnumber, $faxfile, $date, $time,
+	   $sender, $contactid, $lastfaxowner, $subcontactid );
+ }
+
+#############################################################################
+#############################################################################
+sub _senderToUserName
+ {
+  my $sender = shift;
+  return 'Server fax' if $sender eq 'fax';
+  return    $users_conv{$sender}
+         || IG::UsrInf('name',$sender)
+         || $sender
+         || 'Unknown';
+ }
+
+#############################################################################
+#############################################################################
+sub InfoFaxNum
+ {
+  my @row;
+  my $faxnumber = shift;
+     $faxnumber =~ s/\D//g; ## strips invalid chars
+
+  return ( '', $lang{unknown},         '', '') if !$faxnumber;
+  return ( '', $lang{copyed_document}, '', '') if $IG::soc_fax =~ /$faxnumber$/;
+
+  ## First do a soft search
+  DbQuery("SELECT contactid, contactname, lastfaxowner, master ".
+	  "FROM contacts ".
+	  "WHERE contacttype<>8 and (fax='$faxnumber'".
+	  " or fax='".substr($faxnumber,1,)."'".
+	  " or fax='".substr($faxnumber,2,)."')".
+	  " limit 1");
+
+  unless( @row = FetchRow() )
+   {
+    ## now try Extreme search
+    DbQuery("SELECT contactid, contactname, lastfaxowner, master ".
+	    "FROM contacts ".
+	    "WHERE".
+	    " contacttype<>8 and (".
+	    " tel1='$faxnumber'".
+	    " or tel2='$faxnumber'".
+	    " or tel3='$faxnumber'".
+	    ( length( $faxnumber ) > 5 
+	      ? " or fax='".substr($faxnumber,3,)."'".
+                " or fax='".substr($faxnumber,4,)."'".
+                " or fax~*'".substr($faxnumber,4,)."'"
+              : '').
+	    ") limit 1");
+
+    @row = FetchRow();
+   }
+
+  ## We want use master contact infos (contactid & contactname)
+  ## instead of subcontact ones but we want lastfaxowner of subcontact
+  if ( $row[3] )
+   {
+    DbQuery("SELECT contactid, contactname FROM contacts ".
+	    "WHERE contactid='$row[3]'");
+    @row = (FetchRow(), $row[2], $row[0]);
+   }
+
+  return @row
+         ? @row
+         : ( '', "$faxnumber $lang{unknown}", '', '');
+ }
+
+#############################################################################
+#############################################################################
+sub mkfaxcover
+ {
+  my %data = @_;
+  my $comments   = $data{comments};
+     $comments   =~ tr/\(\)/\<\>/;
+  my @comments   = split "\n", $comments;
+
+  my $subject    = $data{subject} ||= "$lang{rif} $data{id}";
+     $subject    =~ tr/\(\)/\<\>/;
+
+  my $cover_file = $IG::htdocs_dir . $IG::S .
+                   $IG::default_lang{fax_sent} . $IG::S .
+                   ".faxjob_${auth_user}_cover";
+
+  my $owner_name = IG::UsrInf('name',$data{owner});
+
+  open (DET, '>', $cover_file)
+    or die("Can't write a cover fax to '$cover_file'.\n");
+  binmode(DET);
+
+  print DET <<END;
+%!PS-Adobe-2.0 EPSF-2.0
+%%BoundingBox: 21 3 588 788
+%%Title: CoverFax
+%%CreationDate: 11:05 AM January  3, 2004
+%%Pages: 1 +1
+%%EndComments
+%
+% IGFax an HylaFAX Client
+%
+1 setlinejoin
+/nullstring () def
+/IS {
+    dup where {
+	pop
+	load dup nullstring ne {S} {pop} ifelse
+    } {pop} ifelse
+} bind def
+/M  { moveto } bind def /S { show  } bind def
+/R { rmoveto } bind def /L { lineto } bind def
+/B { newpath 0 0 M 0 1 L 1 1 L 1 0 L closepath } bind def
+/CS { closepath stroke } bind def
+
+/showcaseisoencoding [
+/.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef
+/space /exclam /quotedbl /numbersign
+/dollar /percent /ampersand /quoteright
+/parenleft /parenright /asterisk /plus
+/comma /minus /period /slash
+/zero /one /two /three /four /five /six /seven
+/eight /nine /colon /semicolon
+/less /equal /greater /question
+/at /A /B /C /D /E /F /G
+/H /I /J /K /L /M /N /O
+/P /Q /R /S /T /U /V /W
+/X /Y /Z /bracketleft
+/backslash /bracketright /asciicircum /underscore
+/quoteleft /a /b /c /d /e /f /g
+/h /i /j /k /l /m /n /o
+/p /q /r /s /t /u /v /w
+/x /y /z /braceleft
+/bar /braceright /asciitilde /guilsinglright
+/fraction /florin /quotesingle /quotedblleft
+/guilsinglleft /fi /fl /endash
+/dagger /daggerdbl /bullet /quotesinglbase
+/quotedblbase /quotedblright /ellipsis /trademark
+/dotlessi /grave /acute /circumflex
+/tilde /macron /breve /dotaccent
+/dieresis /perthousand /ring /cedilla
+/Ydieresis /hungarumlaut /ogonek /caron
+/emdash /exclamdown /cent /sterling
+/currency /yen /brokenbar /section
+/dieresis /copyright /ordfeminine /guillemotleft
+/logicalnot /hyphen /registered /macron
+/degree /plusminus /twosuperior /threesuperior
+/acute /mu /paragraph /periodcentered
+/cedilla /onesuperior /ordmasculine /guillemotright
+/onequarter /onehalf /threequarters /questiondown
+/Agrave /Aacute /Acircumflex /Atilde
+/Adieresis /Aring /AE /Ccedilla
+/Egrave /Eacute /Ecircumflex /Edieresis
+/Igrave /Iacute /Icircumflex /Idieresis
+/Eth /Ntilde /Ograve /Oacute
+/Ocircumflex /Otilde /Odieresis /multiply
+/Oslash /Ugrave /Uacute /Ucircumflex
+/Udieresis /Yacute /Thorn /germandbls
+/agrave /aacute /acircumflex /atilde
+/adieresis /aring /ae /ccedilla
+/egrave /eacute /ecircumflex /edieresis
+/igrave /iacute /icircumflex /idieresis
+/eth /ntilde /ograve /oacute
+/ocircumflex /otilde /odieresis /divide
+/oslash /ugrave /uacute /ucircumflex
+/udieresis /yacute /thorn /ydieresis ] def
+/Helvetica-Bold findfont
+dup length dict begin
+  {1 index /FID ne {def} {pop pop} ifelse} forall
+  /Encoding showcaseisoencoding def
+  currentdict
+end
+/Helvetica-Bold-SHOWISO exch definefont pop
+/Helvetica findfont
+dup length dict begin
+  {1 index /FID ne {def} {pop pop} ifelse} forall
+  /Encoding showcaseisoencoding def
+  currentdict
+end
+/Helvetica-SHOWISO exch definefont pop
+/Courier findfont
+dup length dict begin
+  {1 index /FID ne {def} {pop pop} ifelse} forall
+  /Encoding showcaseisoencoding def
+  currentdict
+end
+/Courier-SHOWISO exch definefont pop
+/Times-Bold findfont
+dup length dict begin
+  {1 index /FID ne {def} {pop pop} ifelse} forall
+  /Encoding showcaseisoencoding def
+  currentdict
+end
+/Times-Bold-SHOWISO exch definefont pop
+%%EndProlog
+%%Page: label 1
+newpath clippath pathbbox
+/URy exch def
+/URx exch def
+/LLy exch def
+/LLx exch def
+/Width  URx LLx sub 0.005 sub def
+/Height URy LLy sub 0.005 sub def
+LLx LLy translate
+Width 612 div Height 792 div gt
+    { /Y_size Height def
+      /X_size 612 792 div Y_size mul def
+      /Scale Height 792 div def }
+    { /X_size Width def
+      /Y_size 792 612 div X_size mul def
+      /Scale Width 612 div def } ifelse
+Width  X_size sub 2 div
+Height Y_size sub 2 div translate
+Scale Scale scale
+gsave
+0 0 0 setrgbcolor
+gsave
+newpath
+11.9999 3.00039 M -8.00007 787 L 618 787 L 618 3.00039 L
+closepath clip newpath
+/Helvetica-SHOWISO findfont 14 scalefont setfont
+
+/inch {72 mul} def
+/width {.375 inch} def
+/r {.3 inch} def
+/d {r 30 cos mul neg} def
+/R {2 inch} def
+1 setlinejoin
+
+/drawtext {
+gsave
+
+ 0.7 inch 10.2 inch moveto
+ /Helvetica-BoldOblique findfont 30 scalefont setfont
+ ($IG::soc_name) show
+ 0.7 inch 9.85 inch moveto
+ /Helvetica-Bold findfont 20 scalefont setfont
+ ($IG::soc_email) show
+
+grestore
+} def
+
+drawtext
+
+0 0 0 setrgbcolor
+/Helvetica-Bold-SHOWISO findfont 24 scalefont setfont
+190.875 586 M (FAX AUTOMATICO) S
+50.5068 499 M ($lang{to}:) S
+227.744 499 M (________________________) S
+50.5068 457 M ($lang{ca}:) S
+227.744 457 M (________________________) S
+50.5068 415 M ($lang{fax_number}:) S
+227.744 415 M (________________________) S
+50.5068 373 M ($lang{from}:) S
+227.744 373 M (________________________) S
+50.5068 331 M ($lang{subject}:) S
+227.744 331 M (________________________) S
+50.5068 289 M ($lang{date}:) S
+227.744 289 M (________________________) S
+50.5068 247 M (# $lang{pages_without_cover}:) S
+403.216 247 M (___________) S
+/Helvetica-Bold-SHOWISO findfont 20 scalefont setfont
+227.744 499 M ($data{contactname}) S
+227.744 457 M ($data{subcontactnameca}) S
+/Helvetica-Bold-SHOWISO findfont 18 scalefont setfont
+227.744 415 M ($data{faxnumber}) S
+227.744 373 M ($owner_name) S
+227.744 331 M ($subject) S
+227.744 289 M ($tv{today}) S
+403.216 247 M ($data{pages}) S
+/Helvetica-Bold-SHOWISO findfont 14 scalefont setfont
+60 190 M ($lang{comments}:) S
+60 170 M ($comments[0]) S
+60 150 M ($comments[1]) S
+60 130 M ($comments[2]) S
+60 110 M ($comments[3]) S
+60 90 M ($comments[4]) S
+60 70 M ($comments[5]) S
+110 30 M ($lang{without_paper_fax}) S
+
+newpath
+50 620 moveto
+570 620 lineto
+570 570 lineto
+50 570 lineto
+closepath
+stroke
+newpath
+50 10 moveto
+570 10 lineto
+570 50 lineto
+50 50 lineto
+closepath
+stroke
+
+grestore
+grestore
+showpage
+END
+  close(DET);
+  return $cover_file;
+ }
+
+#############################################################################
+#############################################################################
+sub Header 
+ {
+  my ($title, $timeout) = @_;
+  
+  HtmlHead( shortcuts=>_short_cuts(),
+            expire   => $timeout );
+
+  TaskHead( title    => $title || 'IGFax',
+	    minwidth => 650,
+	    width    => '100%');
+
+  HLayer( left_layers =>
+           [(
+             MkButton( text => $lang{inner_fax},
+                       link => 'igfax'),
+                       
+             MkButton( text => $lang{outer_fax},
+                       link => 'igfax?action=outgoings'),
+
+             MkButton( text => $lang{fax_sent},
+                       link => 'igfax?action=faxsent'),
+
+             MkButton( text => $lang{sendfax},
+                       link => 'igfax?action=sendfax',
+                       privilege => CheckPrivilege('igfax_send') ),
+
+             MkButton( text => $lang{events_report},
+                       privilege => $IG::OS ne 'WINDOWS',
+                       link => 'igfax?action=logs' ),
+           )],
+          right_layers => [( $page_selector )]
+	 );
+ }
+
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+## $lang{no_preview} it's used inside IG::DocView
+## $lang{normal_view}
+## $lang{rotate_view}

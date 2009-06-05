@@ -1,0 +1,19 @@
+## IGSuite 4.0.0
+## Language: todo_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+completed_todos         =>'Completed',
+in_progress_todos       =>'In progress',
+new_task                =>'Nova tarefa',
+duration		=>'Duração',
+backto_project          =>'Voltar ao Projeto',
+to_start		=>'Iniciar',
+delete_participant	=>'Remover participantes',
+delete_project		=>'Remover todos projetos',
+todo_list		=>'Lista Tarefas',
+   ));
+
+1;

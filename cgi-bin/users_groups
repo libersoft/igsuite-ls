@@ -1,0 +1,395 @@
+#! /usr/bin/perl
+# Procedure: users_groups
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	proto		=> sub { CheckPrivilege('users_groups_new') },
+		protomodi	=> sub { CheckPrivilege('users_groups_edit') },
+		protoagg	=> sub { CheckPrivilege('users_groups_edit') },
+		privileges	=> sub { CheckPrivilege('sys_user_admin') },
+		privilegesagg	=> sub { CheckPrivilege('sys_user_admin') },
+		delshow		=> sub { CheckPrivilege('sys_user_admin') },
+		delexec		=> sub { CheckPrivilege('sys_user_admin') },
+		default_action	=> sub { CheckPrivilege('users_groups_view') } );
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
+         IG::LastDocuments().
+         TaskFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  $on{alphabet}	     ||= 'all';
+  $on{order}         ||= 'name';
+  $on{sortdirection} ||= 'asc';
+  $on{status}	     ||= 1;
+
+  QuoteParams();
+  my $query;
+  $query .= "and substr(name,1,1)='$on{alphabet}' " if $on{alphabet} ne 'all';
+  $query =~ s/and (.+)/where $1/;
+
+  DbQuery("select groupid, name, description ".
+	  "from users_groups $query order by $in{order} $in{sortdirection}");
+
+  Header();
+
+  ## Create alphabet index
+  IG::AlphabetSelector
+    (	param    => 'alphabet',
+	link     => "users_groups?",
+    );
+
+  TaskListMenu ([$lang{group_name},	'order=name'],
+		[$lang{description},	'order=description'],
+	       );
+
+  while (my @row = FetchRow())
+   {
+    TaskListItem (
+	[$row[1],
+	 "users_groups?action=protomodi&amp;groupid=$row[0]"],
+	[$row[2],	""]);
+   }
+
+  TaskListFoot();
+  Footer();
+ }
+
+##############################################################################
+##############################################################################
+sub privileges
+ {
+  my $maxid = 0;
+  my $lasttitle;
+  my $counter = 0;
+
+  ## Retrieve group privileges
+  DbQuery("select name, igprivileges from users_groups ".
+	  "where groupid='".DbQuote($on{groupid})."'");
+  my ($group_name, $group_privileges) = FetchRow();
+
+  HtmlHead();
+  TaskHead( title => "$lang{privileges_mng} - $lang{group_name}: $group_name",
+	    minwidth => 500 );
+
+  FormHead(	cgiaction=>'privilegesagg',
+		ckchanges=>'true');
+
+  PrOut "<br><table border=1><td valign=\"top\">";
+
+  foreach (sort keys %IG::privileges)
+   {
+    next unless $IG::privileges{$_}[0];
+    $maxid = $IG::privileges{$_}[0] if $IG::privileges{$_}[0] > $maxid;
+
+    my $privilege_name = uc($_);
+       $privilege_name =~ s/^([^\_]+)\_(.+)/$2/;
+    my $title = $1;
+       $privilege_name =~ s/\_/ /g;
+
+    if ($title ne $lasttitle)
+     {
+      if ($lasttitle)
+       {
+        PrOut "</table></td>";
+        if ( $counter == 4 )
+         {
+          PrOut "</tr>";
+          $counter = 0;
+         }
+        PrOut "<td width=\"25%\" valign=\"top\">";
+       }
+
+      PrOut "<span style=\"color:red; font-weight:bold\">$title</span>".
+	    "<table width=100%>";
+      $lasttitle = $title;
+      $counter++;
+     }
+
+    if (!$IG::privileges{$_}[1] || -e "$IG::cgi_dir/$IG::privileges{$_}[1]")
+     {
+      TaskListItem(
+	[$privilege_name],
+	[Input( type =>'checkbox',
+		name =>"per$IG::privileges{$_}[0]",
+		override=>1,
+		checked => length($group_privileges) < $IG::privileges{$_}[0]
+			?  0
+			:  substr( $group_privileges,
+				   $IG::privileges{$_}[0],
+				   1)
+	      )
+	]
+		  );
+     }
+    else
+     {
+      Input(	type  => 'hidden',
+		name  => "per$IG::privileges{$_}[0]",
+		value => '0');
+     }
+   }
+  PrOut "</table></td></tr></table><br>";
+
+  Input( type=>'hidden', name=>'maxid', value=>$maxid);
+  Input( type=>'hidden', name=>'groupid');
+
+  Input(	type=>'reset',
+		value=>$lang{restore});
+
+  Input(	type=>'submit',
+		value=>$lang{save},
+		float=>'left');
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+##############################################################################
+##############################################################################
+sub privilegesagg
+ {
+  my $privileges;
+  for (0..$on{maxid}) { $privileges .= $on{"per$_"} eq 'on' ? '1' : '0'; }
+
+  die("Any groupid specified!\n") if !$on{groupid};
+
+  DbQuery("update users_groups set igprivileges='$privileges' ".
+	  "where groupid='".DbQuote($on{groupid})."'");
+
+  LogD('change group privileges', 'update', 'users', $on{groupid});
+  IG::Redirect("users_groups?action=protomodi&amp;groupid=$on{groupid}");
+ }
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  require IG::Utils;
+
+  HtmlHead( shortcuts=>_short_cuts());
+  TaskHead( title=>$lang{user_groups},
+	    minwidth=>600 );
+
+  HLayer( MkButton( text => $lang{privileges_mng},
+                    link => "users_groups?action=privileges&amp;".
+                            "groupid=$on{groupid}" ),
+
+          MkButton( text => $lang{back_to_list},
+                    link => "users_groups"),
+	) if $on{groupid};
+
+  FormHead(	cgiaction=>'protoagg',
+		name=>'proto',
+		ckchanges=>'true',
+		method=>'post');
+
+  Input (	type=>'hidden',	name=>'groupid');
+  Input (	type=>'hidden',	name=>'igprivileges');
+
+
+  Input (	show=>$lang{group_name},
+		type=>'text',
+		name=>'name',
+		maxlen=>50,
+		style=>'width:400px');
+
+  Input (	show=>$lang{description},
+		type=>'textarea',
+		name=>'description',
+		style=>'width:400px; height:80px;' );
+
+  Input (	show=>$lang{users},
+		name=>'users',
+		style=>'height:250px',
+		type=>'multiselect',
+		label2=>$lang{participants},
+		data=>	"select login, name from users ".
+			"where login<>'' and status<>'2' ".
+			"order by name" );
+
+  Input (	type=>'submit',
+		style=>'margin-top:20px',
+		show=>$lang{save} );
+
+  Input (	type=>'button',
+		style=>'margin-top:20px',
+		float=>'left',
+		onclick=>"document.location='users_groups'",
+		show=>$lang{abort} );
+
+  FormFoot();
+
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  if (!$on{name})
+   {
+    push @IG::errmsg, $lang{Err_group_name};
+   }
+
+  if (!$on{description})
+   {
+    push @IG::errmsg, $lang{Err_group_description};
+   }
+
+  proto() && return if @IG::errmsg;
+
+  $on{groupid}  ||= MkId(15);
+
+  QuoteParams();
+  DbQuery(query=>[( "DELETE FROM users_groups where groupid = '$in{groupid}'",
+		    "DELETE FROM users_groups_link where groupid = '$in{groupid}'",
+
+		    "INSERT INTO users_groups VALUES ('$in{groupid}',".
+		    " '$in{name}', '$in{description}', '$in{igprivileges}')"
+		  )] );
+
+  for (split /\r*\n/, $on{users})
+   {
+    my $id = MkId(15);
+    DbQuery("INSERT INTO users_groups_link values".
+	    " ('$id', '$_', '$in{groupid}')");
+   }
+
+  LogD('', 'insert', 'users_groups', $on{groupid});
+  IG::Redirect('users_groups');
+ }
+
+##############################################################################
+##############################################################################
+sub protomodi
+ {
+  DbQuery("select name, description, igprivileges from users_groups ".
+	  "where groupid='".DbQuote($on{groupid})."'");
+  ($on{name}, $on{description}, $on{igprivileges}) = FetchRow();
+
+  $on{users} = '';
+  DbQuery("SELECT users_groups_link.userid ".
+	  "FROM users_groups_link ".
+	  "LEFT JOIN users ".
+	  "ON users_groups_link.userid = users.login ".
+	  "WHERE users_groups_link.groupid = '".DbQuote($on{groupid})."'".
+	  " and users.status <>'2' ". 
+	  "ORDER BY users.name");
+  while (my $userid = FetchRow())
+   { $on{users} .= "$userid\n"; } 
+
+  LogD( $on{name},
+        'view',
+        'users_group',
+        $on{groupid} ) if $on{groupid};
+
+  proto();
+ }
+
+##############################################################################
+##############################################################################
+sub delshow
+ {
+  Header();
+  TaskMsg("<strong>$lang{alert_on_delete}</strong>".
+	  Br(2).
+	  FormHead(cgiaction=>'delexec',
+		   float=>'left',
+		   onsubmitask=>$lang{are_you_sure} ).
+
+	  Input (type=>"select",
+		 name=>"groupid",
+		 zerovalue=>'true',
+		 style=>'width: 350px',
+		 data=>"SELECT groupid, name FROM users_groups ".
+		       "ORDER BY name",
+		 show=>$lang{group_name}).
+
+	  Input (type=>"submit",
+		 show=>$lang{delete}).
+
+	  FormFoot(),2);
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub delexec
+ {
+  QuoteParams();
+  DbQuery(query=>[( "DELETE FROM users_groups ".
+                    "where groupid = '$in{groupid}'",
+
+		    "DELETE FROM users_groups_link ".
+		    "where groupid = '$in{groupid}'",
+		  )] );
+
+  LogD("", "delete", "users_groups", $on{groupid});
+
+  IG::Redirect("users_groups");
+ } 
+
+##############################################################################
+##############################################################################
+sub Header 
+ {
+  HtmlHead( shortcuts => _short_cuts());
+  TaskHead( title     => $lang{user_groups},
+	    minwidth  => 650,
+	    width     => '100%');
+
+  HLayer(
+	 MkButton( text      => $lang{new_group},
+	           link      => 'users_groups?action=proto',
+                   privilege => CheckPrivilege('users_new') ),
+
+         MkButton( text      => $lang{delete},
+                   link      => 'users_groups?action=delshow',
+                   privilege => CheckPrivilege('users_new') ),
+
+         MkButton( text      => $lang{update_list},
+                   link      => 'users_groups' ),
+
+	);
+ }
+
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }
+

@@ -1,0 +1,164 @@
+#! /usr/bin/perl
+# Procedure: system_log
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	findshow	=> sub { CheckPrivilege('sys_log_view') },
+		findexec	=> sub { CheckPrivilege('sys_log_view') });
+
+############################################################################
+############################################################################
+sub findshow
+ {
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer( bottom_space => 0,
+            right_layers=>[(
+		    FormHead (	name=>'navi',
+				labelstyle=>"border:0px; width:auto; color:$IG::clr{font_menu_title}; background-color:$IG::clr{bg_menu_title}",
+				method=>'get',
+				target=>'mainf',
+				cgiaction=>'findexec',
+				float=>'left' ),
+
+		    Input (	type=>'findable' ),
+
+		    Input (	type=>'logins',
+				allvalue=>'true',
+				value=>'all',
+				name=>'usertofind'),
+
+		    Input (	type=>'select',
+				name=>'maxrows',
+				show=>$lang{howmany_results},
+				value=>20,
+				data=>[([ 10000000,	$lang{all}],
+					[ 10,		10],
+					[ 20,		20],
+					[ 50,		50],
+					[ 100,		100],)]),
+
+		    Input (	type=>'text',
+				name=>'keytofind',
+                                focus => 'true',
+                         	value=>$IG::cookie{lastsearch},
+                                style=>'width:100px; margin-right: -5px;',
+				onblur=>"document.cookie='lastsearch=' + escape(this.value)"),
+
+		    Input (	type=>'image',
+				name=>$lang{find},
+				src=>"$IG::img_url/${IG::tema}search.gif",
+				alt=>$lang{find}),
+				
+		    FormFoot())]
+		 );
+   }
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+         TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
+         IG::LastDocuments().
+         TaskFoot();
+ }
+
+############################################################################
+############################################################################
+sub findexec
+ {
+  my $counter;
+  my $maxrows     = DbQuote($on{maxrows})     || 40;
+  my $usertofind  = DbQuote($on{usertofind})  || 'all';
+  my $keytofind   = DbQuote($on{keytofind})   || '';
+  my $targettable = DbQuote($on{targettable}) || '';
+
+  $IG::set_cookie{lastsearch} = $on{keytofind};
+
+  HtmlHead( shortcuts => _short_cuts() );
+  TaskHead( title => $lang{system_log}, width => '80%' );
+  TaskMsg( "$lang{system_log} - $lang{find}: ".
+           "<strong>$keytofind</strong>",
+           4 );
+
+  my $query  = "select * from system_log where ";
+
+  if ( length( $keytofind ) < 2 )
+   {
+    $query .= '1=0';
+    push @IG::errmsg, $lang{Err_find};
+   }
+  elsif ( $on{fastfind} )
+   {
+    $query .= "targetid = '$keytofind' ".
+              ( $targettable ? "and targettable = '$targettable' " : '').
+              "order by date desc, time desc";
+   }
+  else
+   {
+    $query .= "authuser = '$usertofind' and " if $usertofind ne 'all';
+
+    $query .= "(targetid ~* '$keytofind' or text ~* '$keytofind' or".
+              " remotehost ~* '$keytofind' or level ~* '$keytofind'".
+              ") and " if $keytofind;
+
+    $query .= "1=1 order by date desc, time desc limit $maxrows";
+   }
+
+  DbQuery( $query ); 
+
+  TaskListMenu(	["$lang{date} $lang{hour}"],
+		[$lang{user}],
+		["Host"],
+		["Table/Module"],
+		["Action"],
+		[$lang{operation}]
+	      );
+
+  while (my @row = FetchRow())
+     { 
+      $counter++;
+
+      TaskListItem(
+		["$row[4] - $row[5]",'','nowrap'],
+		[(IG::UsrInf('name',$row[6]) || 'Guest'), '', 'nowrap'],
+		[$row[7]],
+		[$row[2]],
+		[$row[1]],
+		[MkLink("$row[3] $row[8]")]
+		 );
+     }
+
+  push @IG::errmsg, $lang{no_items} if !$counter && length($on{keytofind}) > 1;
+
+  TaskListFoot();
+  TaskFoot();
+  HtmlFoot();
+ }

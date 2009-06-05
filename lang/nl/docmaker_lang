@@ -1,0 +1,48 @@
+## IGSuite 4.0.0
+## Language: docmaker_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+update_document         =>'Update document',
+build			=>'Build',
+import_template		=>'Import template',
+template_format		=>'Template format',
+Err_template_name	=>'Ongeldig template naam',
+Err_incomplete_parsing	=>'Een aantal template velden konden niet vervangen worden, u moet handmatig verder',
+fields_legend		=>'Legenda',
+new_template		=>'Creëer een nieuw template',
+delete_template		=>'Verwijder template',
+template_name		=>'Template naam',
+table_vars		=>'Beschikbare velden tabel',
+regards			=>'Met vriendelijke groet,',
+field_logo		=>'Uw bedrijfslogo',
+field_contactid		=>'Contact code',
+field_contactname	=>'Contact bedrijfsnaam',
+field_email		=>'Contact E-mail adres',
+field_address		=>'Contact adres',
+field_city		=>'Contact stad',
+field_zip		=>'Contact zip code',
+field_prov		=>'Contact provincie',
+field_header1		=>'Volledig adres operationele afdeling',
+field_header2		=>'Volledig adres justitionele afdeling',
+field_header3		=>'Volledig adres hoofdvestiging',
+field_sendmode		=>'Document verzend mode',
+field_tel		=>'Contact telefoon nummer',
+field_fax		=>'Contact fax nummer',
+field_docid		=>'Document protocol nummer',
+field_docowner		=>'Document eigenaar',
+field_docissue		=>'Document publicatie datum',
+field_docexpire		=>'Document verloop datum',
+field_startyear		=>'Jaar, begin datum',
+field_endyear		=>'Jaar, eind datum',
+field_today		=>'Datum',
+field_function		=>'Uw bedrijfsfunctie',
+field_priceshtable	=>'Horizontale prijzen tabel',
+field_pricesvtable	=>'Verticale prijzen tabel',
+field_employer		=>'Contact bedrijfswerkgever.',
+   ));
+
+1;
+
+

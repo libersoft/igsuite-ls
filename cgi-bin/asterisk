@@ -1,0 +1,142 @@
+#! /usr/bin/perl
+# Procedure: asterisk
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+use IG::NetTelnet;
+
+IG::MkEnv(__PACKAGE__);
+
+my %conf;
+
+IG::DTable( place_call      => sub { _sanitize_options(); CheckPrivilege() },
+            default_action  => sub { _sanitize_options(); CheckPrivilege() } );
+
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  place_call();
+ }
+
+#############################################################################
+############################################################################# 
+sub place_call
+ {
+  my ($Prematch, $Match, $status, $telnet_errmsg);
+
+  # Connect to localhost via telnet on the Asterisk manager port.
+  my $TelnetClient = new Net::Telnet( Timeout => 20,
+                                      Errmode => 'return',
+                                      Host    => $conf{call_manager_hostname},
+                                      Port    => $conf{call_manager_port} );
+
+  if ( !$on{number} )
+   {
+    $status = "You have to specify a telephone number to call!\n";
+   }
+  elsif ( !$TelnetClient )
+   {
+    $status = "Can't connect to Asterisk Call Manager host: ".
+              "'$conf{call_manager_hostname}:$conf{call_manager_port}'. ".
+              "Check your IGSuite user configuration or Asterisk Call Manager ".
+              "configuration file (generally you can find it to ".
+              "'/etc/asterisk/manager.conf').\n";
+   }
+  else
+   {
+    # Login with our username and secret.
+    $TelnetClient->open();
+    $TelnetClient->print("Action: Login");
+    $TelnetClient->print("Username: $conf{call_manager_username}");
+    $TelnetClient->print("Secret: $conf{call_manager_password}");
+    $TelnetClient->print(""); 
+
+    # Check for login success.
+    ($Prematch, $Match) = $TelnetClient->waitfor("/Message: .*/");
+
+    if ( ($Prematch =~ m/Success/) && ($Match =~ m/Authentication/) )
+     {
+      ## Set callerid
+      my $caller_id;
+      if ( $on{contactid} )
+       {
+        ## find contact_name
+        DbQuery("select contactname from contacts ".
+                "where contactid='".DbQuote($on{contactid})."' limit 1");
+        my $contactname = FetchRow() || '';
+           $contactname =~ s/(\"|\:|\<|\>)//g;
+
+        $caller_id = "\"$contactname\" ".
+                     "<$conf{number_to_call}>"
+                   if $contactname;
+       }
+
+      $caller_id ||= "\"IGSuite autodial\" ".
+                     "<$conf{call_manager_extension}>";
+
+      $TelnetClient->print("Action: Originate");
+      $TelnetClient->print("Channel: $conf{call_manager_extension}");
+      $TelnetClient->print("Exten: $conf{number_to_call}");
+      $TelnetClient->print("Priority: 1");
+      $TelnetClient->print("Callerid: $caller_id");
+      $TelnetClient->print("");
+
+      ($Prematch, $Match) = $TelnetClient->waitfor("/Message: .*/");
+
+      $status = (($Match =~ m/Originate/) && ($Prematch =~ m/Success/))
+              ? "Call placed.\n"
+              : "Good authentication, but can't place a call.\n";
+     }
+    else
+     {
+      $status = "Authentication failed. ".
+                "Check Call Manager username or password.\n";
+     }
+   }
+
+  HtmlHead( onevent => "onload=\"setTimeout('self.close()',10000);\"");
+  TaskHead( title=>'Asterisk Call Manager', icon => 1);
+  TaskMsg($status);
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub _sanitize_options
+ {
+  for my $param ( qw( call_manager_hostname
+                      call_manager_port
+                      call_manager_username
+                      call_manager_password
+                      call_manager_phonetype
+                      call_manager_numberprefix
+                      call_manager_extension ) )
+   {
+    $conf{$param} = IG::ConfigParam('asterisk.' . $param );  
+    $conf{$param} =~ s/[^a-zA-Z0-9\-\.\_\/]//;
+   }
+
+  $conf{number_to_call} = $conf{call_manager_numberprefix} . $on{number};
+ }
+ 

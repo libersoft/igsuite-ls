@@ -1,0 +1,14 @@
+## IGSuite 4.0.0
+## Language: users_groups_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+Err_group_name		=> 'Attentie! Groep naam ontbreekt',
+Err_group_description	=> 'Attentie! Groep beschrijving ontbreekt',
+alert_on_delete		=> 'Als u deze groep verwijdert, verwijderd u de gerelateerde voorrechten',
+   ));
+
+1;
+
+

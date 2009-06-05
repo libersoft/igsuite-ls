@@ -1,0 +1,358 @@
+#! /usr/bin/perl
+# Procedure: igforms
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable( proto_field         => sub { CheckPrivilege('igforms_edit') },
+	    insert_field        => sub { CheckPrivilege('igforms_edit') },
+	    edit_field	        => sub { CheckPrivilege('igforms_edit') },
+	    change_field_status => sub { CheckPrivilege('igforms_edit') },
+	    build_form_mask     => sub { CheckPrivilege('igforms_view') },
+	    show_form_fields    => sub { CheckPrivilege('igforms_view') },
+	    default_action      => sub { CheckPrivilege('igforms_view') } );
+
+
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  die("No default action!\n");
+ }
+
+#############################################################################
+#############################################################################
+sub proto_field
+ {
+  ## Looking for populated field
+  DbQuery("select value from form_records ".
+          "where fieldid='".DbQuote($on{fieldid})."' limit 1");
+  my $field_rmode = FetchRow() ? 1 : 0;
+
+  HtmlHead();
+  TaskHead( title     => 'IGForms (EXPERIMENTAL)',
+            icon      => 1,
+            width     => 600 );
+
+  FormHead( cgiaction => 'insert_field',
+            labelstyle=> 'width:200px',
+            name      => 'protofield' );
+
+  Input( name  => 'igformid',
+         type  => 'hidden');
+
+  Input( name  => 'fieldid',
+         type  => 'hidden');
+
+  Input( name  => 'fieldlabel',
+         style => 'width:150px;',
+         show  => $lang{field_label},
+         type  => 'text' );
+
+  Input( name  => 'fieldtype',
+         readonly => $field_rmode,
+         style => 'width:150px;',
+         show  => $lang{field_type},
+         data  => { text     => $lang{text_type},
+                    textarea => $lang{textarea_type},
+                    select   => $lang{select_type},
+                    checkbox => $lang{checkbox_type},
+                    logins   => $lang{users_type},
+                  },
+         value => 'text',
+         type  => 'select' );
+
+  Input( name  => 'position',
+         size  => 3,
+         show  => $lang{field_position},
+         type  => 'text' );
+
+  Input( name  => 'fieldfloat',
+         style => 'width:150px;',
+         show  => 'Float',
+         data  => { none     => $lang{none},
+                    left     => 'left',
+                    right    => 'right',
+                  },
+         value => 'none',
+         type  => 'select' );
+
+  Input( name  => 'fieldstyle',
+         show  => $lang{field_css_style},
+         value => 'width:200px;',
+         quickhelp=>'Try to read http://www.w3.org/Style/CSS/learning',
+         style => 'width:300px;',
+         type  => 'text' );
+
+  Input( name  => 'labelstyle',
+         show  => $lang{label_css_style},
+         value => 'width:150px;',
+         quickhelp=>'Try to read http://www.w3.org/Style/CSS/learning',
+         style => 'width:300px;',
+         type  => 'text' );
+
+  Input( name  => 'defaultvalues',
+         readonly => $field_rmode,
+         show  => $lang{field_values},
+         style => 'width:300px; height:120px',
+         type  => 'textarea' );
+
+  Input( name  => 'description',
+         show  => $lang{description},
+         style => 'width:300px; height:60px',
+         type  => 'textarea' );
+
+  Input( show  => $lang{update_field_data},
+         style => 'margin-top:20px;',
+         type  => 'submit' );
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+#############################################################################
+#############################################################################
+sub insert_field
+ {
+  $on{igformid}    ||= 'base';
+  $on{fieldid}     ||= MkId(20);
+  $on{fieldlabel}  ||= 'No label';
+  $on{fieldtype}   ||= 'text';
+  $on{position}    ||= 50;
+  $on{status}      ||= '0';
+
+  if ( !$on{defaultvalues} && $on{fieldtype} eq 'select' )
+   { $on{defaultvalues} = "Empty1\nEmpty2\nEmpty3\n"; }
+
+  QuoteParams();
+  DbQuery( query=>[("delete from form_defs ".
+                    "where igformid='$in{igformid}' and fieldid='$in{fieldid}'",
+                      
+                    "insert into form_defs values(".
+                    "'$in{igformid}', '$in{fieldid}', '$in{fieldtype}', ".
+                    "'$in{fieldlabel}', '$in{description}', $in{position}, ".
+                    "'$in{defaultvalues}', $in{status}, '$in{fieldstyle}', ".
+                    "'$in{labelstyle}', '$in{fieldfloat}')"
+                   )] );
+
+  show_form_fields();
+ }
+
+#############################################################################
+#############################################################################
+sub edit_field
+ {
+  DbQuery("select * from form_defs ".
+          "where fieldid='".DbQuote($on{fieldid})."'");
+  
+  ( $on{igformid},
+    $on{fieldid},
+    $on{fieldtype},
+    $on{fieldlabel},
+    $on{description},
+    $on{position},
+    $on{defaultvalues},
+    $on{status},
+    $on{fieldstyle},
+    $on{labelstyle},
+    $on{fieldfloat} ) = FetchRow();
+
+  proto_field();
+ }
+
+#############################################################################
+#############################################################################
+sub change_field_status
+ {
+  my $status = not $on{status};
+     $status ||= '0';
+
+  DbQuery("update form_defs set status=".DbQuote($status).
+          " where fieldid='".DbQuote($on{fieldid})."'");
+
+  show_form_fields();
+ }
+
+#############################################################################
+#############################################################################
+sub build_form_mask
+ {
+  HttpHead( expires => 'now' );
+
+  TaskMsg( Input( type=>'button',
+                  float=>'right',
+                  onclick=>"document.location = '".
+                             "igforms?".
+                                      "action=show_form_fields&amp;".
+                                      "igformid=$on{igformid}';",
+                  show=>$lang{edit_form},
+                  fieldstyle=>'margin:0px',
+                  style=>'margin:0px;font-size:10px; height:15px' ).
+
+           Img(src=>"$IG::img_url/mime_mini_offer.png",
+               align=>'absmiddle').
+           'IGForms'
+           ,7);
+
+  ## disegna il form tramite una left join tra form_defs e form_records
+  QuoteParams();
+  DbQuery( "select form_defs.igformid, form_defs.fieldid,".
+           " form_defs.fieldtype, form_defs.fieldlabel,".
+           " form_defs.description, form_defs.position,".
+           " form_defs.defaultvalues, form_defs.status,".
+           " form_defs.fieldstyle, form_defs.labelstyle,".
+           " form_defs.fieldfloat, form_records.value ".
+           "from form_defs ".
+           "left join form_records ".
+           "on form_defs.fieldid = form_records.fieldid ".
+           " and form_records.recordid = '$in{recordid}' ".
+           "where form_defs.igformid='$in{igformid}'".
+           " and status=0 ".
+           "order by form_defs.position" );
+
+  while ( ( $on{igformid},
+            $on{fieldid},
+            $on{fieldtype},
+            $on{fieldlabel},
+            $on{description},
+            $on{position},
+            $on{defaultvalues},
+            $on{status},
+            $on{fieldstyle},
+            $on{labelstyle},
+            $on{fieldfloat},
+            $on{value} ) = FetchRow() )
+   {
+    my @data;
+  
+    ## adjust values
+    if ( $on{fieldtype} eq 'select' )
+     {
+      @data = split /\n|\r\n/, $on{defaultvalues};
+     }
+    elsif ($on{fieldtype} eq 'text' || $on{fieldtype} eq 'textarea')
+     {
+      $on{value} ||= $on{defaultvalues};
+     }
+
+    PrOut Input( type      => $on{fieldtype},
+                 name      => $on{fieldid},
+                 show      => $on{fieldlabel},
+                 float     => $on{fieldfloat},
+                 readonly  => CheckPrivilege('igforms_edit') ? 0 : 1,
+                 quickhelp => $on{description},
+                 value     => $on{value},
+                 zerovalue => 'true',
+                 checked   => $on{fieldtype} eq 'checkbox' && $on{value}
+                              ? 1 : '',
+                 data      => \@data,
+                 override  => 1,
+                 onblur    => CheckPrivilege('igforms_edit')
+                              ? ( $on{fieldtype} eq 'date'
+	                          ? "ajaxrequest(['NO_CACHE',".
+	                            "'ajaxaction__ckdate',".
+	                            "'date__' + getVal('$on{fieldid}')],['$on{fieldid}'],'GET');"
+                                  : "").
+                                "ajaxrequest(".
+	                        "['NO_CACHE',".
+	                          "'$on{fieldid}',".
+	                          "'ajaxaction__update_igforms_field',".
+                                  "'recordid__$on{recordid}',".
+                                  "'fieldid__$on{fieldid}'],".
+	                        "['fake_div'],'GET');".
+	                        "return true;"
+                              : '',
+                 style     => $on{fieldstyle},
+                 labelstyle=> $on{labelstyle} );
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub show_form_fields
+ {
+  HtmlHead();
+  TaskHead( width => '100%',
+            title=>'IGForms (EXPERIMENTAL)' );
+
+  HLayer( 
+         MkButton( text => $lang{add_form_field},
+                   link => "igforms?action=proto_field&amp;".
+                                   "igformid=$on{igformid}" ),
+        );
+
+
+
+  DbQuery("select * from form_defs ".
+          "where igformid='".DbQuote($on{igformid})."' ".
+          "order by position");
+
+  TaskListMenu( [$lang{field_label}],
+                [$lang{priority}],
+                [$lang{type}],
+                [$lang{description}],
+                [] );
+
+  while (my @row = FetchRow() )
+   {
+    my $color = "style=\"color:".
+                ($row[7]
+                 ? '#CCCCCC; text-decoration:line-through;'
+                 : '#000000; text-decoration:none;') . ";\"";
+
+    my $icon_links = Img( src   => "$IG::img_url/delete.gif",
+                          title => $lang{delete},
+                          href  => "igforms?".
+                                   "action=change_field_status&amp;".
+                                   "igformid=$row[0]&amp;".
+                                   "fieldid=$row[1]&amp;".
+                                   "status=$row[7]" ).
+ 
+                     Img( src   => "$IG::img_url/edit.gif",
+                          title => $lang{edit},
+                          href  => "igforms?".
+                                       "action=edit_field&amp;".
+                                       "igformid=$row[0]&amp;".
+                                       "fieldid=$row[1]" );
+
+    TaskListItem
+     (
+      [$row[3], '', $color],
+      [$row[5], '', $color],
+      [$row[2], '', $color],
+      [$row[4], '', $color],
+      [$icon_links]
+     );
+   }
+
+  TaskListFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+
+# $lang{date_type}

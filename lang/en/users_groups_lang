@@ -1,0 +1,12 @@
+## IGSuite 4.0.0
+## Language: users_groups_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+Err_group_name		=> 'Attention! group name missing',
+Err_group_description	=> 'Attention! group description missing',
+alert_on_delete		=> 'If you delete the group you will delete all related privileges',
+   ));
+
+1;

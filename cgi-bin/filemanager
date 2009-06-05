@@ -1,0 +1,4008 @@
+#! /usr/bin/perl
+# Procedure: filemanager
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+#BUG Remember you will have problems (client side) with some characters
+#    if $ENV{LANG} =~ /UTF-8/ and $IG::charset_lang ne 'UTF-8'
+
+use strict;
+use IG;
+use IG::Thumbnails;
+IG::MkEnv(__PACKAGE__);
+
+## prepare environment
+my %elements;
+my %dir_info;
+my %fm = ( root_path       => $IG::htdocs_dir,
+           repository_path => $IG::data_dir . ${S} . 'repository',
+           basket_path     => "$IG::htdocs_dir${S}$IG::default_lang{basket}",
+           basket_link     => "/$IG::default_lang{basket}",
+           home            => "/$IG::default_lang{home}",
+           home_path       => "$IG::htdocs_dir${S}$IG::default_lang{home}",
+           home_link       => MkUrl("/$IG::default_lang{home}") );
+
+check_dir_info();
+
+## Dispatch table
+IG::DTable (	mkframes	=> 1,
+		openfile	=> 1,
+		getpreview	=> 1,
+		mktreeframe	=> 1,
+		getfuncmenu	=> 1,
+		mkthumb         => 1,
+		getrepositorypan=> sub { CheckPrivilege() },
+		renamefile	=> sub { CheckPrivilege('filemanager_edit') },
+		renamefileagg	=> sub { CheckPrivilege('filemanager_edit') },
+		movefile	=> sub { CheckPrivilege('filemanager_edit') },
+		movefileagg     => sub { CheckPrivilege('filemanager_edit') },
+		makedir		=> sub { CheckPrivilege('filemanager_edit') },
+		makediragg	=> sub { CheckPrivilege('filemanager_edit') },
+		deletefile	=> sub { CheckPrivilege('filemanager_edit') },
+		deletefileagg	=> sub { CheckPrivilege('filemanager_edit') },
+		deletedir	=> sub { CheckPrivilege('filemanager_edit') },
+		deletediragg	=> sub { CheckPrivilege('filemanager_edit') },
+		configuredir	=> sub { CheckPrivilege('filemanager_edit') },
+		configurediragg	=> sub { CheckPrivilege('filemanager_edit') },
+		uploadfile	=> sub { CheckPrivilege('filemanager_edit') },
+		uploadfileagg	=> sub { CheckPrivilege('filemanager_edit') },
+		default_action	=> 1 );
+
+#############################################################################
+#############################################################################
+sub mkframes
+ {
+  ## in some cases we show just files task
+  default_action() && return if    $dir_info{target} eq 'myframe'
+				|| $IG::screen_size =~ /^noframe/;
+
+  my $frame_sx_link = "filemanager?action=mktreeframe";
+  my $frame_dx_link = "filemanager?dir=$dir_info{dir_link}&amp;".
+                                  "repid=$dir_info{repid}&amp;".
+                                  "repapp=$dir_info{repapp}";
+
+  IG::DocHead( type    => 'text/html',
+               expires => 'now' );
+
+  PrOut <<HTML;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN"
+     "http://www.w3.org/TR/html4/frameset.dtd">
+<html>
+<head><title>IGSuite $IG::VERSION</title>
+<META HTTP-EQUIV=Pragma CONTENT=no-cache>
+<LINK REL="icon" HREF="$IG::img_url/favicon.ico" TYPE="image/x-icon">
+</head> 
+
+<FRAMESET cols="240,*" framespacing=0 frameborder=0>
+ <FRAME src="$frame_sx_link" name="treeframe">
+ <FRAME src="$frame_dx_link" name="basefrm"> 
+</FRAMESET>
+
+<NOFRAMES>Error: Your browser doesn't support frames!</NOFRAMES>
+<BODY>Error: Your browser doesn't support frames!</BODY>
+</html>
+HTML
+ }
+
+#############################################################################
+#############################################################################
+sub mktreeframe
+ {
+  my $limit_to_home =    $auth_user eq 'guest' 
+                      || CheckPrivilege('filemanager_limit_to_home');
+  my $user_tree     = $limit_to_home ? $auth_user : $on{user} || $auth_user;
+  my $dir           = $fm{home_path} . ${S} . $user_tree . ${S};
+
+  my ( $space, $total_files, @dirs ) = IG::DirWalk( $dir, 'cache' );
+
+  HtmlHead( javascript => "<script src=\"filemanager?action=getfuncmenu\"".
+                          " type=\"text/javascript\"></script>" );
+
+  TaskHead( title => 'IGFile',
+	    width => '100%',
+	    icon  => 1 );
+ 
+  FormHead( name       => 'navi',
+	    labelstyle => 'width: auto; font-size: 10px;');
+
+  TaskMsg( Input( type      => 'logins',
+		  guestvalue=> $limit_to_home ?  0 : 1,
+		  label     => $lang{user},
+		  style     => 'font-size: 10px; width: 110px',
+		  name      => 'user',
+		  value     => $user_tree,
+		  readonly  => $limit_to_home ?  1 : 0,
+		  override  => 1,
+		  onchange  => "window.location = '".
+		               "filemanager?action=mktreeframe&amp;".
+		               "user=' + this.options[this.selectedIndex].value").
+
+           Input( type	    => 'label',
+                  show      => "$lang{utilized_space}: ".
+                               IG::MkByte($space) . ' ',
+                  labelstyle=> 'font-size:10px; background:transparent; '.
+                               'width:auto; border:0',
+                  data      => Img( src   => "$IG::img_url/drive.gif",
+			            width => 16,
+				    align => 'absmiddle'))
+	    ,4);
+  FormFoot();
+
+  PrOut "<div id=\"treebox\" style=\"border:1px solid #999999;".
+        " overflow:auto; font-size:x-small; width:200px; padding:3px\">",
+        "<script>".
+	"foldersTree=gFld(\"<div>$fm{home_link}/$user_tree</div>\",".
+	"\"filemanager?dir=$fm{home_link}/$user_tree\")\n";
+  
+  for ( sort { lc($a) cmp lc($b) } @dirs )
+   { 
+    $_ = substr( $_, length($dir), );
+    next if !$_;
+    my $lnk = "filemanager?dir=".
+	       MkUrl("$fm{home_link}/$user_tree/$_");
+    my $lev = $_ =~ s/[^\/]+\///g;
+
+    PrOut $lev == 0
+          ? "aux1 = insFld(foldersTree, gFld(\"<div>$_</div>\", \"$lnk\"))\n"
+          : "aux".
+            ($lev+1).
+            " = insFld(aux$lev, gFld(\"<div>$_</div>\", \"$lnk\"))\n";
+   }
+
+  PrOut <<END;
+
+function openThisDir(linkID)
+ {
+  var folderObj;
+  docObj = parent.treeframe.findObjLink(linkID);
+  if (typeof docObj=='undefined' || docObj==null) return;
+  clickOnNodeObj(docObj);
+  docObj.forceOpeningOfAncestorFolders();
+ }
+
+window.onload = treebox_maximize;
+window.onresize = treebox_maximize;
+
+function treebox_maximize()
+ {
+  getSize();
+  if ( maxHeight > 165 )
+   { \$('treebox').style.height = maxHeight - 165; }
+ }
+
+initializeDocument();
+openThisDir('$dir_info{this_dir_name}');
+</script>
+</div>
+<noscript>
+A tree for files navigation will open here if you enable JavaScript in your browser.
+</noscript>
+END
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub _set_hiddens
+ {
+  return ( Input( type => 'hiddens',
+		  data => { dir    => '',
+		            repid  => '',
+		            repapp => '',
+		            order  => '',
+			  }
+		 )
+	 );
+ }
+
+#############################################################################
+#############################################################################
+sub check_dir_info
+ {
+  ## Set %dir_info hash whit values needed to all procedures 
+  ## and store into it the values of the directory configuration file
+  ##
+  ## $dir_info{this_dir_name} - used only by mktreeframe
+  ## $dir_info{cnt_byte}      - directory total size
+  ## $dir_info{cnt_dir}       - subdirectories counter
+  ## $dir_info{cnt_file}      - files counter
+  ## $dir_info{dir}           - human readable web directory
+  ## $dir_info{dir_link}      - escaped directory link
+  ## $dir_info{dir_path}      - server path to directory access
+  ## $dir_info{dir_up}        - escaped path of previous directory 
+
+  ## Store user arguments
+  %dir_info = ( repid  => $on{repid},
+                repapp => $on{repapp},
+                order  => $on{order} || 'name',
+                dir    => $on{dir} );
+
+  ## Fix Ajax undefined values on win clients
+  $dir_info{repid}  = '' if $dir_info{repid}  eq 'undefined';
+  $dir_info{repapp} = '' if $dir_info{repapp} eq 'undefined';
+
+  ## Adjust $dir_info{dir} value whit last location
+  $dir_info{dir} ||= (    $IG::cookie{filemanager}
+                       || "$fm{home_link}/$auth_user"
+                     ) if !$dir_info{repid} && !$on{defact};
+
+  ## force dir/repid/repapp in specific cases  
+  if (    $auth_user eq 'guest'
+       && $on{dir} !~ /^$fm{home_link}\/guest/
+       && !$dir_info{repid}
+       && $dir_info{repapp} ne 'igwiki'
+     )
+   {
+    ## For security reason user guest can access only
+    ## in her home or in a wiki repository
+    $dir_info{dir}    = $on{dir} = "$fm{home_link}/guest";
+    $dir_info{repid}  = 
+    $dir_info{repapp} = '';
+   }
+  elsif (    $on{defact}
+          && $dir_info{dir} !~ /^$fm{home_link}\/$auth_user/
+        )
+   {
+    ## If we use filemanager for email attachment the user
+    ## can't open directory different from /Home/$auth_user
+    $dir_info{dir}    = "$fm{home_link}/$auth_user";
+    $dir_info{repid}  =
+    $dir_info{repapp} = '';
+   }
+  elsif (    !$dir_info{repid}
+          && CheckPrivilege('filemanager_limit_to_home')
+          && $dir_info{dir} !~ /^($fm{home_link}\/$auth_user|$fm{basket_link})/
+        )
+   {
+    ## User have a limited use of filemanager to her Home
+    $dir_info{dir}    = $on{dir} = "$fm{home_link}/$auth_user";
+    $dir_info{repid}  = 
+    $dir_info{repapp} = '';
+   }
+ 
+  ## clean $dir_info{dir} from last /
+  $dir_info{dir} =~ s/\/$//g;
+
+  ## clean double /
+  $dir_info{dir} =~ s/\/\//\//g;
+
+  ## Check what kind of directory we have. We can manage:
+  ## repository, user home directory, filesystem shared directory
+  if ($dir_info{repid} && $dir_info{repapp})
+   {
+    ## This is a repository
+    ##
+    $dir_info{dir_path} = $fm{repository_path} . ${S} .
+                          $dir_info{repapp}    . ${S} .
+                          $dir_info{repid}     . ${S} .
+                          _from_link_to_path( $dir_info{dir} );
+
+    ## Set repository owner
+    if ( CheckPrivilege('sys_user_admin') ||
+	 CheckPrivilege('filemanager_superuser')
+       )
+     {
+      $dir_info{owner} = $auth_user;
+     }
+    else 
+     {
+      ## check user privilege to edit repository
+
+      if ( $dir_info{repapp} eq 'todo' )
+       { 
+        DbQuery("select owner from todo ".
+                "where todoid='".DbQuote($dir_info{repid})."'");
+        $dir_info{owner} = FetchRow();
+       }
+      elsif ($dir_info{repapp} eq 'calendar')
+       {
+        DbQuery("select fromuser, touser from calendar ".
+		"where eventid='".DbQuote($dir_info{repid})."'");
+        my @row = FetchRow();
+
+        if ($row[1] eq $auth_user || $row[2] eq $auth_user )
+         { $dir_info{owner} = $auth_user }
+       }
+      elsif ($dir_info{repapp} eq 'contacts')
+       {
+        DbQuery("select owner, sharemode from contacts ".
+		"where contactid='".DbQuote($dir_info{repid})."'");
+        my ($owner, $sharemode) = FetchRow();
+
+        $dir_info{owner} = $auth_user
+         if    CheckPrivilege('contacts_edit')
+            && ( $owner eq $auth_user || $sharemode < 2 );
+       }
+      else
+       {
+        $dir_info{owner} = $auth_user if CheckPrivilege($dir_info{repapp}.'_edit');
+       }
+     }
+
+    ## If repid exist but repository dir doesn't exist we create it
+    if ( ! -e $dir_info{dir_path} )
+     {
+      mkdir( $dir_info{dir_path}, 0777 )
+        or die("Can't create directory '$dir_info{dir_path}'.\n");
+     }
+
+    $dir_info{task}      = 'no';
+    $dir_info{location}	 = 'no';
+    $dir_info{target}	 = 'myframe';
+    $dir_info{scrollbar} = 'no';
+   }
+  elsif ( $dir_info{dir} =~ /^$fm{home_link}\/([^\/]+)/ )
+   {
+    ## This is an user home directory (or a subdirectories)
+    my $home_dir_user = $1;
+
+    die("This is a false Home directory '$dir_info{dir}' of an unknown user! ".
+        "Please remove this directory ".
+        "or add a new user with login '$home_dir_user'\n"
+       ) if ! IG::UsrInf( 'name', $home_dir_user );
+
+    $dir_info{owner}    = $home_dir_user eq 'guest'
+                        ? $IG::login_admin
+                        : $home_dir_user;
+
+    $dir_info{target}   = $home_dir_user eq $auth_user
+                        ? 'mainf'
+                        : '';
+
+    $dir_info{dir_path} = $fm{root_path} .
+                          _from_link_to_path( $dir_info{dir} );
+
+    ## Make auth_user home dir if doesn't exist
+    if ( $dir_info{dir_path} eq "$fm{home_path}${S}$auth_user"
+         && ! -e $dir_info{dir_path}
+       )
+     {
+      mkdir( $dir_info{dir_path}, 0777 )
+        or die( "$lang{Err_cant_mkdir} '$dir_info{dir_path}'.\n");
+     }
+
+    if (    ( $on{action} eq 'makediragg'    )
+         || ( $on{action} eq 'renamefileagg' )
+         || ( $on{action} eq 'deletediragg'  )
+       )
+     {
+      ## update DirWalk cache file
+      my $dirwalk_cache_file = ( $IG::temp_dir . ${S} .
+                                 IG::Crypt( $fm{home_path}          . ${S} .
+                                            $home_dir_user          . ${S} ) .
+                                 '.dir' );
+      IG::FileUnlink( $dirwalk_cache_file )
+        or die("Can't delete DirWalk cache file '$dirwalk_cache_file'.\n");
+     }
+   }
+  else 
+   {
+    ## This is a directory of the shared filesystem but not the basket dir
+    ## only admin can access to this space others user
+    ## can just openfile here
+    die("Only admin user can access here!\n")
+      if    $on{action} ne 'openfile'
+         && $dir_info{dir} !~ /^$fm{basket_link}/
+         && !CheckPrivilege('sys_user_admin');
+
+    $dir_info{dir_path} = $fm{root_path} . 
+                          _from_link_to_path( $dir_info{dir} );
+    $dir_info{target}   = 'mainf';
+   }
+
+
+  ## Check if we have a valid directory
+  if (    $dir_info{dir} =~ /(\.\.|\*|\?|\||\>|\<|\$|\&)/
+       || ! -d $dir_info{dir_path} )
+   {
+    push @IG::errmsg, $lang{Err_directory_unknow};
+    $dir_info{dir}	= "$fm{home_link}/$auth_user";
+    $dir_info{dir_path}	= "$fm{home_path}${S}$auth_user";
+    $dir_info{repid}	= '';
+    $dir_info{repapp}   = '';
+   }
+
+  ## Set dir_up and this_dir relatively to actual directory
+  my @subdirlist = split( /\//, $dir_info{dir} );
+  $dir_info{this_dir_name} = pop( @subdirlist );
+  $dir_info{dir_up}        = MkUrl( substr( $dir_info{dir},
+                                            0,
+                                            length($dir_info{dir}) -
+                                            length($dir_info{this_dir_name}) ));
+  $dir_info{this_dir_name} = MkUrl( $dir_info{this_dir_name} );
+  $dir_info{dir_link}      = MkUrl( $dir_info{dir} );
+
+  ## In trash basket directory set specific parameters and clean old files
+  if ( $dir_info{dir_path} eq $fm{basket_path} )
+   {
+    ## Clean old file from trash
+    my $files;
+    opendir (DIR, $dir_info{dir_path} )
+      or die("Can't read from directory '$dir_info{dir_path}'.\n");
+
+    while ( defined($files = readdir(DIR)) )
+     {
+      if (    -M "$dir_info{dir_path}${S}$files" > 30
+           && -f "$dir_info{dir_path}${S}$files"
+         )
+       {
+        IG::FileUnlink( "$dir_info{dir_path}${S}$files" )
+          or die("Can't delete '$files' from '$dir_info{dir_path}${S}'.\n");
+       }
+     }
+    closedir (DIR);
+
+    $dir_info{title}       = $lang{basket};
+    $dir_info{location}	   = 'no';
+    $dir_info{scrollbar}   = 'no';
+    $dir_info{toolbar}	   = 'no';
+    $dir_info{directories} = 'no';
+    $dir_info{index}	   = 'no';
+    $dir_info{order}	   = 'date';
+    $dir_info{listtype}    = 'filelist';
+   }
+
+  ## Force some directory config in case filemanager
+  ## is used for email attachment
+  elsif ( $on{defact} )
+   {
+    $dir_info{title}       = 'IGWebMail';
+    $dir_info{location}	   = 'no';
+    $dir_info{scrollbar}   = 'no';
+    $dir_info{toolbar}	   = 'no';
+    $dir_info{directories} = 'yes';
+    $dir_info{index}	   = 'no';
+    $dir_info{order}	   = 'date';
+    $dir_info{listtype}    = 'iconlist';
+   }
+
+  ## Load specific directory configuration file
+  elsif ( -e "$dir_info{dir_path}${S}.igsuiterc" )
+   {
+    open( DET, '<', "$dir_info{dir_path}${S}.igsuiterc" )
+      or die("$lang{Err_cant_readfile} '$dir_info{dir_path}${S}.igsuiterc'.\n");
+
+    while(<DET>)
+     {
+      s/\r|\n//;	      ## no trailing space
+      s/#.*//;                ## no comments
+      s/^\s+//;               ## no blank rows
+      s/\s+$//;               ## strip rows
+      s/.+\=$//;	      ## no empty keys
+      next unless length;
+      my ( $key, $val ) = split( /\s\=\s/, $_ );
+      if ( $key eq 'note' )
+       {
+        ## note is last record so read until end
+        $val .= "\n";
+        $val .= $_ while <DET>;
+       }
+      $dir_info{$key} = $val;
+     }
+    close(DET);
+   }
+
+  ## force directory view with arguments by user
+  $dir_info{listtype} = $on{listtype} if $on{listtype};
+  $dir_info{order}    = $on{order}    if $on{order};
+
+  ## avoid "preview list" to guest user because
+  ## getpreview() can't be used by a guest
+  $dir_info{listtype} = 'iconlist' if    $auth_user eq 'guest'
+                                      && $dir_info{listtype} eq 'previewlist';
+
+  ## default target frame if not specified
+  $dir_info{target} ||= '_self';
+
+  ## store location inside a cookie
+  $IG::set_cookie{filemanager} = $dir_info{dir};
+ }
+
+#############################################################################
+#############################################################################
+sub _from_link_to_path
+ {
+  my $link = shift;
+     $link =~ s/\//${S}/g if ${S} ne '/';
+
+  return $link;
+ }
+
+#############################################################################
+#############################################################################
+sub openfile
+ {
+  ## security rules
+  ## - thanks to check_dir_info, guest can't open file outside its home dir
+  ## - thanks to CkPath(), openfile() can't open files outside IG env.
+  ## - thanks to _ck_use_argument(), $on{file} can't contain evil chars 
+
+  ## security check 
+  _ck_user_argument( $on{file} );
+
+  my $file = "$dir_info{dir_path}${S}$on{file}";
+  die( "Error: file '$on{file}' doesn't exist in directory ".
+       "'$dir_info{dir_path}'.\n" ) if ! -e $file;
+
+  if ( ! $on{defact} )
+   {
+    ## open file
+    my ( $type, $size ) = IG::FileStat( $file );
+
+    IG::DocHead( type           => $type,
+                 expires        => '+20m',
+                 content_length => $size,
+                 attachment     => $on{file} );
+
+    open( FH, '<', CkPath($file) ) or die("Can't open '$file'.\n");
+    binmode(FH);
+    PrOut($_) while <FH>;
+    close (FH);
+   }
+  else
+   {
+    ## user has requested to add a file as an email attach
+    my $js_obj = "window.opener.document.composeform";
+    my $onload  = "$js_obj.file2import.value='" . IG::JsQuote($file) . "'; ".
+                  "$js_obj.submit(); self.close();";
+    HtmlHead( onevent => "onload=\"$onload\"" );
+    HtmlFoot();
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub getrepositorypan
+ {
+  my $width  = $on{width}  || '100%';
+  my $height = $on{height} || '100%';
+  my $src    = "filemanager?repid=$on{repid}&amp;repapp=$on{repapp}";
+
+  HttpHead( expires => 'now' );
+
+  PrOut "<iframe".
+        " frameborder=\"0\"".
+        " style=\"padding:0px; width:$width; height:$height;\"".
+        " src=\"$src\"".
+        " id=\"files\"".
+        " name=\"myframe\">".
+        "</iframe>";
+ }
+
+#############################################################################
+#############################################################################
+sub getpreview
+ {
+  ## security check 
+  _ck_user_argument( $on{file} );
+
+  ## "next" image requests
+  if ( $on{nextimage} )
+   {
+    study_dir();
+    my $flag = 0;
+    foreach my $key ( sort keys %elements )
+     {
+      next if $elements{$key}[7] !~ /image\/(bmp|tif|gif|jpeg|png)|pdf/i;
+      next if !$flag && $elements{$key}[0] ne $on{file};
+      $on{file} = $elements{$key}[0];
+      ($flag++ && last) if $flag++;
+     }
+
+    if ( $flag != 3 )
+     {
+      ## try to catch first image
+      foreach my $key ( sort keys %elements )
+       {
+        next if $elements{$key}[7] !~ /image\/(bmp|tif|gif|jpeg|png)|pdf/i;
+        $on{file} = $elements{$key}[0];
+        last;
+       }
+     }
+   }
+
+  ## next image link  
+  my $next_image_link = $on{fullscreen}
+                      ? "filemanager?repid=$dir_info{repid}&amp;".
+                                 "repapp=$dir_info{repapp}&amp;".
+                                 "action=getpreview&amp;".
+                                 "file=".MkUrl($on{file})."&amp;".
+                                 "dir=$dir_info{dir_link}&amp;".
+                                 "fullscreen=1&amp;".
+                                 "nextimage=1&amp;".
+                                 "presentation=$on{presentation}&amp;".
+                                 "order=$dir_info{order}&amp;".
+                                 "height=$on{height}&amp;".
+                                 "width=$on{width}"
+                      : '';
+
+  my $file = "$dir_info{dir_path}${S}$on{file}";
+  die("Error: file '$on{file}' doesn't exist in directory ".
+      "'$dir_info{dir_path}'.\n") if ! -e $file;
+
+  if ( $on{fullscreen} )
+   {
+    $IG::clr{bg} = '#000000';
+    HtmlHead( padding => 1,
+              expire  => $on{presentation} 
+                      ?  "6; URL=$next_image_link"
+                      :  '' );
+   }
+  else
+   {
+    HttpHead( expires => 'now' );
+   }
+  
+  my $content = (IG::FileStat( $file ))[0];
+
+  if ( $content =~ /text\/plain/i )
+   {
+    my $mytext;
+    open( FH, '<', CkPath($file) ) or die("Can't open '$file'.\n");
+    binmode(FH);
+    $mytext .= $_ while <FH>;
+    close (FH);
+
+    PrOut "<pre style=\"font-size:10px; overflow:visible;padding:2px;".
+                       "margin:0; border:0px; background-color:#FFFFFF;".
+                       "text-align:left; width:100%\">".
+          MkEntities( $mytext ) .
+          "</pre>";
+   }
+  elsif ( $content =~ /image\/(bmp|tif|gif|jpeg|png)|pdf/i )
+   {
+    if ( ! -x $IG::ext_app{convert} )
+     { 
+      PrOut "<div style=\"margin:40px; font-size:16px; color:#999999;\">".
+            "You have to configure a right path to 'convert' application<br>".
+            "inside IGSuite configuration file 'igsuite.conf' to get ".
+            "a preview of this file.</div>\n";
+      return;
+     }
+
+    my $file_path = IG::Crypt( $file, 'crypt' );
+    my $query_str = $IG::query_string;
+       $query_str =~ s/height\=\d+\&amp\;/fullscreen=1\&amp\;/;
+       $query_str =~ s/width\=\d+\&amp\;//;
+       $query_str = MkUrl($query_str);
+
+    PrOut "<div style=\"cursor:pointer; font-size:10px; position:absolute;".
+                       "right:40px; background-color:#FFFFFF; color:#000000\"".
+              " onclick=\"winPopUp('filemanager?$query_str&amp;".
+                                               "order=$dir_info{order}&amp;".
+                                               "height='+(window.screen.availHeight-100)+'&amp;".
+                                               "width='+(window.screen.availWidth-100),".
+                                   "(window.screen.availWidth-10),".
+                                   "(window.screen.availHeight-10),".
+                                  "'OverTop');\">".
+          "Full Screen</div>\n" if !$on{fullscreen};
+
+    my $img = Img( src     => "docview?action=photo_view&amp;".
+                                 "photo_type=filemanager&amp;".
+                                 "width=$on{width}&amp;".
+                                 "height=$on{height}&amp;".
+                                 "fp=$file_path",
+                   onclick => $on{fullscreen}
+                           ?  "document.location='$next_image_link';"
+                           :  '',
+                   style   => 'margin:auto;border:2px solid #CCCCCC; '.
+                              'vertical-align:middle;'.
+                              ( $on{fullscreen} ? 'cursor:pointer;' : '' )
+                 );
+
+    MkTable( style       => 'width:100%; height:100%;',
+             style_c_r   => 'text-align:center; vertical-align:middle;',
+             values      => [([ $img ])] );
+   }
+  else
+   {
+    PrOut "<div style=\"margin-top:50px; font-size:25px; color:#999999;\">".
+          "No available preview for this type of file.</div>\n";
+   }
+
+  HtmlFoot() if $on{fullscreen};
+ }
+
+#############################################################################
+#############################################################################
+sub makedir
+ {
+  HtmlHead();
+  TaskHead( title     => $lang{new_directory},
+            width     => 450,
+            padding   => 10,
+            icon      => 2 );
+
+  FormHead( name      => 'newdir',
+            cgiaction => 'makediragg' );
+
+  _set_hiddens();
+
+  Input(    show      => $lang{insert_new_dir_name},
+            type      => 'text',
+            name      => 'newdirname',
+            labelstyle=> 'width:150px',
+            style     => 'width:200px' );
+
+  Input(    type      => 'reset',
+            style     => 'margin-top: 30px',
+            value     => $lang{abort},
+            onclick   => 'self.close()' );
+
+  Input(    type      => 'submit',
+            style     => 'margin-top:30px;',
+            name      => 'confirm',
+            float     => 'right',
+            value     => $lang{confirm} );
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub makediragg
+ {
+  my $errmessage;
+
+  if ( !$on{newdirname} || _ck_user_argument( $on{newdirname} ) )
+   {
+    $errmessage = $lang{Err_directory};
+   }
+  elsif (    $dir_info{owner} eq $auth_user
+          || CheckPrivilege('filemanager_superuser')
+        )
+   {
+    if ( ! -e "$dir_info{dir_path}${S}$on{newdirname}" )
+     {
+      if ( ! mkdir( "$dir_info{dir_path}${S}$on{newdirname}", 0777 ))
+       {
+        $errmessage = $lang{Err_make_dir};
+       }
+      else
+       {
+        LogD($on{newdirname}, 'mkdir', 'filemanager');
+	writeconfigdir("$dir_info{dir_path}${S}$on{newdirname}");
+       }
+     }
+    else
+     {
+      $errmessage = $lang{Err_directory_exist};
+     }
+   }
+  else
+   {
+    $errmessage = $lang{Err_dir_privileges};
+   }
+
+  my $status = $errmessage || $lang{Ok_make_directory};
+
+  _show_status( task_head_title   => $lang{make_directory},
+                status            => $status,
+                left_button_value => $lang{new_dir_again},
+                left_button_link  => 'history.go(-1)' );
+ }
+
+#############################################################################
+#############################################################################
+sub uploadfile
+ {
+  HtmlHead();
+  TaskHead( title      => 'Upload File',
+            width      => 450,
+            padding    => 10,
+            icon       => 2 );
+
+  FormHead( cgiaction  => 'uploadfileagg',
+            name       => 'upload',
+            method     => 'post',
+            labelstyle => 'width:180px',
+            enctype    => 'multipart/form-data' );
+
+  _set_hiddens();
+
+  Input(    show       => $lang{select_file},
+            type       => 'file',
+            style      => 'width:200px;',
+            name       => 'upfile' );
+
+  Input(    show       => $lang{insert_new_file_name},
+            type       => 'text',
+            style      => 'width:200px;',
+            name       => 'newfilename' );
+
+  Input(    show       => $lang{overwrite_file},
+            type       => 'checkbox',
+            name       => 'overwrite' );
+
+  Input(    type       => 'reset',
+            style      => 'margin-top:30px',
+            value      => $lang{abort},
+            onclick    => 'self.close()' );
+
+  Input(    type       => 'submit',
+            float      => 'right',
+            style      => 'clear:right; margin-top:30px',
+            onclick    => IG::CallMeter('upload.upfile.value'),
+            value      => "$lang{continue}..." );
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+#############################################################################
+#############################################################################
+sub uploadfileagg
+ {
+  my $status;
+
+  if (    $dir_info{owner} ne $auth_user
+       && ! CheckPrivilege('filemanager_superuser')
+     )
+   {
+    $status = $lang{Err_no_privileges};
+   }
+  else
+   {
+    if ( _ck_user_argument( $on{newfilename} ) )
+     {
+      $status = $lang{Err_wrong_name};
+     }
+    else
+     {
+      $status = IG::FileUpload
+                 ( param_name    => 'upfile',
+                   target_dir    => $dir_info{dir_path},
+                   target_file   => $on{newfilename},
+                   deny_pattern  => '(\.igsuiterc|\.php)$',
+                   can_overwrite => $on{overwrite}
+                 );
+     }
+   }
+
+  _show_status( task_head_title   => $lang{file_upload},
+                status            => $status,
+                left_button_value => $lang{upload_again},
+                left_button_link  => 'history.go(-1)' );
+ }
+
+#############################################################################
+#############################################################################
+sub deletefile
+ {
+  study_dir();
+  my @files_to_delete;
+  foreach ( sort { lc($elements{$a}[0]) cmp lc($elements{$b}[0]) }
+            keys %elements )
+   {
+    push @files_to_delete, $elements{$_}[0]
+      if $elements{$_}[7] ne 'directory'; 
+   }
+
+  HtmlHead();
+
+  TaskHead( title       => $lang{delete_file},
+            padding     => 10,
+            width       => 450,
+            icon        => 2 );
+
+  FormHead( name        => 'del',
+            onsubmitask => $lang{are_you_sure},
+            cgiaction   => 'deletefileagg' );
+
+  _set_hiddens();
+
+  Input(    show        => $lang{select_file_to_trash},
+            type        => 'select',
+            name        => 'filename',
+            zerovalue   => 'true',
+            style       => 'width:250px',
+            labelstyle  => 'width:150px',
+            data        => \@files_to_delete );
+
+  Input(    type        => 'reset',
+            style       => 'margin-top:30px',
+            value       => $lang{abort},
+            onclick     => 'self.close()' );
+
+  Input(    type        => 'submit',
+            style       => 'margin-top:30px',
+            float       => 'right',
+            value       => $lang{confirm} );
+            
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub deletefileagg
+ {
+  my $errmessage;
+
+  if (   $dir_info{owner} eq $auth_user
+      || CheckPrivilege("filemanager_superuser")
+     )
+   {
+    if ( _ck_user_argument( $on{filename} ) )
+     {
+      $errmessage = $lang{Err_wrong_name};
+     }
+    elsif (     -e "$dir_info{dir_path}${S}$on{filename}"
+           && ! -d "$dir_info{dir_path}${S}$on{filename}"
+          )
+     {
+      IG::FileCopy( "$dir_info{dir_path}${S}$on{filename}",
+                    $fm{basket_path} . ${S}. $on{filename},
+                    1 );
+
+      LogD( $on{filename}, 'deletefile', 'filemanager');
+     }
+    else
+     {
+      $errmessage = $lang{Err_file_not_found};
+     }
+   }
+  else
+   {
+    $errmessage = $lang{Err_no_privileges};
+   }
+
+  my $status = $errmessage || $lang{trash_ok};
+
+  _show_status( task_head_title   => $lang{delete_file},
+                status            => $status,
+                left_button_value => $lang{delete_again},
+                left_button_link  => "document.location='".
+                                     "filemanager?action=deletefile&amp;".
+                                                 "dir=$dir_info{dir_link}&amp;".
+                                                 "order=$dir_info{order}&amp;".
+                                                 "repid=$dir_info{repid}&amp;".
+                                                 "repapp=$dir_info{repapp}';" );
+ }
+
+#############################################################################
+#############################################################################
+sub renamefile
+ {
+  study_dir();
+  my @files_to_rename;
+  foreach ( sort { lc($elements{$a}[0]) cmp lc($elements{$b}[0]) }
+            keys %elements )
+   { push @files_to_rename, $elements{$_}[0]; }
+
+  HtmlHead();
+  TaskHead( title       => $lang{rename},
+            width       => 450,
+            padding     => 10,
+            icon        => 2 );
+
+  FormHead( name        => 'rename',
+            onsubmitask => $lang{are_you_sure},
+            labelstyle  => 'width:150px',
+            cgiaction   => 'renamefileagg' );
+
+  _set_hiddens();
+
+  Input(    type        => 'select',
+            show        => $lang{select_file_to_rename},
+            name        => 'filename',
+            zerovalue   => 'true',
+            onchange    => 'document.rename.newfilename.value=this.value',
+            style       => 'width: 250px',
+            data        => \@files_to_rename);
+
+  Input(    show        => $lang{insert_new_file_name},
+            type        => 'text',
+            style       => 'width: 250px',
+            name        => 'newfilename',
+            size        => 40 );
+
+  Input(    type        => 'reset',
+            style       => 'margin-top: 30px',
+            value       => $lang{abort},
+            onclick     => 'self.close()' );
+
+  Input(    type        => 'submit',
+            style       => 'margin-top: 30px',
+            float       => 'right',
+            value       => $lang{confirm} );
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub renamefileagg
+ {
+  my $errmessage; 
+
+  if (   $dir_info{owner} eq $auth_user
+      || CheckPrivilege('filemanager_superuser')
+     )
+   {
+    ## we have privileges...
+    if (    ! $on{filename}
+         || ! $on{newfilename}
+         || _ck_user_argument( $on{filename} )
+         || _ck_user_argument( $on{newfilename} )
+       )
+     {
+      $errmessage = $lang{Err_wrong_name};
+     }
+    elsif (-e "$dir_info{dir_path}${S}$on{filename}")
+     {
+      ## all looks ok...
+      if (! rename( CkPath("$dir_info{dir_path}${S}$on{filename}"),
+                    CkPath("$dir_info{dir_path}${S}$on{newfilename}") )
+         )
+       {
+        $errmessage = $lang{Err_cant_rename};
+       }
+      else
+       {
+        LogD("Rename file '$dir_info{dir_path}${S}$on{filename}' to '$on{newfilename}'",
+             'renamefile',
+             'filemanager');
+       }
+     }
+    else
+     {
+      $errmessage = $lang{Err_file_not_found};
+     }
+   }
+  else
+   {
+    $errmessage = $lang{Err_no_privileges};
+   }
+
+  my $status = $errmessage || $lang{rename_ok};
+
+  _show_status( task_head_title   => $lang{rename},
+                status            => $status,
+                left_button_value => $lang{rename_again},
+                left_button_link  => "document.location='".
+                                     "filemanager?action=renamefile&amp;".
+                                                 "dir=$dir_info{dir_link}&amp;".
+                                                 "order=$dir_info{order}&amp;".
+                                                 "repid=$dir_info{repid}&amp;".
+                                                 "repapp=$dir_info{repapp}';" );
+ }
+
+#############################################################################
+#############################################################################
+sub movefile
+ {
+  die("You can't move these files from here.\n")
+    if $dir_info{repid};
+
+  ## get all subdirectories of auth_user home  
+  study_dir();
+  my ( $space,
+       $total_files,
+       @dirs ) = IG::DirWalk( "$fm{home_path}${S}$auth_user" ); 
+
+  ## remove actual directory and trim paths
+  @dirs = grep !/^$dir_info{dir}$/,
+          map { substr($_, length( $fm{root_path} ) ) } @dirs; 
+
+  ## get files list
+  my @files_to_move;
+  $elements{$_}[7] ne 'directory' && push @files_to_move, $elements{$_}[0]
+    foreach sort { lc($elements{$a}[0]) cmp lc($elements{$b}[0]) }
+            keys %elements;
+
+  HtmlHead();
+  TaskHead( title       => $lang{move_file},
+            width       => 450,
+            padding     => 10,
+            icon        => 2 );
+
+  FormHead( name        => 'move',
+            onsubmitask => $lang{are_you_sure},
+            labelstyle  => 'width:100px',
+            cgiaction   => 'movefileagg' );
+
+  _set_hiddens();
+
+  Input(    type        => 'select',
+            show        => $lang{select_file_to_move},
+            name        => 'filename',
+            zerovalue   => 'true',
+            style       => 'width:300px; font-size:10px;',
+            data        => \@files_to_move );
+
+  Input(    show        => $lang{select_destination_dir},
+            type        => 'select',
+            style       => 'width:300px; font-size:10px;',
+            name        => 'targetdir',
+            data        => \@dirs );
+
+  Input(    type        => 'reset',
+            style       => 'margin-top: 20px',
+            value       => $lang{abort},
+            onclick     => 'self.close()');
+
+  Input(    type        => 'submit',
+            style       => 'margin-top: 20px',
+            float       => 'right',
+            value       => $lang{confirm} );
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub movefileagg
+ {
+  my $errmessage;
+
+  die("You can't move these files from here.\n")
+    if $dir_info{repid};
+
+  if (   $dir_info{owner} eq $auth_user
+      || CheckPrivilege('filemanager_superuser')
+     )
+   {
+    if ( _ck_user_argument( $on{filename} ) )
+     {
+      $errmessage = $lang{Err_wrong_name};
+     }
+    elsif ( -e "$dir_info{dir_path}${S}$on{filename}" )
+     {
+      if ( ! IG::FileCopy( CkPath("$dir_info{dir_path}${S}$on{filename}"),
+                           CkPath("$fm{root_path}$on{targetdir}${S}$on{filename}"),
+                           1 )
+	 )
+       {
+        $errmessage = $lang{Err_cant_move_file};
+       }
+      else
+       {
+        LogD("Move file '$dir_info{dir_path}${S}$on{filename}' to '$on{destinationdir}'",
+	     'movefile',
+	     'filemanager');
+       }
+     }
+    else
+     {
+      $errmessage = $lang{Err_file_not_found};
+     }
+   }
+  else
+   {
+    $errmessage = $lang{Err_no_privileges};
+   }
+
+  my $status = $errmessage || $lang{move_ok};
+
+  _show_status( task_head_title   => $lang{move_file},
+                status            => $status,
+                left_button_value => $lang{move_again},
+                left_button_link  => "document.location='".
+                                     "filemanager?action=movefile&amp;".
+                                                 "dir=$dir_info{dir_link}&amp;".
+                                                 "order=$dir_info{order}&amp;".
+                                                 "repid=$dir_info{repid}&amp;".
+                                                 "repapp=$dir_info{repapp}';" );
+ }
+
+#############################################################################
+#############################################################################
+sub deletedir
+ {
+  my $dir_to_delete = substr( $dir_info{dir}, length($fm{root_path}) );
+  HtmlHead();
+  TaskHead( title       => $lang{delete_directory},
+            padding     => 10,
+            width       => 450,
+            icon        => 2 );
+
+  TaskMsg("$lang{remove_dir_sure}<br>$dir_info{dir}",2);
+
+  FormHead( name        => 'del',
+            cgiaction   => 'deletediragg' );
+
+  Input(    type        => 'hidden',
+            name        => 'dir_to_delete',
+            value       => $dir_info{dir} );
+
+  _set_hiddens();
+
+  Input(    type        => 'reset',
+            style       => 'margin-top:20px',
+            value       => $lang{abort},
+            onclick     => 'self.close()' );
+
+  Input(    type        => 'submit',
+            float       => 'right',
+            style       => 'margin-top:20px',
+            value       => $lang{confirm} );
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub deletediragg
+ {
+  my $errmessage;
+
+  if (   $dir_info{owner} eq $auth_user
+      || CheckPrivilege('filemanager_superuser')
+     )
+   {
+    ## user can delete this dir
+    if ( $on{dir_to_delete} =~ /^\Q$fm{home_path}$S$auth_user\E$/i )
+     {
+      ## user can't delete its home dir
+      $errmessage = $lang{Err_wrong_name};
+     }
+    elsif (-d "$dir_info{dir_path}${S}$on{filename}")
+     {
+      $errmessage = "Can't remove file '$dir_info{dir_path}${S}.igsuiterc'"
+                    if ! IG::FileUnlink("$dir_info{dir_path}${S}.igsuiterc");
+
+      $errmessage = "Can't remove file '$dir_info{dir_path}${S}.isogestrc'"
+                    if ! IG::FileUnlink("$dir_info{dir_path}${S}.isogestrc");
+
+      if ( !$errmessage && -d "$dir_info{dir_path}${S}.thumbnails")
+       {
+        ## delete thumbnails files
+        opendir (DIR, "$dir_info{dir_path}${S}.thumbnails")
+          or die("Can't open directory '$dir_info{dir_path}${S}.thumbnails${S}'.\n");
+        for (grep !/^\./, readdir(DIR) )
+         {
+          my ($msg, $sts) = IG::FileUnlink($_);
+          $errmessage = $msg if $sts;
+         }
+        closedir(DIR);
+
+        $errmessage = "Can't remove directory '$dir_info{dir_path}${S}.thumbnails'"
+                      if ! rmdir( CkPath("$dir_info{dir_path}${S}.thumbnails") );
+       }
+
+      $errmessage = "$lang{Err_cant_remove_dir}: '$dir_info{dir_path}'"
+                    if ! rmdir( CkPath($dir_info{dir_path}) );
+     }
+    else
+     {
+      $errmessage = $lang{Err_file_not_found};
+     }
+   }
+  else
+   {
+    $errmessage = $lang{Err_no_privileges};
+   }
+
+  LogD($on{dir_to_delete}, 'rmdir', 'filemanager') if ! $errmessage;
+
+  my $status = $errmessage || $lang{delete_dir_ok};
+
+  _show_status( task_head_title   => $lang{delete_directory},
+                back_to_dir       => 'dir_up',
+                status            => $status );
+ }
+
+#########################################################################
+#########################################################################
+sub _ck_user_argument
+ {
+  my $argument = shift;
+
+  ## Check user arguments (Filename can't contain shell special characters)
+  if ( $argument =~ /(\\|\/|\.\.|\*|\?|\||\>|\<|\$|\&
+                     |igsuiterc|htaccess|htgroup|\.php)/xi
+     )
+   {
+    if ( wantarray )
+     {
+      return 1;
+     }
+    else
+     {
+      die("Are you trying to exploit this system? ".
+          "files or directories name can't contain ".
+          "special characters or reserved names!\n");
+     }
+   }
+  return 0;
+ }
+
+#########################################################################
+#########################################################################
+sub _show_status
+ {
+  my %data = @_;
+ 
+  $data{back_to_dir}        ||= 'dir_link';
+  $data{task_head_title}    ||= 'Unknown';
+  $data{status}             ||= 'OK';
+  $data{right_button_value} ||= $lang{close};
+  $data{right_button_link}  ||= '';
+  $data{left_button_value}  ||= '';
+  $data{left_button_link}   ||= '';
+
+  HtmlHead( onevent => "onload=\"".
+                       ( $on{action} eq 'deletediragg' || $on{action} eq 'makediragg'
+                         ? "if( opener.parent.frames[0].name == 'treeframe' )".
+                           " { opener.parent.treeframe.location ='".
+                           "filemanager?action=mktreeframe&amp;".
+                                       "dir=$dir_info{$data{back_to_dir}}'; } "
+                         : '').
+                       "opener.location = '".
+                       "filemanager?dir=$dir_info{$data{back_to_dir}}&amp;".
+                                   "order=$dir_info{order}&amp;".
+                                   "repid=$dir_info{repid}&amp;".
+                                   "repapp=$dir_info{repapp}';".
+                       "setTimeout('self.close()',10000);\"" );
+
+  TaskHead( title   => $data{task_head_title},
+            width   => 450,
+            padding => 10,
+            icon    => 2 );
+
+  TaskMsg( "<div style=\"margin:10px; text-align:center\">".
+           $data{status}.
+           "</div>", 2);
+  
+  Input( type    => 'button',
+         style   => 'margin-top:30px;',
+         onclick => 'self.close();',
+         name    => 'right_button',
+         float   => 'right',
+         value   => $data{right_button_value} );
+
+  Input( type    => 'button',
+         style   => 'margin-top:30px;',
+         onclick => $data{left_button_link},
+         float   => 'left',
+         value   => $data{left_button_value},
+         name    => 'left_button' ) if $data{left_button_value};
+
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#########################################################################
+#########################################################################
+sub default_action
+ {
+  ## Read directory info
+  study_dir();
+
+  $on{action}          = 'default_action';
+  $on{sortdirection} ||= $IG::list_order;
+
+  ## use index.html if exists
+  IG::Redirect("$dir_info{dir_link}/$dir_info{index_html}")
+    if    $dir_info{index_html}
+       && $dir_info{index} eq 'yes'
+       && !CheckPrivilege('filemanager_superuser');
+
+  ## set a list view
+  if    ( $dir_info{listtype} eq 'menulist'    ) { filelist();    }
+  elsif ( $dir_info{listtype} eq 'iconlist'    ) { iconlist();    }
+  elsif ( $dir_info{listtype} eq 'previewlist' ) { previewlist(); }
+  else                                           { filelist();    }
+ }
+
+#########################################################################
+#########################################################################
+sub filelist
+ {
+  my ($icon, $resource_link, $bg);
+  my ($limit, $offset, $page_selector);
+
+  ## set a list per pages
+  if ( $dir_info{scrollbar} ne 'no' && $dir_info{cnt_elements} )
+   {
+    my $base_url = "filemanager?".
+                   "dir=$dir_info{dir_link}&amp;".
+                   "repid=$dir_info{repid}&amp;".
+                   "repapp=$dir_info{repapp}&amp;".
+                   "order=$dir_info{order}";
+
+    ( $limit,
+      $offset,
+      $page_selector ) = IG::MkTaskPaging( $dir_info{cnt_elements},
+                                           $base_url );
+   }
+  else
+   {
+    $limit         = $dir_info{cnt_elements};
+    $offset        = 0;
+    $page_selector = '';
+   }
+
+  Header( page_selector => $page_selector );
+  my $base_link = "dir=$dir_info{dir_link}&amp;".
+		  "repid=$dir_info{repid}&amp;".
+		  "repapp=$dir_info{repapp}&amp;".
+		  "pos=$on{pos}";
+
+  TaskListMenu
+   (
+    [''],
+    [$lang{file_name},  "order=name&amp;$base_link"],
+    [$lang{type},	"order=type&amp;$base_link"],
+    [$lang{size},	"order=size&amp;$base_link"],
+    [$lang{last_change},"order=date&amp;$base_link"]
+   );
+
+  if ( $dir_info{dir_link} && $dir_info{directories} ne 'no' )
+   {
+    $bg = "style=\"background: $IG::clr{bg_list}\"";
+
+    TaskListItem
+      (
+	[Img( src   => "$IG::img_url/mime_mini_folder.png",
+	      width => 16,
+	      align => 'middle',
+	      href  => "filemanager?".
+			"dir=$dir_info{dir_up}&amp;".
+			"defact=$on{defact}&amp;".
+			"repid=$dir_info{repid}&amp;".
+			"repapp=$dir_info{repapp}" ),
+	 '',
+	 "align=center $bg"],
+	[$lang{previous_folder},
+	 "filemanager?dir=$dir_info{dir_up}&amp;".
+                     "defact=$on{defact}&amp;".
+	             "repid=$dir_info{repid}&amp;".
+	             "repapp=$dir_info{repapp}",
+	 $bg],
+	['','',$bg],
+	['','',$bg],
+	['','',$bg],
+      );
+   }
+
+  my @ordered_file = $on{sortdirection} eq 'desc'
+                   ? (reverse sort keys %elements)
+                   : (sort keys %elements);
+
+  my $counter = 0;
+  foreach my $i ( @ordered_file )
+   {
+    next if ++$counter < ($offset + 1);
+    last if $counter   > ($offset + $limit);
+
+    $bg = $counter % 2 && !$on{print}
+	? "style=\"background: $IG::clr{bg_link}\""
+	: "style=\"background: $IG::clr{bg_list}\"";
+
+    if ( $elements{$i}[7] eq 'directory' )
+     {
+      $icon          = 'mime_mini_folder.png';
+      $resource_link = "filemanager?".
+			"dir=$dir_info{dir_link}/$elements{$i}[1]&amp;".
+			"defact=$on{defact}&amp;".
+			"repid=$dir_info{repid}&amp;".
+			"repapp=$dir_info{repapp}";
+     }
+    else
+     {
+      next if $dir_info{files} eq 'no';
+      $icon          = 'mime_mini_' . $elements{$i}[9] . '.png';
+      $resource_link = "filemanager?".
+			"action=openfile&amp;".
+                        "defact=$on{defact}&amp;".
+			"dir=$dir_info{dir_link}&amp;".
+			"repid=$dir_info{repid}&amp;".
+			"repapp=$dir_info{repapp}&amp;".
+			"file=$elements{$i}[1]";
+     }
+
+    TaskListItem (
+	[Img( src   => "$IG::img_url/$icon",
+	      width => 16,
+	      align => 'middle',
+	      href  => $resource_link ),
+	 '',
+	 "$bg valign=\"top\" align=\"center\""],
+	[MkEntities($elements{$i}[0]),
+	 $resource_link,
+	 $bg],
+	[$elements{$i}[7],
+	 '',
+	 $bg],
+	[$elements{$i}[6],
+	 '',
+	 "$bg align=\"right\""],
+	["$elements{$i}[3] $elements{$i}[8]",
+	 '',
+	 "$bg align=\"right\" nowrap"],
+		);
+   }
+
+  my $_list_rows = $dir_info{repid} ? 7 : $IG::page_results;
+  for my $i ( $counter+1 .. $_list_rows ) 
+   {
+    $bg = $i % 2 && !$on{print}
+	? "style=\"background: $IG::clr{bg_link}\""
+	: "style=\"background: $IG::clr{bg_list}\"";
+
+    PrOut "<td $bg>&nbsp;</td>" x 5,"</tr>";
+   }
+   
+  PrOut "</table>";
+
+  PrOut "<table width=100% border=0 cellspacing=2>
+	 <td class=\"menu\">$dir_info{status_line} &nbsp;</td>
+	 </tr></table>\n";
+
+  Footer();
+ }
+
+#########################################################################
+#########################################################################
+sub iconlist
+ {
+  my ( $alt, $icon, $resource_link);
+  my ( $page_selector, $limit, $offset );
+  my @thumbs;
+
+  ## Make the Thumbnails
+  my $ref = Thumbnails->new( dir       => $dir_info{dir_path},
+                             overwrite => $on{subact} eq 'reload' ? 1 : 0,
+                             width     => 164 );
+
+  ## Delete orphan
+  $ref->delete_orphan_thumbnails();
+
+  ## set a view per pages
+  if ( $dir_info{scrollbar} ne 'no' && $dir_info{cnt_elements} )
+   {
+    $IG::page_results = 50;
+    my $base_url      = "filemanager?dir=$dir_info{dir_link}".
+                                    "&amp;repid=$dir_info{repid}".
+                                    "&amp;repapp=$dir_info{repapp}".
+                                    "&amp;order=$dir_info{order}";
+
+    ( $limit,
+      $offset,
+      $page_selector ) = IG::MkTaskPaging( $dir_info{cnt_elements},
+                                           $base_url );
+
+    $page_selector = "<div style=\"background-color:#ffcc00\">".
+                     $page_selector.
+                     "</div>" if ($offset + $limit) < $dir_info{cnt_elements};
+   }
+  else
+   {
+    ## view all files (without paging)
+    $offset        = 0;
+    $limit         = $dir_info{cnt_elements};
+    $page_selector = '';
+   }
+
+  ## javascipt that optimize the height of the icons container
+  my $height_busy = $dir_info{repid}
+                  ? 90
+                  : $on{defact}
+                  ? 130
+                  : 213;
+
+  my $javascript = <<END;
+<script language="JavaScript">
+ <!--
+ window.onload = container_maximize;
+ window.onresize = container_maximize;
+
+ function container_maximize()
+  {
+   getSize();
+   if ( maxHeight > $height_busy )
+    { \$('container_files').style.height = maxHeight - $height_busy; }
+  }
+  //-->
+</script>
+END
+
+  Header( javascript    => $javascript,
+          page_selector => $page_selector );
+
+  PrOut "<table style=\"width:100%;\" cellspacing=0 cellpadding=0><tr>".
+        "<td class=\"menu\" height=15>&nbsp;</td></tr>\n".
+	"<td valign=\"top\">".
+	"<div id=\"container_files\" style=\"height:180px; ".
+	          "padding:8px 3px 3px 3px; overflow:auto; ".
+	          "border-left:2px solid $IG::clr{bg_menu_task}; ".
+	          "border-right:2px solid $IG::clr{bg_menu_task};\">\n";
+
+  if ( $dir_info{dir_link} && $dir_info{directories} ne 'no' )
+   { 
+    PrOut "<div class=\"fileicon\">".
+	  "<a href=\"filemanager?".
+			"dir=$dir_info{dir_up}&amp;".
+			"defact=$on{defact}&amp;".
+			"repid=$dir_info{repid}&amp;".
+			"repapp=$dir_info{repapp}\">".
+	  Img( src => "$IG::img_url/mime_folder.gif",
+	       alt => $lang{previous_folder} ).
+	  "<br>$lang{previous_folder}</a></div>\n";
+   }
+
+  my @ordered_file = $on{sortdirection} eq 'desc'
+                   ? (reverse sort keys %elements)
+                   : (        sort keys %elements);
+
+  my $cnt;
+  foreach my $i ( @ordered_file )
+   {
+    next if ++$cnt < ($offset + 1);
+    last if $cnt   > ($offset + $limit);
+
+    my $icon_id;
+
+    if ( $elements{$i}[7] eq 'directory' )
+     {
+      $icon = "$IG::img_url/mime_folder.gif";
+      $resource_link = "filemanager?dir=$dir_info{dir_link}/$elements{$i}[1]".
+			"&amp;defact=$on{defact}".
+			"&amp;repid=$dir_info{repid}".
+			"&amp;repapp=$dir_info{repapp}";
+     }
+    else
+     {
+      next if $dir_info{files} eq 'no';
+
+      if ( $elements{$i}[7] =~ /^(image\/|application\/pdf)/i )
+       {
+        $icon_id = $ref->get_thumb_name( $elements{$i}[0] );
+
+        if (      -e "$dir_info{dir_path}${S}$ref->{thumb_dir}${S}$icon_id.png"
+             && ! -z "$dir_info{dir_path}${S}$ref->{thumb_dir}${S}$icon_id.png"
+             && ! $ref->{overwrite} )
+	 {
+	  ## this is an image and we have the thumbnails than show a preview
+	  $icon = "filemanager?action=openfile".
+		  "&amp;dir=$dir_info{dir_link}/$ref->{thumb_dir}".
+		  "&amp;repid=$dir_info{repid}".
+		  "&amp;repapp=$dir_info{repapp}".
+		  "&amp;file=$icon_id.png";
+         }
+        else
+         {
+          ## this is an image but we don't have a thumb than show an icon
+          ## and add its name on @thumbs to build a preview later
+          push @thumbs, IG::JsQuote( $elements{$i}[0] );
+          $icon = "$IG::img_url/mime_" . $elements{$i}[9] . '.gif';
+         }
+       }
+      else
+       {
+        ## this is not an image but an other file format (without preview)
+        $icon = "$IG::img_url/mime_" . $elements{$i}[9] . ".gif";
+       }
+
+      ## the link to open the file
+      $resource_link = "filemanager?action=openfile".
+		       "&amp;dir=$dir_info{dir_link}".
+		       "&amp;defact=$on{defact}".
+		       "&amp;repid=$dir_info{repid}".	
+		       "&amp;repapp=$dir_info{repapp}".
+		       "&amp;file=$elements{$i}[1]";
+     }
+
+    my $wrapped_name = IG::WrapText(  text      => MkEntities( $elements{$i}[0] ),
+                                      separator => ' ',
+                                      columns   => 18 );
+
+    ## this is the quick-help content
+    $alt = "<table><tr><td valign=\"top\">".
+           ( $dir_info{repid}
+             ? ''
+             : Img( src    => $icon,
+                    id     => $icon_id ? 'qe_'.$icon_id  : undef ) ).
+	   "</td><td style=\"vertical-align:top;\">".
+	   "<strong>$lang{file_name}:</strong>".
+	   "<div style=\"font-size:10px\">$wrapped_name</div>".
+	   "<strong>$lang{type}:</strong>".
+	   "<div style=\"font-size:10px\">$elements{$i}[7]</div>".
+	   "<strong>$lang{last_change}:</strong>".
+	   "<div style=\"font-size:10px\">$elements{$i}[8] - $elements{$i}[3]</div>".
+	   "<strong>$lang{size}:</strong>".
+	   "<div style=\"font-size:10px\">$elements{$i}[6]</div>".
+	   "</td></tr></table>";
+
+    ## Printout icon
+    PrOut "<div class=\"fileicon\">".
+          IG::QuickHelp( alt    => $alt,
+                         width  => 'auto',
+                         href   => $resource_link,
+                         anchor => Img( src    => $icon,
+                                        id     => $icon_id,
+                                        height => 32 ).
+                                   Br().
+                                   $wrapped_name
+                       ).
+          "</div>\n\n";
+   }
+
+  PrOut '</div></td></tr>';
+
+  ## status line
+  PrOut "<td height=18 class=\"menu\">".
+        "&nbsp;$dir_info{status_line}".
+        "</td></tr></table>\n";
+
+  ## Mk images thumbs by Ajax 
+  my $imgs_list    = join ",\n\t\t", map { "\"$_\"" } @thumbs;
+  my $imgUpdateUrl = "filemanager?action=mkthumb".
+                     "&amp;dir=$dir_info{dir_link}".
+                     "&amp;repid=$dir_info{repid}".
+                     "&amp;repapp=$dir_info{repapp}".
+                     "&amp;subact=$on{subact}".
+                     "&amp;file=";
+
+  my $imgThumbUrl  = "filemanager?action=openfile".
+                     "&amp;dir=$dir_info{dir_link}/$ref->{thumb_dir}".
+                     "&amp;repid=$dir_info{repid}".
+                     "&amp;repapp=$dir_info{repapp}".
+                     "&amp;file=";
+
+  ## adjusts container size and make images thumbnail
+  IG::JsExec( position => 'footer',
+              code     => "\n// Make images thumbnail\n".
+                          "container_maximize();\n".
+                          "imgs = new Array($imgs_list);\n".
+                          "var imgUpdateUrl = '$imgUpdateUrl';\n".
+                          "var imgThumbUrl = '$imgThumbUrl';\n".
+                          "mkImgThumbs(imgs);\n" 
+            ) if $ref->can_convert();
+
+  Footer();
+ }
+
+#########################################################################
+#########################################################################
+sub previewlist
+ {
+  my ($icon, $page_selector, $limit, $offset);
+  my @thumbs;
+
+  ## Make the Thumbnails
+  my $ref = Thumbnails->new( dir       => $dir_info{dir_path},
+                             overwrite => $on{subact} eq 'reload' ? 1 : 0,
+                             width     => 164 );
+
+  ## Delete orphan
+  $ref->delete_orphan_thumbnails();
+
+  ## set a list per pages
+  if ( $dir_info{scrollbar} ne 'no' && $dir_info{cnt_elements} )
+   {
+    $IG::page_results = 50;
+    my $base_url      = "filemanager?dir=$dir_info{dir_link}".
+			"&amp;repid=$dir_info{repid}".
+			"&amp;repapp=$dir_info{repapp}".
+			"&amp;order=$dir_info{order}";
+
+    ( $limit,
+      $offset,
+      $page_selector ) = IG::MkTaskPaging( $dir_info{cnt_elements},
+                                           $base_url );
+   }
+  else
+   {
+    $offset        = 0;
+    $limit         = $dir_info{cnt_elements};
+    $page_selector = '';
+   }
+
+  ## javascipt
+  my $height_busy = $dir_info{repid} ? 80 : 147;
+  my $javascript = <<END;
+<script language="JavaScript">
+ <!--
+ var containerHeight;
+ var containerWidth;
+ window.onload = container_maximize;
+ window.onresize = container_maximize;
+ 
+ function container_maximize()
+  {
+   getSize();
+   containerWidth = \$('container_preview').offsetWidth - 10;
+   if ( maxHeight > $height_busy )
+    {
+     containerHeight = maxHeight - $height_busy;
+     \$('container_files').style.height = containerHeight;
+     \$('container_preview').style.height = containerHeight;
+     containerHeight = containerHeight - 10;
+    }
+  }
+  //-->
+</script>
+END
+
+  Header( javascript    => $javascript,
+          ajax_req      => { getpreview => "filemanager?action=getpreview&amp;".
+                                                       "repid=$dir_info{repid}&amp;".
+                                                       "repapp=$dir_info{repapp}&amp;".
+                                                       "dir=$dir_info{dir_link}" },
+          page_selector => $page_selector );
+
+
+  PrOut "<table style=\"width:100%;\" cellspacing=0 cellpadding=0><tr>".
+        "<td class=\"menu\"><div style=\"width:610px\">&nbsp;&nbsp;$lang{address}: $dir_info{dir}</div></td></tr>\n".
+	"<td valign=\"top\" align=\"center\" style=\"border-left:2px solid $IG::clr{bg_menu_task}; border-right:2px solid $IG::clr{bg_menu_task};\">\n".
+	"<div id=\"container_files\" style=\"height:180px; float:left; width:20%; overflow-y:scroll; overflow-x:hidden; border-right:2px solid #CCCCCC\">\n";
+
+  if ($dir_info{dir_link} && $dir_info{directories} ne 'no')
+   { 
+    PrOut "<div class=\"fileicon\" style=\"float:none\">".
+	  "<a href=\"filemanager?".
+			"dir=$dir_info{dir_up}&amp;".
+			"defact=$on{defact}&amp;".
+			"repid=$dir_info{repid}&amp;".
+			"repapp=$dir_info{repapp}\">".
+	  Img( src   => "$IG::img_url/mime_folder.gif",
+	       title => $lang{previous_folder} ).
+	  "<br>$lang{previous_folder}</a></div>\n";
+   }
+
+  my @ordered_file = $on{sortdirection} eq 'desc'
+                   ? (reverse sort keys %elements)
+                   : (        sort keys %elements);
+
+  my $cnt;
+  foreach my $i ( @ordered_file )
+   {
+    next if ++$cnt < ($offset + 1);
+    last if $cnt   > ($offset + $limit);
+
+    my $icon_id;
+    my $resource_link;
+
+    if ( $elements{$i}[7] eq 'directory' )
+     {
+      $icon          = "$IG::img_url/mime_folder.gif";
+      $resource_link = "filemanager?dir=$dir_info{dir_link}/$elements{$i}[1]".
+			"&amp;defact=$on{defact}".
+			"&amp;repid=$dir_info{repid}".
+			"&amp;repapp=$dir_info{repapp}";
+     }
+    else
+     {
+      next if $dir_info{files} eq 'no';
+
+      if ( $elements{$i}[7] =~ /^(image\/|application\/pdf)/i )
+       {
+        $icon_id = $ref->get_thumb_name($elements{$i}[0]);
+
+        if (      -e "$dir_info{dir_path}${S}$ref->{thumb_dir}${S}$icon_id.png"
+             && ! -z "$dir_info{dir_path}${S}$ref->{thumb_dir}${S}$icon_id.png"
+             && ! $ref->{overwrite} )
+	 {
+	  $icon = "filemanager?action=openfile".
+		  "&amp;dir=$dir_info{dir_link}/$ref->{thumb_dir}".
+		  "&amp;repid=$dir_info{repid}".
+		  "&amp;repapp=$dir_info{repapp}".
+		  "&amp;file=$icon_id.png";
+         }
+        else
+         {
+          push @thumbs, IG::JsQuote( $elements{$i}[0] );
+          $icon = "$IG::img_url/mime_" . $elements{$i}[9] . '.gif';
+         }
+       }
+      else
+       {
+        $icon = "$IG::img_url/mime_" . $elements{$i}[9] . ".gif";
+       }
+
+      $resource_link = "javascript:".
+                       "getpreview(['NO_CACHE',".
+                                   "'height__'+containerHeight,".
+                                   "'width__'+containerWidth,".
+                                   "'file__".IG::JsQuote($elements{$i}[0])."'],".
+                                  "['container_preview']);";
+     }
+
+    my $wrapped_name = IG::WrapText(  text      => MkEntities($elements{$i}[0]),
+                                      separator => ' ',
+                                      columns   => 18 );
+
+    my $alt = "<table width=160><tr><td valign=\"top\" nowrap>".
+              "<strong>$lang{file_name}:</strong><br>".
+              "$wrapped_name<br>".
+              "<strong>$lang{type}:</strong><br>".
+              "$elements{$i}[7]<br>".
+              "<strong>$lang{last_change}:</strong><br>".
+              "$elements{$i}[8] - $elements{$i}[3]<br>".
+              "<strong>$lang{size}:</strong><br>".
+              "$elements{$i}[6]</td></tr></table>";
+
+    ## Printout icon
+    PrOut "<div class=\"fileicon\" style=\"float:none\">".
+          IG::QuickHelp( alt    => $alt,
+                         width  => 'auto',
+                         href   => $resource_link,
+                         anchor => Img( src    => $icon,
+                                        id     => $icon_id,
+                                        height => 32 ).
+                                   Br().
+                                   $wrapped_name
+                       ).
+          "</div>\n";
+   }
+
+  PrOut "</div>".
+	"<div id=\"container_preview\" style=\"vertical-align:middle;".
+	" background-color:#ffffff; text-align:center; height:180px;".
+	" z-index:1; padding:2px 2px 1px 2px; float:right; width:79%;".
+	" overflow:auto;\">".
+	"<div style=\"margin-top:50px; font-size:25px; color:#999999;\">".
+	" Select a file to preview.</div>\n".
+        "</div></td></tr>";
+
+  ## status line
+  PrOut "<td class=\"menu\" height=20>".
+        "&nbsp;&nbsp;$dir_info{status_line}".
+        "</td></tr></table>\n";
+
+  ## Mk images thumbs by Ajax 
+  my $imgs_list    = join ",\n\t\t", map { "\"$_\"" } @thumbs;
+  my $imgUpdateUrl = "filemanager?action=mkthumb".
+                     "&amp;dir=$dir_info{dir_link}".
+                     "&amp;repid=$dir_info{repid}".
+                     "&amp;repapp=$dir_info{repapp}".
+                     "&amp;subact=$on{subact}".
+                     "&amp;file=";
+
+  my $imgThumbUrl  = "filemanager?action=openfile".
+                     "&amp;dir=$dir_info{dir_link}/$ref->{thumb_dir}".
+                     "&amp;repid=$dir_info{repid}".
+                     "&amp;repapp=$dir_info{repapp}".
+                     "&amp;file=";
+
+  ## adjusts container size and make images thumbnail
+  IG::JsExec( position => 'footer',
+              code     => "\n// Make images thumbnail\n".
+                          "container_maximize();\n".
+                          "imgs = new Array($imgs_list);\n".
+                          "var imgUpdateUrl = '$imgUpdateUrl';\n".
+                          "var imgThumbUrl = '$imgThumbUrl';\n".
+                          "mkImgThumbs(imgs);\n"
+            ) if $ref->can_convert();
+
+  Footer();
+ }
+
+#########################################################################
+#########################################################################
+sub study_dir
+ {
+  my $filter = $on{filter} ? quotemeta($on{filter}) : '';
+
+  opendir (DIR, $dir_info{dir_path})
+    or die("Can't open directory '$dir_info{dir_path}'.\n");
+
+  for my $element_name (grep !/^\./, readdir DIR )
+   {
+    next if $filter && $element_name !~ /$filter/i;
+ 
+    ## store index.html
+    ( $dir_info{index_html} ) = $element_name =~ /index\.html*/i;
+
+    my ( $file_type,
+         $icon_name ) = _ck_file_type("$dir_info{dir_path}${S}$element_name");
+
+    next if    $file_type =~ /symbolic link/i
+            || (    $dir_info{directories} eq 'no'
+                 && $file_type eq 'directory' );
+
+    my @fl = stat("$dir_info{dir_path}${S}$element_name");
+
+    my $order;
+    if ( $file_type eq 'directory' )
+     {
+      ## it's a directory
+      ++$dir_info{cnt_dir};
+      $order = '111';
+     }
+    else
+     {
+      ## it's a file
+      ++$dir_info{cnt_file};
+      $order = '000';
+     }
+
+    ## select a directory order
+    $order .= $dir_info{order} eq 'name' ? ''
+            : $dir_info{order} eq 'date' ? $fl[9]
+            : $dir_info{order} eq 'size' ? substr('0000000000'.$fl[7],-10,10)
+            : $dir_info{order} eq 'type' ? lc( $file_type )
+            : '';
+    $order .= lc( $element_name ); ## as second element to order
+
+    ## file name
+    $elements{$order}[0]  = $element_name;
+    $elements{$order}[1]  = MkUrl( $element_name );
+
+    ## file permissions (octal)
+    $elements{$order}[2]  = sprintf "%lo", ($fl[2] & 07777);
+
+    ## last update date 
+    my ($s1,$m1,$h1,$g1,$me1,$a1,$w1,$y1,$i1) = localtime($fl[9]);
+    $elements{$order}[8]  = sprintf("%02d:%02d:%02d", $h1, $m1, $s1);
+    $elements{$order}[3]  = IG::GetDateByFormat( $g1, ($me1+1), (1900+$a1) );
+
+    ## file size
+    $dir_info{cnt_byte} += $fl[7];
+    $elements{$order}[6]  = IG::MkByte($fl[7]); # human readable
+    $elements{$order}[10] = $fl[7]; # clean size
+
+    ## file type and icon
+    $elements{$order}[7]  = $file_type;
+    $elements{$order}[9]  = $icon_name;
+   }
+  closedir( DIR );
+
+  ## build dir_info{status_line}
+  $dir_info{cnt_elements} = $dir_info{cnt_dir} + $dir_info{cnt_file};
+  if ( $dir_info{status} eq 'no' )
+   {
+    $dir_info{status_line} = '';
+   }
+  else
+   {
+    $dir_info{status_line} = IG::TextPluralize( "%d (Directory|Directories) - ",
+                                                $dir_info{cnt_dir} ).
+                             IG::TextPluralize( "%d (File|Files) - ",
+                                                $dir_info{cnt_file} ).
+                             "$lang{utilized_space} " .
+                             IG::MkByte($dir_info{cnt_byte});
+   }
+
+  return 1;
+ }
+
+#########################################################################
+#########################################################################
+sub _ck_file_type
+ {
+  my $file      = shift;
+  my $file_ico  = 'file';
+  my @file_name = split( /\Q${S}\E/, $file );
+  my $file_name = pop @file_name;
+  my $file_type = $lang{unknown};
+
+  ## Check if is it an IG document
+  if ( -d $file )
+   {
+    $file_type = 'directory';
+   }
+  elsif ( $file_name =~ /^[1234589]\d\d\d\d\d[\_\.]\d\d\.\w\w\w$/ )
+   {
+    $file_type = 'IGSuite Document';
+    $file_ico  = 'document';
+   }
+  elsif ( $file_name =~ /^[67]\d\d\d\d\d[\_\.]\d\d\.\w\w\w$/ )
+   {
+    $file_type = 'Fax';
+    $file_ico  = 'fax';
+   }
+  else
+   {
+    $file_type = (IG::FileStat( $file ))[0];
+
+    if    ( $file_type =~ /pdf/ )
+     {
+      $file_ico = 'pdf';
+     }
+    elsif ( $file_type =~ /image\/(bmp|tif|gif|jpeg|png)/ )
+     {
+      $file_ico = 'images';
+     }
+    elsif ( $file_type =~ /msexcel/ )
+     {
+      $file_ico  = 'spreadsheet';
+     }
+    elsif ( $file_type =~ /msword/ )
+     {
+      $file_ico  = 'word';
+     }
+    elsif ($file_name =~ /\.(html|htm)$/i)
+     {
+      $file_ico = 'html';
+     }
+    elsif ($file_name =~ /\.(tgz|gz|zip|tar|stw)$/i)
+     {
+      $file_ico = 'zip';
+     }
+   }
+
+  return ($file_type, $file_ico);
+ }
+
+##########################################################################
+##########################################################################
+sub configuredir
+ {
+  die("Repositories can't be configured!\n") if $dir_info{repid};
+
+  %on = ( %on, %dir_info );
+
+  HtmlHead();
+  TaskHead( title      => $lang{settings},
+            width      => 650,
+            icon       => 1 );
+
+  FormHead( cgiaction  => 'configurediragg',
+            labelstyle => 'width:230px' );
+
+  _set_hiddens();
+
+  Input( show     => $lang{folder_title},
+         type     => 'text',
+         name     => 'title',
+         style    => 'width:350px',
+         size     => 40,
+         maxlen   => 25 );
+
+  Input( show     => $lang{description},
+         type     => 'textarea',
+         style    => 'width:350px',
+         name     => 'note',
+         cols     => 40,
+         rows     => 3 );
+
+  Input( show     => $lang{view_type},
+         type     => 'select',
+         name     => 'listtype',
+         data     => [(['filelist',    $lang{filemanager_view}],
+                       ['iconlist',    $lang{icons_view}],
+                       ['previewlist', $lang{preview_view}])] );
+
+  Input( show     => $lang{show_location_bar},
+         type     => 'select',
+         name     => 'location',
+         data     => [(['yes', $lang{yes}],
+                       ['no',  $lang{no}])]);
+
+  Input( show     => $lang{show_toolbar},
+         type     => 'select',
+         name     => 'toolbar',
+         data     => [(['yes', $lang{yes}],
+                       ['no',  $lang{no}])]);
+
+  Input( show     => $lang{make_task_pages},
+         type     => 'select',
+         name     => 'scrollbar',
+         data     => [(['yes', $lang{yes}],
+                       ['no',  $lang{no}])]);
+
+  Input( show     => $lang{show_status_bar},
+         type     => 'select',
+         name     => 'status',
+         data     => [(['yes', $lang{yes}],
+                       ['no',  $lang{no}])]);
+
+  Input( show     => $lang{show_subfolder},
+         type     => 'select',
+         name     => 'directories',
+         data     => [(['yes', $lang{yes}],
+                       ['no',  $lang{no}])]);
+
+  Input( show     => $lang{show_files},
+         type     => 'select',
+         name     => 'files',
+         data     => [(['yes', $lang{yes}],
+                       ['no',  $lang{no}])]);
+
+  Input( show     => $lang{use_index_file},
+         type     => 'select',
+         name     => 'index',
+         data     => [(['yes', $lang{yes}],
+                       ['no',  $lang{no}])]);
+
+  Input( show     => $lang{show_igsuite_task},
+         type     => 'select',
+         name     => 'task',
+         data     => [(['yes', $lang{yes}],
+                       ['no',  $lang{no}])]);
+
+  Input( show     => $lang{select_default_order},
+         type     => 'select',
+         name     => 'order',
+         data     => [(['name', $lang{order_by_name}],
+                       ['type', $lang{order_by_type}],
+                       ['size', $lang{order_by_size}],
+                       ['date', $lang{order_by_date}])]);
+
+  Input( type     => 'submit',
+         style    => 'margin-top:15px',
+         value    => $lang{save});
+
+  Input( type     => 'reset',
+         style    => 'margin-top:15px',
+         float    => 'left',
+         value    => $lang{restore});
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub configurediragg
+ {
+  writeconfigdir( $dir_info{dir_path} );
+  check_dir_info();
+
+  LogD( "Configure this directory $dir_info{dir_path}",
+        'configuredir',
+        'filemanager' );
+
+  default_action();
+ }
+
+#############################################################################
+#############################################################################
+sub writeconfigdir
+ {
+  my ($dirr) = @_;
+  %on = ( %dir_info, %on );
+
+  open ( DAT, '>', CkPath("$dirr${S}.igsuiterc") )
+    or die("Can't write file '.igsuiterc' on '$dirr'.\n");
+
+  print DAT "# IGSuite configuration File\n";
+  print DAT "#########################################################\n\n";
+  print DAT "index = $on{index}\n";
+  print DAT "listtype = $on{listtype}\n";
+  print DAT "location = $on{location}\n";
+  print DAT "toolbar = $on{toolbar}\n";
+  print DAT "scrollbar = $on{scrollbar}\n";
+  print DAT "title = $on{title}\n";
+  print DAT "status = $on{status}\n";
+  print DAT "order = $on{order}\n";
+  print DAT "files = $on{files}\n";
+  print DAT "task = $on{task}\n";
+  print DAT "directories = $on{directories}\n";
+  print DAT "note = $on{note}";
+
+  close (DAT);
+ }
+
+##########################################################################
+##########################################################################
+sub Header
+ {
+  my %data = @_;
+ 
+  if ( $dir_info{task} ne 'no' )
+   {
+    $dir_info{title} ||= 'IGFile';
+    HtmlHead( javascript => $data{javascript},
+              ajax_req   => $data{ajax_req} );
+    TaskHead( title      => $dir_info{title},
+              width      => '100%' );
+   }
+  else
+   {
+    $IG::clr{bg} = "white";
+    HtmlHead( padding    => 1,
+              javascript => $data{javascript},
+              ajax_req   => $data{ajax_req},
+              align      => 'left');
+
+    $dir_info{title} &&= HTitle( title => $dir_info{title},
+                                 style => 'margin-bottom:15px',
+                                 level => 4);
+
+    PrOut "<div style=\"background-color:$IG::clr{bg_task}; width:100%\">".
+          "$dir_info{title}\n";
+   }
+
+  if ($dir_info{location} ne 'no' && $dir_info{listtype} ne 'previewlist')
+   {
+    FormHead( cgiaction => 'default_action',
+              name      => 'address');
+
+
+    my $locat = Input( type       => 'text',
+                       show
+                        => Img( src     => "$IG::img_url/fmlocationdel.gif",
+                                style   => "cursor: pointer; margin-right:3px",
+                                align   => 'absmiddle',
+                                width   => 16,
+                                onclick => "document.address.dir.focus();".
+                                           "document.address.dir.value ='';").
+                                           "$lang{address}: ",
+                       name       => 'dir',
+                       value      => $dir_info{dir},
+                       labelstyle => 'width: 23%; font-size:10px; overflow:hidden;',
+                       fieldstyle => 'width: 70%',
+                       style      => 'width: 100%');
+                       
+    my $filter = Input(type       => 'text',
+                       labelstyle => 'width:20%; font-size:10px; overflow:hidden;',
+                       fieldstyle => 'width:65%',
+                       style      => 'width:100%',
+                       show       => $lang{filter_set},
+                       name       => 'filter');
+                       
+    my $submit = Input( type      => 'submit',
+                        style     => 'font-size:10px;',
+                        show      => $lang{go} );
+
+    TaskMsg( MkTable( style       => 'width:100%',
+                      style_c1_r  => 'width:70%;',
+                      style_c2_r  => 'width:25%;',
+                      style_c3_r  => 'width:5%;',
+                      values      => [( [$locat, $filter, $submit] )] )
+             , 4);
+
+    FormFoot();
+   }
+
+  if (   !$on{print}
+      && !$on{defact}
+      && (   $dir_info{toolbar} ne 'no'
+          || CheckPrivilege("filemanager_superuser") )
+     )
+   {
+    my $mydir = 1 if    $dir_info{owner} eq $auth_user
+                     || CheckPrivilege('filemanager_superuser')
+                     || CheckPrivilege('sys_user_admin');
+
+    HLayer(intra_space  => 3,
+           bottom_space => 3,
+           left_layers  =>
+	    [(
+	      ## BACK
+	      $dir_info{dir_link} && $dir_info{directories} ne 'no'
+	      ?	MkButton( icon_src   => "$IG::img_url/fmback.gif",
+	                  icon_width => 27,
+	                  link       => "filemanager?dir=$dir_info{dir_up}&amp;".
+	                                "repid=$dir_info{repid}&amp;".
+                                        "repapp=$dir_info{repapp}",
+                          quick_help => $lang{previous_folder} )
+
+	      :	Img( src   => "$IG::img_url/fmbackg.gif",
+                     title => $lang{previous_folder},
+	             width => 27 ),
+
+              ## RELOAD
+	      MkButton(	icon_src   => "$IG::img_url/fmreload.gif",
+                        icon_width => 27,
+	                link       => "filemanager?dir=$dir_info{dir_link}&amp;".
+	                              "subact=reload&amp;".
+	                              "repid=$dir_info{repid}&amp;".
+	                              "repapp=$dir_info{repapp}&amp;".
+	                              "order=$dir_info{order}",
+                        quick_help => $lang{reload} ),
+
+              ## GO HOME
+	      !$dir_info{repid}
+	      ?	MkButton( icon_src   => "$IG::img_url/fmgohome.gif",
+                          icon_width => 27,
+	                  link       => "filemanager?".
+	                                "dir=$fm{home_link}/$auth_user",
+                          quick_help =>	$IG::default_lang{home} )
+
+	      :	Img( src   => "$IG::img_url/fmgohomeg.gif",
+	             title => $IG::default_lang{home},
+	             width => 27 ),
+
+	      "&middot;",
+
+              ## UPLOAD
+	      $mydir
+	      ?	MkButton( icon_src   => "$IG::img_url/fmupload.gif",
+                          icon_width => 27,
+	                  link       => "javascript:winPopUp(".
+	                                "'filemanager?action=uploadfile&amp;".
+	                                             "dir=$dir_info{dir_link}&amp;".
+	                                             "repid=$dir_info{repid}&amp;".
+	                                             "repapp=$dir_info{repapp}&amp;".
+	                                             "order=$dir_info{order}".
+                                        "',500,230,'UploadFile');".
+                                        "\" onclick=\"getMouseOptions(event)",
+	                  quick_help => 'Upload' )
+
+	      :	Img( src   => "$IG::img_url/fmuploadg.gif",
+	             title => 'Upload',
+                     width => 27 ),
+
+              ## RENAME
+	      $mydir && ($dir_info{cnt_file} || $dir_info{cnt_dir})
+	      ?	MkButton( icon_src   => "$IG::img_url/fmrenamefile.gif",
+                          icon_width => 27,
+	                  link       => "javascript:winPopUp('".
+	                                "filemanager?action=renamefile&amp;".
+	                                            "dir=$dir_info{dir_link}&amp;".
+	                                            "repid=$dir_info{repid}&amp;".
+	                                            "repapp=$dir_info{repapp}&amp;".
+	                                            "order=$dir_info{order}".
+                                        "',500,230,'Rename');".
+                                        "\" onclick=\"getMouseOptions(event)",
+	                  quick_help =>	$lang{rename} )
+
+	      :	Img( src   => "$IG::img_url/fmrenamefileg.gif",
+	             title => $lang{rename},
+                     width => 27 ),
+
+              ## MOVE
+	      $mydir && $dir_info{cnt_file} && !$dir_info{repid}
+	      ?	MkButton( icon_src   => "$IG::img_url/fmmovefile.gif",
+                          icon_width => 27,
+	                  link       => "javascript:winPopUp('".
+                                        "filemanager?action=movefile&amp;".
+                                                    "dir=$dir_info{dir_link}&amp;".
+                                                    "repid=$dir_info{repid}&amp;".
+                                                    "repapp=$dir_info{repapp}&amp;".
+                                                    "order=$dir_info{order}".
+                                        "',500,230,'Move');".
+                                        "\" onclick=\"getMouseOptions(event)",
+	                  quick_help => $lang{move_file} )
+
+	      :	Img( src   => "$IG::img_url/fmmovefileg.gif",
+	             title => $lang{move_file},
+	             width => 27 ),
+
+              ## DELETE FILE
+	      $mydir && $dir_info{cnt_file}
+	      ?	MkButton( icon_src   => "$IG::img_url/fmdelfile.gif",
+                          icon_width => 27,
+	                  link       => "javascript:winPopUp('".
+	                                "filemanager?action=deletefile&amp;".
+	                                            "dir=$dir_info{dir_link}&amp;".
+	                                            "repid=$dir_info{repid}&amp;".
+	                                            "repapp=$dir_info{repapp}&amp;".
+	                                            "order=$dir_info{order}".
+                                        "',500,230,'Delete');".
+                                        "\" onclick=\"getMouseOptions(event)",
+	                  quick_help => $lang{delete_file} )
+
+	      : Img( src   => "$IG::img_url/fmdelfileg.gif",
+	             title => $lang{delete_file},
+	             width => 27 ),
+
+	      "&middot;",
+
+              ## MKDIR
+ 	      $mydir
+	      ?	MkButton( icon_src   => "$IG::img_url/fmfoldernew.gif",
+                          icon_width => 27,
+	                  link       => "javascript:winPopUp('".
+	                                "filemanager?action=makedir&amp;".
+	                                            "dir=$dir_info{dir_link}&amp;".
+	                                            "repid=$dir_info{repid}&amp;".
+	                                            "repapp=$dir_info{repapp}&amp;".
+	                                            "order=$dir_info{order}".
+                                        "',500,230,'NewDir');".
+                                        "\" onclick=\"getMouseOptions(event)",
+	                  quick_help => $lang{new_directory} )
+
+	      :	Img( src   => "$IG::img_url/fmfoldernewg.gif",
+	             title => $lang{new_directory},
+	             width => 27 ),
+
+              ## CONFIGURE DIR
+	      $mydir && !$dir_info{repid}
+	      ?	MkButton( icon_src   => "$IG::img_url/fmfolderconf.gif",
+                          icon_width => 27,
+	                  link       => "filemanager?".
+	                                "action=configuredir&amp;".
+	                                "dir=$dir_info{dir}&amp;".
+	                                "repid=$dir_info{repid}&amp;".
+	                                "repapp=$dir_info{repapp}",
+                          quick_help => $lang{configure} )
+
+	      :	Img( src   => "$IG::img_url/fmfolderconfg.gif",
+	             title => $lang{configure},
+	             width => 27 ),
+
+              ## DELETE DIR
+	      $mydir && !$dir_info{cnt_dir}
+	      ?	MkButton( icon_src   => "$IG::img_url/fmfolderdel.gif",
+                          icon_width => 27,
+	                  link       => "javascript:winPopUp('".
+	                                "filemanager?action=deletedir&amp;".
+	                                            "dir=$dir_info{dir_link}&amp;".
+	                                            "repid=$dir_info{repid}&amp;".
+	                                            "repapp=$dir_info{repapp}&amp;".
+	                                            "order=$dir_info{order}".
+                                        "',500,230,'RmDir');".
+                                        "\" onclick=\"getMouseOptions(event)",
+	                  quick_help => $lang{delete_directory} )
+
+	      :	Img( src   => "$IG::img_url/fmfolderdelg.gif",
+	             title => $lang{delete_directory},
+	             width => 27 ),
+
+	      "&middot;",
+
+              ## LIST VIEW
+	      $auth_user ne 'guest' && $dir_info{listtype} ne 'filelist'
+	      ?	MkButton( icon_src   => "$IG::img_url/fmlistview.gif",
+                          icon_width => 27,
+	                  link       => "filemanager?".
+	                                "action=configurediragg&amp;".
+	                                "dir=$dir_info{dir}&amp;".
+	                                "listtype=filelist&amp;".
+	                                "repid=$dir_info{repid}&amp;".
+	                                "repapp=$dir_info{repapp}",
+                          quick_help => $lang{filemanager_view} )
+
+	      :	Img( src   => "$IG::img_url/fmlistviewg.gif",
+	             title => $lang{filemanager_view},
+	             width => 27 ),
+
+              ## ICON VIEW
+	      $auth_user ne 'guest' && $dir_info{listtype} ne 'iconlist'
+              ?	MkButton( icon_src   => "$IG::img_url/fmiconview.gif",
+                          icon_width => 27,
+                          link       => "filemanager?".
+                                        "action=configurediragg&amp;".
+                                        "dir=$dir_info{dir}&amp;".
+                                        "listtype=iconlist&amp;".
+                                        "repid=$dir_info{repid}&amp;".
+                                        "repapp=$dir_info{repapp}",
+                          quick_help =>	$lang{icons_view} )
+
+	      :	Img( src   => "$IG::img_url/fmiconviewg.gif",
+	             title => $lang{icons_view},
+	             width => 27 ),
+
+              ## PREVIEW VIEW
+	      $auth_user ne 'guest' && $dir_info{listtype} ne 'previewlist'
+              ?	MkButton( icon_src   => "$IG::img_url/fmpreview.gif",
+                          icon_width => 27,
+                          link       => "filemanager?".
+                                        "action=configurediragg&amp;".
+                                        "dir=$dir_info{dir}&amp;".
+                                        "listtype=previewlist&amp;".
+                                        "repid=$dir_info{repid}&amp;".
+                                        "repapp=$dir_info{repapp}",
+                          quick_help =>	$lang{preview_view} )
+
+	      :	Img( src   => "$IG::img_url/fmpreviewg.gif",
+	             title => $lang{preview_view},
+	             width => 27 ),
+
+              ## PRESENTATION
+	         $auth_user ne 'guest'
+	      && $dir_info{cnt_file} > 1
+	      && -x $IG::ext_app{convert}
+	      ?	MkButton( icon_src   => "$IG::img_url/fmpresentation.gif",
+                          icon_width => 27,
+	                  link       => "javascript:winPopUp('".
+	                                "filemanager?action=getpreview&amp;".
+	                                            "dir=$dir_info{dir_link}&amp;".
+	                                            "nextimage=1&amp;".
+	                                            "presentation=1&amp;".
+	                                            "fullscreen=1&amp;".
+	                                            "repid=$dir_info{repid}&amp;".
+	                                            "repapp=$dir_info{repapp}&amp;".
+	                                            "order=$dir_info{order}&amp;".
+                                                    "height='+(window.screen.availHeight-100)+'&amp;".
+                                                    "width='+(window.screen.availWidth-100),".
+                                        "(window.screen.availWidth-10),".
+                                        "(window.screen.availHeight-10),".
+                                        "'OverTop');",
+	                  quick_help =>	$lang{slideshow_view} )
+
+	      :	Img( src   => "$IG::img_url/fmpresentationg.gif",
+	             title => $lang{slideshow_view},
+                     width => 27 ),
+            )],
+
+	   right_layers => [( $data{page_selector} )]
+	  );
+   }
+
+  $dir_info{note} = MkLink($dir_info{note});
+  $dir_info{note} =~ s/(\r\n|\n)/<br>/g;
+  TaskMsg( $dir_info{note}, 2 );
+ }
+
+##############################################################################
+##############################################################################
+sub Footer
+ {
+  if ($dir_info{task} ne 'no')
+   { TaskFoot();}
+  else
+   { PrOut "</div>\n"; }
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub mkthumb
+ {
+  ## This is an Ajax feature
+  HttpHead( expires => 'now' );
+  my $ref = Thumbnails->new( dir       => $dir_info{dir_path},
+                             overwrite => $on{subact} eq 'reload' ? 1 : 0,
+                             width     => 164 );
+
+  ## Mk the thumbnails
+  my $status = $ref->convert( imagefilename => $on{file} );
+
+  PrOut $status;
+ }
+
+#############################################################################
+#############################################################################
+sub getfuncmenu
+ {
+  ## Remember in a javascript inside an HERE document we have to quote
+  ## these chars: $ @ \ in \$ \@ \\
+  IG::DocHead (	type       => 'text/javascript',
+                expires    => '+24h',
+		attachment => 'funcmenu.js' );
+  PrOut <<END;
+/*
+ * Revision 1.9  2002/07/22 14:06:21  bc6ix
+ * fix license path, change version reporting to use 2 digits for each level
+ *
+ * Revision 1.8  2002/07/07 08:23:07  bc6ix
+ * fix line endings
+ *
+ * Revision 1.7  2002/05/14 16:52:52  bc6ix
+ * use CVS Log for revision history
+ *
+ *
+ */
+
+/* ***** BEGIN LICENSE BLOCK *****
+ * Licensed under Version: MPL 1.1/GPL 2.0/LGPL 2.1
+ * Full Terms at http://bclary.com/lib/js/license/mpl-tri-license.txt
+ *
+ * Software distributed under the License is distributed on an "AS IS" basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+ * for the specific language governing rights and limitations under the
+ * License.
+ *
+ * The Original Code is Netscape code.
+ *
+ * The Initial Developer of the Original Code is
+ * Netscape Corporation.
+ * Portions created by the Initial Developer are Copyright (C) 2001
+ * the Initial Developer. All Rights Reserved.
+ *
+ * Contributor(s): Bob Clary <bclary\@netscape.com>
+ *
+ * ***** END LICENSE BLOCK ***** */
+
+function xbDetectBrowser()
+{
+  var oldOnError = window.onerror;
+  var element = null;
+
+  window.onerror = null;
+  
+  // work around bug in xpcdom Mozilla 0.9.1
+  window.saveNavigator = window.navigator;
+
+  navigator.OS    = '';
+  navigator.version  = parseFloat(navigator.appVersion);
+  navigator.org    = '';
+  navigator.family  = '';
+
+  var platform;
+  if (typeof(window.navigator.platform) != 'undefined')
+  {
+    platform = window.navigator.platform.toLowerCase();
+    if (platform.indexOf('win') != -1)
+      navigator.OS = 'win';
+    else if (platform.indexOf('mac') != -1)
+      navigator.OS = 'mac';
+    else if (platform.indexOf('unix') != -1 || platform.indexOf('linux') != -1 || platform.indexOf('sun') != -1)
+      navigator.OS = 'nix';
+  }
+
+  var i = 0;
+  var ua = window.navigator.userAgent.toLowerCase();
+  
+  if (ua.indexOf('safari') != -1)
+  {
+    i = ua.indexOf('safari');
+    navigator.family = 'safari';
+    navigator.org = 'safari';
+    navigator.version = parseFloat('0' + ua.substr(i+7), 10);
+  }
+  else if (ua.indexOf('opera') != -1)
+  {
+    i = ua.indexOf('opera');
+    navigator.family  = 'opera';
+    navigator.org    = 'opera';
+    navigator.version  = parseFloat('0' + ua.substr(i+6), 10);
+  }
+  else if ((i = ua.indexOf('msie')) != -1)
+  {
+    navigator.org    = 'microsoft';
+    navigator.version  = parseFloat('0' + ua.substr(i+5), 10);
+    
+    if (navigator.version < 4)
+      navigator.family = 'ie3';
+    else
+      navigator.family = 'ie4'
+  }
+  else if (ua.indexOf('gecko') != -1)
+  {
+    navigator.family = 'gecko';
+    var rvStart = ua.indexOf('rv:');
+    var rvEnd   = ua.indexOf(')', rvStart);
+    var rv      = ua.substring(rvStart+3, rvEnd);
+    var rvParts = rv.split('.');
+    var rvValue = 0;
+    var exp     = 1;
+
+    for (var i = 0; i < rvParts.length; i++)
+    {
+      var val = parseInt(rvParts[i]);
+      rvValue += val / exp;
+      exp *= 100;
+    }
+    navigator.version = rvValue;
+
+    if (ua.indexOf('netscape') != -1)
+      navigator.org = 'netscape';
+    else if (ua.indexOf('compuserve') != -1)
+      navigator.org = 'compuserve';
+    else
+      navigator.org = 'mozilla';
+  }
+  else if ((ua.indexOf('mozilla') !=-1) && (ua.indexOf('spoofer')==-1) && (ua.indexOf('compatible') == -1) && (ua.indexOf('opera')==-1)&& (ua.indexOf('webtv')==-1) && (ua.indexOf('hotjava')==-1))
+  {
+    var is_major = parseFloat(navigator.appVersion);
+    
+    if (is_major < 4)
+      navigator.version = is_major;
+    else
+    {
+      i = ua.lastIndexOf('/')
+      navigator.version = parseFloat('0' + ua.substr(i+1), 10);
+    }
+    navigator.org = 'netscape';
+    navigator.family = 'nn' + parseInt(navigator.appVersion);
+  }
+  else if ((i = ua.indexOf('aol')) != -1 )
+  {
+    // aol
+    navigator.family  = 'aol';
+    navigator.org    = 'aol';
+    navigator.version  = parseFloat('0' + ua.substr(i+4), 10);
+  }
+  else if ((i = ua.indexOf('hotjava')) != -1 )
+  {
+    // hotjava
+    navigator.family  = 'hotjava';
+    navigator.org    = 'sun';
+    navigator.version  = parseFloat(navigator.appVersion);
+  }
+
+  window.onerror = oldOnError;
+}
+
+xbDetectBrowser();
+
+
+
+
+
+
+function Folder(folderDescription, hreference) //constructor 
+{ 
+  //constant data 
+  this.desc = folderDescription; 
+  this.hreference = hreference;
+  this.id = -1;
+  this.navObj = 0;
+  this.iconImg = 0; 
+  this.nodeImg = 0;
+  this.isLastNode = 0;
+  this.iconSrc = ICONPATH + "ftv2folderopen.gif";
+  this.iconSrcClosed = ICONPATH + "ftv2folderclosed.gif";
+  this.children = new Array;
+  this.nChildren = 0;
+  this.level = 0;
+  this.leftSideCoded = "";
+  this.isLastNode=false;
+  this.parentObj = null;
+  this.maySelect=true;
+  this.prependHTML = ""
+ 
+  //dynamic data 
+  this.isOpen = false
+  this.isLastOpenedFolder = false
+  this.isRendered = 0
+ 
+  //methods 
+  this.initialize = initializeFolder 
+  this.setState = setStateFolder 
+  this.addChild = addChild 
+  this.addChildren = addChildren
+  this.createIndex = createEntryIndex 
+  this.escondeBlock = escondeBlock
+  this.esconde = escondeFolder 
+  this.folderMstr = folderMstr 
+  this.renderOb = drawFolder 
+  this.totalHeight = totalHeight 
+  this.subEntries = folderSubEntries 
+  this.linkHTML = linkFolderHTML
+  this.blockStartHTML = blockStartHTML
+  this.blockEndHTML = blockEndHTML
+  this.nodeImageSrc = nodeImageSrc
+  this.iconImageSrc = iconImageSrc
+  this.getID = getID
+  this.forceOpeningOfAncestorFolders = forceOpeningOfAncestorFolders
+} 
+ 
+function initializeFolder(level, lastNode, leftSide) 
+{ 
+  var j=0 
+  var i=0       
+  nc = this.nChildren 
+   
+  this.createIndex() 
+  this.level = level
+  this.leftSideCoded = leftSide
+
+  if (browserVersion == 0 || STARTALLOPEN==1)
+    this.isOpen=true;
+
+  if (level>0)
+    if (lastNode) //the last child in the children array 
+		leftSide = leftSide + "0"
+	else
+		leftSide = leftSide + "1"
+
+  this.isLastNode = lastNode
+ 
+  if (nc > 0) 
+  { 
+    level = level + 1 
+    for (i=0 ; i < this.nChildren; i++)  
+    {
+      if (typeof this.children[i].initialize == 'undefined') //document node was specified using the addChildren function
+      {
+        if (typeof this.children[i][0] == 'undefined' || typeof this.children[i] == 'string')
+        {
+          this.children[i] = ["item incorrectly defined", ""];
+        }
+
+        //Basic initialization of the Item object
+        //These members or methods are needed even before the Item is rendered
+        this.children[i].initialize=initializeItem;
+        this.children[i].createIndex=createEntryIndex;
+        if (typeof this.children[i].maySelect == 'undefined')
+          this.children[i].maySelect=true
+        this.children[i].forceOpeningOfAncestorFolders = forceOpeningOfAncestorFolders
+      }
+      if (i == this.nChildren-1) 
+        this.children[i].initialize(level, 1, leftSide)
+      else 
+        this.children[i].initialize(level, 0, leftSide)
+    } 
+  } 
+} 
+ 
+function drawFolder(insertAtObj) 
+{ 
+  var nodeName = ""
+  var auxEv = ""
+  var docW = ""
+  var i=0
+
+  finalizeCreationOfChildDocs(this)
+
+  var leftSide = leftSideHTML(this.leftSideCoded)
+
+  if (browserVersion > 0) 
+    auxEv = "<a href='javascript:clickOnNode(\\""+this.getID()+"\\")'>" 
+  else 
+    auxEv = "<a>" 
+
+  nodeName = this.nodeImageSrc()
+ 
+  if (this.level>0) 
+    if (this.isLastNode) //the last child in the children array 
+	    leftSide = leftSide + "<td valign=top>" + auxEv + "<img name='nodeIcon" + this.id + "' id='nodeIcon" + this.id + "' src='" + nodeName + "' width=16 height=22 border=0></a></td>"
+    else 
+      leftSide = leftSide + "<td valign=top background=" + ICONPATH + "ftv2vertline.gif>" + auxEv + "<img name='nodeIcon" + this.id + "' id='nodeIcon" + this.id + "' src='" + nodeName + "' width=16 height=22 border=0></a></td>"
+
+  this.isRendered = 1
+
+  if (browserVersion == 2) { 
+    if (!doc.yPos) 
+      doc.yPos=20 
+  } 
+
+  docW = this.blockStartHTML("folder");
+
+  docW = docW + "<tr>" + leftSide + "<td valign=top>";
+  if (USEICONS)
+  {
+    docW = docW + this.linkHTML(false) 
+    docW = docW + "<img id='folderIcon" + this.id + "' name='folderIcon" + this.id + "' src='" + this.iconImageSrc() + "' border=0></a>"
+  }
+  else
+  {
+	  if (this.prependHTML == "")
+        docW = docW + "<img src=" + ICONPATH + "ftv2blank.gif height=2 width=2>"
+  }
+  if (WRAPTEXT)
+	  docW = docW + "</td>"+this.prependHTML+"<td valign=middle width=100%>"
+  else
+	  docW = docW + "</td>"+this.prependHTML+"<td valign=middle nowrap width=100%>"
+  if (USETEXTLINKS) 
+  { 
+    docW = docW + this.linkHTML(true) 
+    docW = docW + this.desc + "</a>"
+  } 
+  else 
+    docW = docW + this.desc
+  docW = docW + "</td>"
+
+  docW = docW + this.blockEndHTML()
+
+  if (insertAtObj == null)
+  {
+	  if (supportsDeferral) {
+		  doc.write("<div id=domRoot></div>") //transition between regular flow HTML, and node-insert DOM DHTML
+		  insertAtObj = getElById("domRoot")
+		  insertAtObj.insertAdjacentHTML("beforeEnd", docW)
+	  }
+	  else
+		  doc.write(docW)
+  }
+  else
+  {
+      insertAtObj.insertAdjacentHTML("afterEnd", docW)
+  }
+ 
+  if (browserVersion == 2) 
+  { 
+    this.navObj = doc.layers["folder"+this.id] 
+    if (USEICONS)
+      this.iconImg = this.navObj.document.images["folderIcon"+this.id] 
+    this.nodeImg = this.navObj.document.images["nodeIcon"+this.id] 
+    doc.yPos=doc.yPos+this.navObj.clip.height 
+  } 
+  else if (browserVersion != 0)
+  { 
+    this.navObj = getElById("folder"+this.id)
+    if (USEICONS)
+      this.iconImg = getElById("folderIcon"+this.id) 
+    this.nodeImg = getElById("nodeIcon"+this.id)
+  } 
+} 
+ 
+function setStateFolder(isOpen) 
+{ 
+  var subEntries 
+  var totalHeight 
+  var fIt = 0 
+  var i=0 
+  var currentOpen
+ 
+  if (isOpen == this.isOpen) 
+    return 
+ 
+  if (browserVersion == 2)  
+  { 
+    totalHeight = 0 
+    for (i=0; i < this.nChildren; i++) 
+      totalHeight = totalHeight + this.children[i].navObj.clip.height 
+      subEntries = this.subEntries() 
+    if (this.isOpen) 
+      totalHeight = 0 - totalHeight 
+    for (fIt = this.id + subEntries + 1; fIt < nEntries; fIt++) 
+      indexOfEntries[fIt].navObj.moveBy(0, totalHeight) 
+  }  
+  this.isOpen = isOpen;
+
+  if (this.getID()!=foldersTree.getID() && PRESERVESTATE && !this.isOpen) //closing
+  {
+     currentOpen = GetCookie("clickedFolder")
+     if (currentOpen != null) {
+         currentOpen = currentOpen.replace(this.getID()+cookieCutter, "")
+         SetCookie("clickedFolder", currentOpen)
+     }
+  }
+	
+  if (!this.isOpen && this.isLastOpenedfolder)
+  {
+		lastOpenedFolder = null;
+		this.isLastOpenedfolder = false;
+  }
+  propagateChangesInState(this) 
+} 
+ 
+function propagateChangesInState(folder) 
+{   
+  var i=0 
+
+  //Change icon
+  if (folder.nChildren > 0 && folder.level>0)  //otherwise the one given at render stays
+    folder.nodeImg.src = folder.nodeImageSrc()
+
+  //Change node
+  if (USEICONS)
+    folder.iconImg.src = folder.iconImageSrc()
+
+  //Propagate changes
+  for (i=folder.nChildren-1; i>=0; i--) {
+    if (folder.isOpen) 
+      folder.children[i].folderMstr(folder.navObj)
+    else 
+  	  folder.children[i].esconde() 
+  }
+} 
+ 
+function escondeFolder() 
+{ 
+  this.escondeBlock()
+   
+  this.setState(0) 
+} 
+ 
+function linkFolderHTML(isTextLink) 
+{ 
+  var docW = "";
+
+  if (this.hreference) 
+  { 
+	if (USEFRAMES)
+	  docW = docW + "<a href='" + this.hreference + "' TARGET=\\"basefrm\\" "
+	else
+	  docW = docW + "<a href='" + this.hreference + "' TARGET=_self "
+        
+    if (isTextLink) {
+        docW += "id=\\"itemTextLink"+this.id+"\\" ";
+    }
+
+    if (browserVersion > 0) 
+      docW = docW + "onClick='javascript:clickOnFolder(\\""+this.getID()+"\\")'"
+
+    docW = docW + ">"
+  } 
+  else 
+    docW = docW + "<a>" 
+
+  return docW;
+} 
+ 
+function addChild(childNode) 
+{ 
+  this.children[this.nChildren] = childNode 
+  childNode.parentObj = this
+  this.nChildren++ 
+  return childNode 
+} 
+
+//The list can contain either a Folder object or a sub list with the arguments for Item 
+function addChildren(listOfChildren) 
+{ 
+  this.children = listOfChildren 
+  this.nChildren = listOfChildren.length
+  for (i=0; i<this.nChildren; i++)
+    this.children[i].parentObj = this
+} 
+
+function folderSubEntries() 
+{ 
+  var i = 0 
+  var se = this.nChildren 
+ 
+  for (i=0; i < this.nChildren; i++){ 
+    if (this.children[i].children) //is a folder 
+      se = se + this.children[i].subEntries() 
+  } 
+ 
+  return se 
+} 
+
+function nodeImageSrc() {
+  var srcStr = "";
+
+  if (this.isLastNode) //the last child in the children array 
+  { 
+    if (this.nChildren == 0)
+      srcStr = ICONPATH + "ftv2lastnode.gif"
+    else
+      if (this.isOpen)
+        srcStr = ICONPATH + "ftv2mlastnode.gif"  
+      else
+        srcStr = ICONPATH + "ftv2plastnode.gif"  
+  } 
+  else 
+  { 
+    if (this.nChildren == 0)
+      srcStr = ICONPATH + "ftv2node.gif"
+    else
+      if (this.isOpen)
+        srcStr = ICONPATH + "ftv2mnode.gif"
+      else
+        srcStr = ICONPATH + "ftv2pnode.gif"
+  }   
+  return srcStr;
+}
+
+function iconImageSrc() {
+  if (this.isOpen)
+    return(this.iconSrc)
+  else
+    return(this.iconSrcClosed)
+} 
+ 
+// Definition of class Item (a document or link inside a Folder) 
+// ************************************************************* 
+ 
+function Item(itemDescription) // Constructor 
+{ 
+  // constant data 
+  this.desc = itemDescription 
+
+  this.level = 0
+  this.isLastNode = false
+  this.leftSideCoded = ""
+  this.parentObj = null
+
+  this.maySelect=true
+
+  this.initialize = initializeItem;
+  this.createIndex = createEntryIndex;
+  this.forceOpeningOfAncestorFolders = forceOpeningOfAncestorFolders;
+
+  finalizeCreationOfItem(this)
+} 
+
+//Assignments that can be delayed when the item is created with folder.addChildren
+//The assignments that cannot be delayed are done in addChildren and in initializeFolder
+//Additionaly, some assignments are also done in finalizeCreationOfChildDocs itself
+function finalizeCreationOfItem(itemArray)
+{
+  itemArray.navObj = 0 //initialized in render() 
+  itemArray.iconImg = 0 //initialized in render() 
+  itemArray.iconSrc = ICONPATH + "ftv2doc.gif" 
+  itemArray.isRendered = 0
+  itemArray.nChildren = 0
+  itemArray.prependHTML = ""
+ 
+  // methods 
+  itemArray.escondeBlock = escondeBlock
+  itemArray.esconde = escondeBlock
+  itemArray.folderMstr = folderMstr 
+  itemArray.renderOb = drawItem 
+  itemArray.totalHeight = totalHeight 
+  itemArray.blockStartHTML = blockStartHTML
+  itemArray.blockEndHTML = blockEndHTML
+  itemArray.getID = getID
+}
+
+function initializeItem(level, lastNode, leftSide) 
+{  
+  this.createIndex() 
+  this.level = level
+  this.leftSideCoded = leftSide
+  this.isLastNode = lastNode
+} 
+ 
+function drawItem(insertAtObj) 
+{ 
+  var leftSide = leftSideHTML(this.leftSideCoded)
+  var docW = ""
+
+  var fullLink = "href=\\""+this.link+"\\" target=\\""+this.target+"\\" onClick=\\"clickOnLink('"+this.getID()+"\\', '"+this.link+"','"+this.target+"');return false;\\"";
+  this.isRendered = 1
+
+  if (this.level>0) 
+    if (this.isLastNode) //the last 'brother' in the children array 
+    { 
+      leftSide = leftSide + "<td valign=top><img src='" + ICONPATH + "ftv2lastnode.gif' width=16 height=22></td>"
+    } 
+    else 
+    { 
+      leftSide = leftSide + "<td valign=top background=" + ICONPATH + "ftv2vertline.gif><img src='" + ICONPATH + "ftv2node.gif' width=16 height=22></td>"
+    } 
+
+  docW = docW + this.blockStartHTML("item")
+
+  docW = docW + "<tr>" + leftSide + "<td valign=top>"
+  if (USEICONS)
+      docW = docW + "<a " + fullLink  + " id=\\"itemIconLink"+this.id+"\\">" + "<img id='itemIcon"+this.id+"' " + "src='"+this.iconSrc+"' border=0>" + "</a>"
+  else
+	  if (this.prependHTML == "")
+        docW = docW + "<img src=" + ICONPATH + "ftv2blank.gif height=2 width=3>"
+
+  if (WRAPTEXT)
+    docW = docW + "</td>"+this.prependHTML+"<td valign=middle width=100%>"
+  else
+    docW = docW + "</td>"+this.prependHTML+"<td valign=middle nowrap width=100%>"
+
+  if (USETEXTLINKS) 
+    docW = docW + "<a " + fullLink + " id=\\"itemTextLink"+this.id+"\\">" + this.desc + "</a>"
+  else 
+    docW = docW + this.desc
+
+  docW = docW + "</td>"
+
+  docW = docW + this.blockEndHTML()
+ 
+  if (insertAtObj == null)
+  {
+	  doc.write(docW)
+  }
+  else
+  {
+      insertAtObj.insertAdjacentHTML("afterEnd", docW)
+  }
+
+  if (browserVersion == 2) { 
+    this.navObj = doc.layers["item"+this.id] 
+    if (USEICONS)
+      this.iconImg = this.navObj.document.images["itemIcon"+this.id] 
+    doc.yPos=doc.yPos+this.navObj.clip.height 
+  } else if (browserVersion != 0) { 
+    this.navObj = getElById("item"+this.id)
+    if (USEICONS)
+      this.iconImg = getElById("itemIcon"+this.id)
+  } 
+} 
+ 
+ 
+// Methods common to both objects (pseudo-inheritance) 
+// ******************************************************** 
+ 
+function forceOpeningOfAncestorFolders() {
+  if (this.parentObj == null || this.parentObj.isOpen)
+    return
+  else {
+    this.parentObj.forceOpeningOfAncestorFolders()
+    clickOnNodeObj(this.parentObj)
+  }
+}
+
+function escondeBlock() 
+{ 
+  if (browserVersion == 1 || browserVersion == 3) { 
+    if (this.navObj.style.display == "none") 
+      return 
+    this.navObj.style.display = "none" 
+  } else { 
+    if (this.navObj.visibility == "hidden") 
+      return 
+    this.navObj.visibility = "hidden" 
+  }     
+} 
+ 
+function folderMstr(domObj) 
+{ 
+  if (browserVersion == 1 || browserVersion == 3) { 
+    if (t==-1)
+      return
+    var str = new String(doc.links[t])
+    //if (str.slice(14,16) != "em") return
+  }
+
+  if (!this.isRendered)
+     this.renderOb(domObj)
+  else
+    if (browserVersion == 1 || browserVersion == 3) 
+      this.navObj.style.display = "block" 
+    else 
+      this.navObj.visibility = "show" 
+} 
+
+function blockStartHTML(idprefix) {
+  var idParam = "id='" + idprefix + this.id + "'"
+  var docW = ""
+
+  if (browserVersion == 2) 
+    docW = "<layer "+ idParam + " top=" + doc.yPos + " visibility=show>"
+  else if (browserVersion != 0)
+    docW = "<div " + idParam + " style='display:block;'>"
+     
+  docW = docW + "<table border=0 cellspacing=0 cellpadding=0 width=100% >"
+
+  return docW
+}
+
+function blockEndHTML() {
+  var docW = ""
+
+  docW = "</table>"
+   
+  if (browserVersion == 2) 
+    docW = docW + "</layer>"
+  else if (browserVersion != 0)
+    docW = docW + "</div>"
+
+  return docW
+}
+ 
+function createEntryIndex() 
+{ 
+  this.id = nEntries 
+  indexOfEntries[nEntries] = this 
+  nEntries++ 
+} 
+ 
+// total height of subEntries open 
+function totalHeight() //used with browserVersion == 2 
+{ 
+  var h = this.navObj.clip.height 
+  var i = 0 
+   
+  if (this.isOpen) //is a folder and _is_ open 
+    for (i=0 ; i < this.nChildren; i++)  
+      h = h + this.children[i].totalHeight() 
+ 
+  return h 
+} 
+
+
+function leftSideHTML(leftSideCoded) {
+	var i;
+	var retStr = "";
+
+	for (i=0; i<leftSideCoded.length; i++)
+	{
+		if (leftSideCoded.charAt(i) == "1")
+		{
+			retStr = retStr + "<td valign=top background=" + ICONPATH + "ftv2vertline.gif><img src='" + ICONPATH + "ftv2vertline.gif' width=16 height=22></td>"
+		}
+		if (leftSideCoded.charAt(i) == "0")
+		{
+			retStr = retStr + "<td valign=top><img src='" + ICONPATH + "ftv2blank.gif' width=16 height=22></td>"
+		}
+	}
+	return retStr
+}
+
+function getID()
+{
+  //define a .xID in all nodes (folders and items) if you want to PERVESTATE that
+  //work when the tree changes. The value eXternal value must be unique for each
+  //node and must node change when other nodes are added or removed
+  //The value may be numeric or string, but cannot have the same char used in cookieCutter
+  if (typeof this.xID != "undefined") 
+    return this.xID
+  else
+    return this.id
+}
+
+ 
+// Events 
+// ********************************************************* 
+ 
+function clickOnFolder(folderId) 
+{ 
+  var clicked = findObj(folderId)
+
+  if (typeof clicked=='undefined' || clicked==null)
+  {
+    alert("Treeview was not able to find the node object corresponding to ID=" + folderId + ". If the configuration file sets a.xID values, it must set them for ALL nodes, including the foldersTree root.")
+    return;
+  }
+
+  if (!clicked.isOpen) {
+    clickOnNodeObj(clicked) 
+  }
+
+  if (lastOpenedFolder != null && lastOpenedFolder != folderId)
+    clickOnNode(lastOpenedFolder); //sets lastOpenedFolder to null
+
+  if (clicked.nChildren==0) {
+    lastOpenedFolder = folderId;
+    clicked.isLastOpenedfolder = true
+  }
+
+  if (isLinked(clicked.hreference)) {
+      highlightObjLink(clicked);
+  }
+} 
+ 
+function clickOnNode(folderId) 
+{ 
+  fOb = findObj(folderId);
+  if (typeof fOb=='undefined' || fOb==null)
+  {
+    alert("Treeview was not able to find the node object corresponding to ID=" + folderId + ". If the configuration file sets a.xID, it must set foldersTree.xID as well.")
+    return;
+  }
+
+  clickOnNodeObj(fOb);
+}
+
+function clickOnNodeObj(folderObj) 
+{ 
+  var state = 0 
+  var currentOpen
+ 
+  state = folderObj.isOpen 
+  folderObj.setState(!state) //open<->close  
+
+  if (folderObj.id!=foldersTree.id && PRESERVESTATE)
+  {
+    currentOpen = GetCookie("clickedFolder")
+    if (currentOpen == null)
+      currentOpen = ""
+
+    if (!folderObj.isOpen) //closing
+    {
+      currentOpen = currentOpen.replace(folderObj.getID()+cookieCutter, "")
+      SetCookie("clickedFolder", currentOpen)
+    }
+    else
+      SetCookie("clickedFolder", currentOpen+folderObj.getID()+cookieCutter)
+  }
+}
+
+function clickOnLink(clickedId, target, windowName) {
+    highlightObjLink(findObj(clickedId));
+   
+    // Patch inserito perche si perdeva il target   
+    if (typeof target=='undefined' || target==null){
+        Lobj = findObj(clickedId);
+    	if (isLinked(Lobj.hreference)) {
+                window.open(Lobj.hreference,windowName);
+        }
+    }
+    else
+    	if (isLinked(target)) {
+        	window.open(target,windowName);
+    	}
+}
+
+function ld  ()
+{
+	return document.links.length-1
+}
+ 
+
+// Auxiliary Functions 
+// *******************
+
+function finalizeCreationOfChildDocs(folderObj) {
+  for(i=0; i < folderObj.nChildren; i++)  {
+    child = folderObj.children[i]
+    if (typeof child[0] != 'undefined')
+    {
+      // Amazingly, arrays can have members, so   a = ["a", "b"]; a.desc="asdas"   works
+      // If a doc was inserted as an array, we can transform it into an itemObj by adding 
+      // the missing members and functions
+      child.desc = child[0] 
+      setItemLink(child, GLOBALTARGET, child[1])   
+      finalizeCreationOfItem(child)
+    }
+  }
+}
+
+function findObj(id)
+{
+  var i=0;
+  var nodeObj;
+
+  if (typeof foldersTree.xID != "undefined") {
+    nodeObj = indexOfEntries[i];
+    for(i=0;i<nEntries&&indexOfEntries[i].xID!=id;i++) //may need optimization
+      ;
+    id = i
+  }
+  if (id >= nEntries)
+    return null; //example: node removed in DB
+  else
+    return indexOfEntries[id];
+}
+
+function findObjLink(id)
+{
+  var i=0;
+  var idx=0;
+  var nodeObj;
+  var Link=""+id.toLowerCase();
+  
+  nodeObj = indexOfEntries[i];
+  //alert(" " + Link + " ");
+
+  for(i=0;i<nEntries;i++){
+        var desc = ""+indexOfEntries[i].desc.toLowerCase();
+        
+        // alert(" " + desc + " ");
+        var dove = desc.indexOf(Link); 
+        var ini = 1 + desc.indexOf('>'); 
+  	//if (desc.indexOf(Link)!=-1){
+  	if (dove == ini){
+                //alert(" " + desc + " "); 
+  		return indexOfEntries[i];
+	}  
+  }
+  idx = i
+  
+  if (idx >= nEntries)
+    return null; //example: node removed in DB
+  else
+    return indexOfEntries[idx];
+}
+
+function isLinked(hrefText) {
+    var result = true;
+    result = (result && hrefText !=null);
+    result = (result && hrefText != '');
+    result = (result && hrefText.indexOf('undefined') < 0);
+    result = (result && hrefText.indexOf('parent.op') < 0);
+    return result;
+}
+
+// Do highlighting by changing background and foreg. colors of folder or doc text
+function highlightObjLink(nodeObj) {
+  if (!HIGHLIGHT || nodeObj==null || nodeObj.maySelect==false) {//node deleted in DB 
+    return;
+  }
+
+  if (browserVersion == 1 || browserVersion == 3) {
+    var clickedDOMObj = getElById('itemTextLink'+nodeObj.id);
+    if (clickedDOMObj != null) {
+        if (lastClicked != null) {
+            var prevClickedDOMObj = getElById('itemTextLink'+lastClicked.id);
+            prevClickedDOMObj.style.color=lastClickedColor;
+            prevClickedDOMObj.style.backgroundColor=lastClickedBgColor;
+        }
+        
+        lastClickedColor    = clickedDOMObj.style.color;
+        lastClickedBgColor  = clickedDOMObj.style.backgroundColor;
+        clickedDOMObj.style.color=HIGHLIGHT_COLOR;
+        clickedDOMObj.style.backgroundColor=HIGHLIGHT_BG;
+    }
+  }
+  lastClicked = nodeObj;
+  if (PRESERVESTATE)
+    SetCookie('highlightedTreeviewLink', nodeObj.getID());
+}
+
+function insFld(parentFolder, childFolder) 
+{ 
+  return parentFolder.addChild(childFolder) 
+} 
+ 
+function insDoc(parentFolder, document) 
+{ 
+  return parentFolder.addChild(document) 
+} 
+
+function gFld(description, hreference) 
+{ 
+  folder = new Folder(description, hreference);
+  return folder;
+} 
+ 
+function gLnk(optionFlags, description, linkData) 
+{ 
+  if (optionFlags>=0) { //is numeric (old style) or empty (error)
+    //Target changed from numeric to string in Aug 2002, and support for numeric style was entirely dropped in Mar 2004
+    alert("Change your Treeview configuration file to use the new style of target argument in gLnk");
+    return;
+  }
+
+  newItem = new Item(description);
+  setItemLink(newItem, optionFlags, linkData);
+  return newItem;
+} 
+
+function setItemLink(item, optionFlags, linkData) {
+  var targetFlag = "";
+  var target = "";
+  var protocolFlag = "";
+  var protocol = "";
+
+  targetFlag = optionFlags.charAt(0)
+  if (targetFlag=="B")
+    target = "_blank"
+  if (targetFlag=="P")
+    target = "_parent"
+  if (targetFlag=="R")
+    target = "basefrm"
+  if (targetFlag=="S")
+    target = "_self"
+  if (targetFlag=="T")
+    target = "_top"
+
+  if (optionFlags.length > 1) {
+    protocolFlag = optionFlags.charAt(1)
+    if (protocolFlag=="h")
+      protocol = "http://"
+    if (protocolFlag=="s")
+      protocol = "https://"
+    if (protocolFlag=="f")
+      protocol = "ftp://"
+    if (protocolFlag=="m")
+      protocol = "mailto:"
+  }
+
+  item.link = protocol+linkData;    
+  item.target = target
+}
+
+//Function created  for backwards compatibility purposes
+//Function contents voided in March 2004
+function oldGLnk(target, description, linkData)
+{
+}
+ 
+function preLoadIcons() {
+	var auxImg
+	auxImg = new Image();
+	auxImg.src = ICONPATH + "ftv2vertline.gif";
+	auxImg.src = ICONPATH + "ftv2mlastnode.gif";
+	auxImg.src = ICONPATH + "ftv2mnode.gif";
+	auxImg.src = ICONPATH + "ftv2plastnode.gif";
+	auxImg.src = ICONPATH + "ftv2pnode.gif";
+	auxImg.src = ICONPATH + "ftv2blank.gif";
+	auxImg.src = ICONPATH + "ftv2lastnode.gif";
+	auxImg.src = ICONPATH + "ftv2node.gif";
+	auxImg.src = ICONPATH + "ftv2folderclosed.gif";
+	auxImg.src = ICONPATH + "ftv2folderopen.gif";
+	auxImg.src = ICONPATH + "ftv2doc.gif";
+}
+
+//Open some folders for initial layout, if necessary
+function setInitialLayout() {
+  if (browserVersion > 0 && !STARTALLOPEN)
+    clickOnNodeObj(foldersTree);
+  
+  if (!STARTALLOPEN && (browserVersion > 0) && PRESERVESTATE)
+		PersistentFolderOpening();
+}
+
+//Used with NS4 and STARTALLOPEN
+function renderAllTree(nodeObj, parent) {
+  var i=0;
+  nodeObj.renderOb(parent)
+  if (supportsDeferral)
+    for (i=nodeObj.nChildren-1; i>=0; i--) 
+      renderAllTree(nodeObj.children[i], nodeObj.navObj)
+  else
+    for (i=0 ; i < nodeObj.nChildren; i++) 
+      renderAllTree(nodeObj.children[i], null)
+}
+
+function hideWholeTree(nodeObj, hideThisOne, nodeObjMove) {
+  var i=0;
+  var heightContained=0;
+  var childrenMove=nodeObjMove;
+
+  if (hideThisOne)
+    nodeObj.escondeBlock()
+
+  if (browserVersion == 2)
+    nodeObj.navObj.moveBy(0, 0-nodeObjMove)
+
+  for (i=0 ; i < nodeObj.nChildren; i++) {
+    heightContainedInChild = hideWholeTree(nodeObj.children[i], true, childrenMove)
+    if (browserVersion == 2) {
+      heightContained = heightContained + heightContainedInChild + nodeObj.children[i].navObj.clip.height
+      childrenMove = childrenMove + heightContainedInChild
+	}
+  }
+
+  return heightContained;
+}
+
+ 
+// Simulating inserAdjacentHTML on NS6
+// Code by thor\@jscript.dk
+// ******************************************
+
+if(typeof HTMLElement!="undefined" && !HTMLElement.prototype.insertAdjacentElement){
+	HTMLElement.prototype.insertAdjacentElement = function (where,parsedNode)
+	{
+		switch (where){
+		case 'beforeBegin':
+			this.parentNode.insertBefore(parsedNode,this)
+			break;
+		case 'afterBegin':
+			this.insertBefore(parsedNode,this.firstChild);
+			break;
+		case 'beforeEnd':
+			this.appendChild(parsedNode);
+			break;
+		case 'afterEnd':
+			if (this.nextSibling) 
+				this.parentNode.insertBefore(parsedNode,this.nextSibling);
+			else this.parentNode.appendChild(parsedNode);
+			break;
+		}
+	}
+
+	HTMLElement.prototype.insertAdjacentHTML = function(where,htmlStr)
+	{
+		var r = this.ownerDocument.createRange();
+		r.setStartBefore(this);
+		var parsedHTML = r.createContextualFragment(htmlStr);
+		this.insertAdjacentElement(where,parsedHTML)
+	}
+}
+
+function getElById(idVal) {
+  if (document.getElementById != null)
+    return document.getElementById(idVal)
+  if (document.all != null)
+    return document.all[idVal]
+  
+  alert("Problem getting element by id")
+  return null
+}
+
+
+// Functions for cookies
+// Note: THESE FUNCTIONS ARE OPTIONAL. No cookies are used unless
+// the PRESERVESTATE variable is set to 1 (default 0)
+// The separator currently in use is ^ (chr 94)
+// *********************************************************** 
+
+function PersistentFolderOpening()
+{
+  var stateInCookie;
+  var fldStr=""
+  var fldArr
+  var fldPos=0
+  var id
+  var nodeObj
+  stateInCookie = GetCookie("clickedFolder");
+  SetCookie('clickedFolder', "") //at the end of function it will be back, minus null cases
+
+  if(stateInCookie!=null)
+  {
+    fldArr = stateInCookie.split(cookieCutter)
+    for (fldPos=0; fldPos<fldArr.length; fldPos++)
+    {
+      fldStr=fldArr[fldPos]
+      if (fldStr != "") {
+        nodeObj = findObj(fldStr)
+        if (nodeObj!=null) //may have been deleted
+          if (nodeObj.setState) {
+            nodeObj.forceOpeningOfAncestorFolders()
+            clickOnNodeObj(nodeObj);
+          }
+          else
+            alert("Internal id is not pointing to a folder anymore.\\nConsider giving an ID to the tree and external IDs to the individual nodes.")
+      }
+    }
+  }
+}
+
+function storeAllNodesInClickCookie(treeNodeObj)
+{
+  var currentOpen
+  var i = 0
+
+  if (typeof treeNodeObj.setState != "undefined") //is folder
+  {
+    currentOpen = GetCookie("clickedFolder")
+    if (currentOpen == null)
+      currentOpen = ""
+
+    if (treeNodeObj.getID() != foldersTree.getID())
+      SetCookie("clickedFolder", currentOpen+treeNodeObj.getID()+cookieCutter)
+
+    for (i=0; i < treeNodeObj.nChildren; i++) 
+        storeAllNodesInClickCookie(treeNodeObj.children[i])
+  }
+}
+
+function CookieBranding(name) {
+  if (typeof foldersTree.treeID != "undefined")
+    return name+foldersTree.treeID //needed for multi-tree sites. make sure treeId does not contain cookieCutter
+  else
+    return name
+}
+ 
+function GetCookie(name)
+{  
+  name = CookieBranding(name)
+
+	var arg = name + "=";  
+	var alen = arg.length;  
+	var clen = document.cookie.length;  
+	var i = 0;  
+
+	while (i < clen) {    
+		var j = i + alen;    
+		if (document.cookie.substring(i, j) == arg)      
+			return getCookieVal (j);    
+		i = document.cookie.indexOf(" ", i) + 1;    
+		if (i == 0) break;   
+	}  
+	return null;
+}
+
+function getCookieVal(offset) {  
+	var endstr = document.cookie.indexOf (";", offset);  
+	if (endstr == -1)    
+	endstr = document.cookie.length;  
+	return unescape(document.cookie.substring(offset, endstr));
+}
+
+function SetCookie(name, value) 
+{  
+	var argv = SetCookie.arguments;  
+	var argc = SetCookie.arguments.length;  
+	var expires = (argc > 2) ? argv[2] : null;  
+	//var path = (argc > 3) ? argv[3] : null;  
+	var domain = (argc > 4) ? argv[4] : null;  
+	var secure = (argc > 5) ? argv[5] : false;  
+	var path = "/"; //allows the tree to remain open across pages with diff names & paths
+
+  name = CookieBranding(name)
+
+	document.cookie = name + "=" + escape (value) + 
+	((expires == null) ? "" : ("; expires=" + expires.toGMTString())) + 
+	((path == null) ? "" : ("; path=" + path)) +  
+	((domain == null) ? "" : ("; domain=" + domain)) +    
+	((secure == true) ? "; secure" : "");
+}
+
+function ExpireCookie (name) 
+{  
+	var exp = new Date();  
+	exp.setTime (exp.getTime() - 1);  
+	var cval = GetCookie (name);  
+  name = CookieBranding(name)
+	document.cookie = name + "=" + cval + "; expires=" + exp.toGMTString();
+}
+
+
+//To customize the tree, overwrite these variables in the configuration file (demoFramesetNode.js, etc.)
+var USETEXTLINKS = 1;
+var STARTALLOPEN = 0;
+var USEFRAMES = 1;
+var USEICONS = 1;
+var WRAPTEXT = 1;
+var PERSERVESTATE = 0; //backward compatibility
+var PRESERVESTATE = 0;
+var ICONPATH = '$IG::img_url/';
+var HIGHLIGHT = 0;
+var HIGHLIGHT_COLOR = 'white';
+var HIGHLIGHT_BG    = 'blue';
+var BUILDALL = 1;
+var GLOBALTARGET = "R"; // variable only applicable for addChildren uses
+
+
+//Other variables
+var lastClicked = null;
+var lastClickedColor;
+var lastClickedBgColor;
+var indexOfEntries = new Array 
+var nEntries = 0 
+var browserVersion = 0 
+var selectedFolder=0
+var lastOpenedFolder=null
+var t=5
+var doc = document
+var supportsDeferral = false
+var cookieCutter = '^' //You can change this if you need to use ^ in your xID or treeID values
+
+doc.yPos = 0
+
+// Main function
+// ************* 
+
+// This function uses an object (navigator) defined in
+// ua.js, imported in the main html page (left frame).
+function initializeDocument() 
+{ 
+  preLoadIcons();
+  switch(navigator.family)
+  {
+    case 'ie4':
+      browserVersion = 1 //Simply means IE > 3.x
+      break;
+    case 'opera':
+      browserVersion = (navigator.version > 6 ? 1 : 0); //opera7 has a good DOM
+      break;
+    case 'nn4':
+      browserVersion = 2 //NS4.x 
+      break;
+    case 'gecko':
+      browserVersion = 3 //NS6.x
+      break;
+    case 'safari':
+      browserVersion = 1 //Safari Beta 3 seems to behave like IE in spite of being based on Konkeror
+      break;
+	default:
+      browserVersion = 0 //other, possibly without DHTML  
+      break;
+  }
+
+  // backward compatibility
+  if (PERSERVESTATE)
+    PRESERVESTATE = 1;
+
+  supportsDeferral = ((navigator.family=='ie4' && navigator.version >= 5 && navigator.OS != "mac") || browserVersion == 3);
+  supportsDeferral = supportsDeferral & (!BUILDALL)
+  if (!USEFRAMES && browserVersion == 2)
+  	browserVersion = 0;
+  //eval(String.fromCharCode(116,61,108,100,40,41))
+
+  //If PRESERVESTATE is on, STARTALLOPEN can only be effective the first time the page 
+  //loads during the session. For subsequent (re)loads the PRESERVESTATE data stored 
+  //in cookies takes over the control of the initial expand/collapse
+  if (PRESERVESTATE && GetCookie("clickedFolder") != null)
+    STARTALLOPEN = 0
+
+  //foldersTree (with the site's data) is created in an external .js (demoFramesetNode.js, for example)
+  foldersTree.initialize(0, true, "") 
+  if (supportsDeferral && !STARTALLOPEN) {
+      foldersTree.renderOb(null) //delay construction of nodes
+  }
+
+  else {
+    renderAllTree(foldersTree, null);
+
+    if (PRESERVESTATE && STARTALLOPEN)
+      storeAllNodesInClickCookie(foldersTree)
+
+    //To force the scrollable area to be big enough
+    if (browserVersion == 2) 
+      doc.write("<layer top=" + indexOfEntries[nEntries-1].navObj.top + ">&nbsp;</layer>") 
+
+    if (browserVersion != 0 && !STARTALLOPEN)
+      hideWholeTree(foldersTree, false, 0)
+  }
+
+  setInitialLayout()
+
+  if (PRESERVESTATE && GetCookie('highlightedTreeviewLink')!=null  && GetCookie('highlightedTreeviewLink')!="") {
+    var nodeObj = findObj(GetCookie('highlightedTreeviewLink'))
+    if (nodeObj!=null){
+      nodeObj.forceOpeningOfAncestorFolders()
+      highlightObjLink(nodeObj);
+    }
+    else
+      SetCookie('highlightedTreeviewLink', '')
+  }
+} 
+
+END
+ }
+ 
+##############################################################################
+##############################################################################
+## Lang item not used
+## $lang{Err_cant_writefile}
+## $lang{rename_file}
+## $lang{total_size}
+
+##############################################################################
+##############################################################################

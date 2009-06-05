@@ -1,0 +1,46 @@
+## IGSuite 4.0.0
+## Language: igsuite_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+first_connection        =>'My Compliment! This is your first access to IGSuite. Please update your %1$s',
+file_zip_ok             =>'The File was successfully compressed',
+file_unzip_ok           =>'The File was successfully uncompressed',
+Err_module_zip          =>'Sorry, you have to install Perl module \'Archive::Zip\' if you want to compress documents.',
+Err_host_deny           =>'Sorry you can\'t login from this client host! Administrator has set some IP address restrictions',
+Err_disabled_user	=>'Attention! disabled user please contact your system administrator',
+maximize                =>'Maximize',
+active_sessions         =>'Sessão ativas',
+my_pipeline             =>'My Pipeline',
+top_open_opportunities  =>'Top Ofertas abertas',
+password_expired        =>'Sua senha expirou ou este é seu primeiro acesso. Mude-a por favor. %1$s',
+new_comments            =>'Novo comentário de ',
+change_user             =>'Mudar usuário',
+weather                 =>'Clima',
+personal_calendar	=>'Calendário pessoal',
+personal_links		=>'Links pessoais',
+igsuite_login		=>'Entrar IGSuite',
+personal_info		=>'Informações pessoais',
+news			=>'Notícias',
+internal_news		=>'Notícias internas',
+personal_documents	=>'Documentos pessoais',
+poll			=>'Votação',
+wellcome_message	=>'Grazie per aver scelto questo prodotto, a questo punto dell\'installazione occorre inserire gli utenti del sistema con i relativi permessi. L\'utente Amministratore è stato inserito automaticamente; è questo l\'utente che avrà i privilegi per inserire tutti gli altri utenti. Cliccare <a href="users">QUI</a> per inserire un altro utente, o ricaricare la pagina per aggiornare il menù.',
+no_event		=>'Sem eventos em seu calendário',
+no_tasks		=>'Sem tarefas em sua lista de IGTODO',
+connected_users		=>'Usuários conectados',
+connected_guest		=>'Visitantes conectados',
+unread_msgs		=>'Mensagens não lidas',
+registered_users	=>'Usuários registrados',
+vote			=>'Votar',
+my_letters		=>'Minhas cartas',
+my_offers		=>'Minhas ofertas',
+my_orders		=>'Meus pedidos',
+my_archive		=>'Meus arquivos',
+my_contracts		=>'Meus contratos',
+my_fax_received		=>'Meus Faxes',
+  ));
+
+1;

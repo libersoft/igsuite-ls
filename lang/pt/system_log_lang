@@ -1,0 +1,11 @@
+## IGSuite 4.0.0
+## Language: find_log_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+operation		=>'Operando',
+  ));
+
+1;

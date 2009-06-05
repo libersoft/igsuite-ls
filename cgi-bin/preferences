@@ -1,0 +1,1095 @@
+#! /usr/bin/perl
+# Procedure: preferences
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+
+#############################################################################
+## Sets and defines available font type
+##
+my @fonts = (   "Arial",
+                "Arial Black",
+		"Arial Narrow",
+                "Century",
+                "Courier",
+                "Futura XBlk BT",
+                "Garamond",
+                "Impact",
+                "Nimbus Sans L",
+                "sans-serif",
+                "Sylfaen",
+                "Tahoma",
+                "Trebuchet MS",
+                "Times",
+                "Verdana",
+            );
+
+#############################################################################
+## Sets and defines available font size
+##
+my @sizes = qw(8px 9px 10px 11px 12px 13px 14px 16px 18px 20px 22px);
+
+
+#############################################################################
+## Sets and defines available parameters
+##
+
+## The same for all protocols user preferences
+my %protocols_share_mode =
+ (
+          type    => 'select',
+          default => 'customized',
+          values  => { customized => $lang{share_customized},
+                       all_users  => $lang{share_with_all},
+                       same_group => $lang{share_with_same_group} }
+ );
+
+
+## The same for all protocols user preferences
+my %protocols_default_view =
+ (
+          type    => 'select',
+          default => 'complete_list',
+          values  => { complete_list   => $lang{complete_list_view},
+                       limited_list    => $lang{limited_list_view} }
+ );
+
+
+my %apps_param =
+ (
+   'archive.share_mode'
+     => \%protocols_share_mode,
+
+   'archive.default_view'
+     => \%protocols_default_view,
+
+   'asterisk.call_manager_status'
+     => { type    => 'select',
+          values  => { enabled  => $lang{enabled},
+                       disabled => $lang{disabled} } },
+
+   'asterisk.call_manager_extension'
+     => { type    => 'text',
+          size    => 20 },
+
+   'asterisk.call_manager_numberprefix'
+     => { type    => 'text',
+          size    => 5 },
+
+   'asterisk.call_manager_username'
+     => { type    => 'text',
+          size    => 20 },
+
+   'asterisk.call_manager_password'
+     => { type    => 'text',
+          size    => 20 },
+
+   'asterisk.call_manager_hostname'
+     => { type    => 'text',
+          default => '127.0.0.1',
+          size    => 40 },
+
+   'asterisk.call_manager_port'
+     => { type    => 'text',
+          default => 5038,
+          size    => 5 },
+
+   'binders.share_mode'
+     => \%protocols_share_mode,
+
+   'contacts.direct_editing'
+     => { type    => 'checkbox' },
+
+   'contacts.contactname_capitalization_mode'
+     => { type    => 'select',
+          default => 'allup',
+          values  => { none  => $lang{disabled},
+                       allup => $lang{all_upper_case},
+                       auto  => $lang{auto_case} } },
+
+   'contacts.panels_order'
+     => { type    => 'multiselect',
+          default => 'todo|'.
+                     'events|'.
+                     'emails|'.
+                     'personalized_fields|'.
+                     'open_repository|',
+          values  => { offers              => $lang{offers},
+                       orders              => $lang{orders},
+                       archive             => $lang{archive},
+                       fax_received        => $lang{fax_received},
+                       fax_sent            => $lang{fax_sent},
+                       binders             => $lang{binders},
+                       equipments          => $lang{equipments},
+                       emails              => $lang{emails},
+                       letters             => $lang{letters},
+                       contracts           => $lang{contracts},
+                       opportunities       => $lang{opportunities},
+                       todo                => $lang{todo},
+                       personalized_fields => $lang{personalized_fields},
+                       open_repository     => $lang{open_repository},
+                       events              => $lang{events} } },
+
+   'contracts.share_mode'
+     => \%protocols_share_mode,
+
+   'contracts.default_view'
+     => \%protocols_default_view,
+
+   'igsuite.news_rss_url'
+     => { type    => 'text',
+          default => $IG::plugin_conf{news}{rss_url},
+          size    => 40 },
+
+   'igsuite.protocol_search'
+     => { type    => 'checkbox' },
+
+   'igsuite.accordion_menu'
+     => { type    => 'checkbox' },
+
+   'igchats.messages_order'
+     => { type    => 'select',
+          values  => { asc  => $lang{asc_order},
+                       desc => $lang{desc_order} } },
+
+   'igchats.window_target'
+     => { type    => 'select',
+          values  => { same  => $lang{open_same_window},
+                       new   => $lang{open_new_window} } },
+
+   'igchats.default_nickname'
+     => { type    => 'text',
+          default => IG::UsrInf('name'),
+          size    => 40 },
+
+   'igsuite.default_application'
+     => { type    => 'select',
+          default => 'igsuite',
+          values  => ['igsuite',
+                      'isms',
+                      'calendar',
+                      'todo',
+                      'webmail'] },
+
+   'calendar.default_view'
+     => { type    => 'select',
+          values  => { daily    => $lang{daily},
+                       weekly   => $lang{weekly},
+                       monthly2 => $lang{monthly} } },
+
+   'calendar.share_mode'
+     => { type    => 'select',
+          values  => [ 'public', 'private'] },
+
+   'calendar.first_hour'
+     => { type    => 'select',
+          default => '08',
+          values  => [ "01".."24" ] },
+
+   'calendar.last_hour'
+     => { type    => 'select',
+          default => '19',
+          values  => [ "01".."24" ] },
+                               
+   'calendar.week_view_mode'
+     => { type    => 'select',
+          values  => { 5 => "$IG::days[1] - $IG::days[5]",
+                       7 => "$IG::days[1] - $IG::days[0]" },
+          default => 5 },
+
+   'fax_received.share_mode'
+     => \%protocols_share_mode,
+
+   'fax_received.default_view'
+     => \%protocols_default_view,
+
+   'fax_sent.share_mode'
+     => \%protocols_share_mode,
+
+   'fax_sent.default_view'
+     => \%protocols_default_view,
+
+   'igwiki.show_toolbar'
+     => { type    => 'checkbox' },
+
+   'igwiki.show_drafts'
+     => { type    => 'checkbox' },
+
+   'letters.share_mode'
+     => \%protocols_share_mode,
+
+   'letters.default_view'
+     => \%protocols_default_view,
+
+   'nc_ext.share_mode'
+     => \%protocols_share_mode,
+
+   'nc_ext.default_view'
+     => \%protocols_default_view,
+
+   'nc_int.share_mode'
+     => \%protocols_share_mode,
+
+   'nc_int.default_view'
+     => \%protocols_default_view,
+
+   'offers.share_mode'
+     => \%protocols_share_mode,
+
+   'offers.default_view'
+     => \%protocols_default_view,
+
+   'orders.share_mode'
+     => \%protocols_share_mode,
+
+   'orders.default_view'
+     => \%protocols_default_view,
+
+   'webmail.fixed_font'
+     => { type    => 'checkbox' },
+
+   'webmail.short_date'
+     => { type    => 'checkbox' },
+
+   'webmail.notify_request'
+     => { type    => 'checkbox' },
+
+   'webmail.html_ok'
+     => { type    => 'checkbox' },
+
+   'webmail.no_extsrc'
+     => { type    => 'checkbox' },
+
+   'webmail.keep_messages'
+     => { type    => 'checkbox' },
+
+   'webmail.trash_spam'
+     => { type    => 'checkbox' },
+
+   'webmail.auto_download'
+     => { type    => 'checkbox' },
+
+   'webmail.compose_method'
+     => { type    => 'select',
+          values  => [ 'text', 'html' ] },
+
+   'webmail.share_mode'
+     => { type    => 'select',
+          values  => { 0 => $lang{webmail_share_mode0},
+                       1 => $lang{webmail_share_mode1},
+                       2 => $lang{webmail_share_mode2} } },
+                       
+   'webmail.thread'
+     => { type    => 'checkbox' },
+
+   'webmail.automatic_protocol'
+     => { type    => 'checkbox' },
+     
+   'webmail.compact_list'
+     => { type    => 'checkbox' },
+     
+   'webmail.auto_tag'
+     => { type    => 'checkbox' },
+ );
+
+##############################################################################
+############################################################################## 
+
+IG::DTable( prefs_profile      => 0,
+	    prefs_profile_agg  => sub { CheckPrivilege() },
+	    prefs_profile_modi => sub { CheckPrivilege() },
+	    prefs_global       => sub { CheckPrivilege('sys_preferences_edit') },
+	    prefs_global_agg   => sub { CheckPrivilege('sys_preferences_edit') },
+	    prefs_apps         => sub { CheckPrivilege('sys_preferences_edit') },
+	    prefs_apps_agg     => sub { CheckPrivilege('sys_preferences_edit') },
+	    default_action     => sub { CheckPrivilege() } );
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  my ($app_list, $current_section);
+  foreach my $key ( sort keys %apps_param )
+   {
+    my ($section, $nfield ) = $key =~ /^([^\.]+)\.(.+)$/;
+    my $fname = $section . '_' . $nfield;
+    my $label = $lang{"$1_$2"} || $lang{$nfield} || ucfirst($nfield);
+       $label =~ s/\_/ /g;
+
+    ## show only preferences related to authorized features
+    next if $section !~ /^(igsuite|calendar|asterisk)$/
+            && !CheckPrivilege("${section}_view");
+    
+    if ( $section ne $current_section )
+     {
+      $app_list .= "<li><a href=\"preferences?action=prefs_apps#$section\">".
+                    ( $lang{$section} || ucfirst $section ).
+                   "</a></li>";
+      $current_section = $section;
+     } 
+   }
+
+  return IG::QuickCreator().
+         TaskHead( title=>$lang{settings},
+                   icon=>2,
+                   width=>180 ).
+         Br().
+         MkButton( text => $lang{personal_profile},
+                   link => "preferences?action=prefs_profile_modi").
+	 Br().	
+         MkButton( text => $lang{globals},
+                   link => "preferences?action=prefs_global").
+	 Br().	
+	 MkButton( text => $lang{applications},
+	           link => "preferences?action=prefs_apps").
+
+	 ( $on{action} eq 'prefs_apps'
+	   ? "<div style=\"margin-left:15px\"><ul>$app_list</ul></div>"
+	   : Br() ).
+
+         TaskFoot();
+ }
+
+##############################################################################
+##############################################################################
+sub default_action
+ {
+  HtmlHead(     title => $lang{settings} );
+  TaskHead(	title => $lang{settings},
+		icon  => 1);
+  HLayer(
+	 MkButton( text => $lang{personal_profile},
+	           link => 'preferences?action=prefs_profile_modi'),
+
+         MkButton( text => $lang{globals},
+                   link => 'preferences?action=prefs_global'),
+
+         MkButton( text => $lang{applications},
+                   link => 'preferences?action=prefs_apps' ),
+
+         MkButton( text => $lang{tables_mng},
+                   link => 'tables',
+                   privilege => CheckPrivilege('sys_user_admin') ),
+
+         MkButton( text => $lang{lang_mngm},
+                   link => 'langtool',
+                   privilege => CheckPrivilege('sys_user_admin') ),
+
+         MkButton( text => $lang{active_sessions},
+                   link => 'igsuite?action=showsessions' ),
+
+         MkButton( text => $lang{session_year},
+                   link => "igsuite?action=setsessionyear\" target=\"leftf" ),
+	);
+
+  TaskFoot();
+  HtmlFoot();
+ }
+
+##########################################################################
+##########################################################################
+sub prefs_profile_modi
+ {
+  DbQuery("select a.name, a.userid, a.address, a.city,".
+	    " a.zip, a.prov, a.birthday, a.personalphone, a.mobilephone,".
+	    " a.passwd, a.initial, a.email, a.function, a.hierarchycode,".
+	    " a.hierarchyref, b.name, a.isosyncpwd, a.pop3login, a.pop3pwd,".
+	    " a.signature ".
+	    "from users as a, users as b ".
+	    "where a.login='$auth_user'".
+	    " and".
+	    " ( (a.hierarchyref<>'' and a.hierarchyref=b.hierarchycode)".
+	     " or".
+	      " (b.name=a.name) )");
+
+  (	$on{name},
+	$on{userid},
+	$on{address},
+	$on{city},
+	$on{zip},
+	$on{prov},
+	$on{birthday},
+	$on{personalphone},
+	$on{mobilephone},
+	$on{passwd},
+	$on{initial},
+	$on{email},
+	$on{function},
+	$on{hierarchycode},
+	$on{hierarchyref},
+	$on{refname},
+	$on{isosyncpwd},
+	$on{pop3login},
+	$on{pop3pwd},
+	$on{signature}	) = FetchRow();
+
+  prefs_profile();
+ }
+
+##########################################################################
+##########################################################################
+sub prefs_profile
+ {
+  HtmlHead( shortcuts=>_short_cuts(),
+            title=>$lang{personal_profile} );
+
+  TaskHead( title=>$lang{personal_profile},
+	    minwidth=>600);
+
+  MkButton( text => $lang{make_card},
+            link => "javascript:winPopUp('".
+                    "users?action=mkcard&userid=$on{userid}',420,300,'Card')",
+	);
+  Br();
+
+  FormHead(	ckchanges=>'true',
+  		labelstyle=>'width: 230px',
+		cgiaction=>'prefs_profile_agg');
+
+  Input (	show=>$lang{contact_name},
+		name=>'name',
+		readonly => 1,
+		style=>'width:330px;',
+		maxlen=>70,
+		size=>50,
+		type=>'text');
+
+  Input (	show=>$lang{initial},
+		readonly => 1,
+		name=>'initial',
+		style=>'width:330px;',
+		maxlen=>5,
+		size=>50,
+		type=>'text');
+
+  Input (	show=>$lang{function},
+		readonly => 1,
+		name=>'function',
+		value=>"$on{hierarchycode} $on{function}",
+		override=>1,
+		style=>'width:330px; overflow:hidden',
+		size=>50,
+		maxlen=>100,
+		type=>'text');
+
+  Input (	show=>$lang{referring},
+		name=>'fackehierarchyref',
+		value=>$on{refname} ne $on{name}
+		     ? "$on{hierarchyref} $on{refname}"
+		     : '',
+		override=>1,
+		readonly=>1,
+		maxlen=>50,
+		style=>'width:330px;',
+		size=>50,
+		type=>'text');
+
+  Input (	show=>'Login',
+		name=>'login',
+		readonly=>1,
+		value=>$auth_user,
+		maxlen=>32,
+		style=>'width:330px;',
+		size=>50,
+		type=>'text');
+ 
+  Input (	show=>$lang{password},
+                readonly=> $IG::ldap_conf{active} ? 1 : 0,
+		type=>'password',
+		name=>'passwd',
+		style=>'width:330px;',
+		size=>50,
+		maxlen=>72 );
+
+  Input (	show=>"IGSync $lang{password}",
+		type=>'password',
+		name=>'isosyncpwd',
+		style=>'width:330px;',
+		size=>50,
+		maxlen=>72 );
+
+  Input (	show=>$lang{address},
+		type=>'text',
+		name=>'address',
+		style=>'width:330px;',
+		maxlen=>50,
+		size=>50);
+
+  Input (	show=>$lang{city},
+		type=>'text',
+		name=>'city',
+		style=>'width:330px;',
+		size=>50,
+		maxlen=>30);
+
+  Input (	show=>$lang{zip_code},
+		type=>'text',
+		name=>'zip',
+		style=>'width:330px;',
+		size=>50,
+		maxlen=>5);
+
+  Input (	show=>$lang{province},
+		type=>'text',
+		name=>'prov',
+		style=>'width:330px;',
+		size=>50,
+		maxlen=>2);
+
+  Input (	show=>$lang{phone_number},
+		type=>'text',
+		name=>'personalphone',
+		style=>'width:330px;',
+		size=>50,
+		maxlen=>25);
+
+  Input (	show=>$lang{mobile_phone},
+		type=>'mobilephone',
+		name=>'mobilephone',
+		style=>'width:330px;',
+		size=>50,
+		maxlen=>25);
+
+  Input (	show=>$lang{birth_date},
+		type=>'date',
+		name=>'birthday');
+
+  Input (	show=>'E-Mail',
+		type=>'text',
+		name=>'email',
+		style=>'width:330px;',
+		size=>50,
+		maxlen=>100);
+
+  Input (	show=>'Pop3Login',
+		type=>'text',
+		name=>'pop3login',
+		style=>'width:330px;',
+		size=>50,
+		maxlen=>100);
+
+  Input (	show=>'Pop3Password',
+		type=>'password',
+		name=>'pop3pwd',
+		style=>'width:330px;',
+		size=>50,
+		maxlen=>72 );
+
+  Input (	show=>'Signature',
+		type=>'textarea',
+		name=>'signature',
+		labelstyle=>'width:230px; height:100px;',
+		style=>'width:330px; height:100px;',
+		rows=>3,
+		cols=>50);
+
+  Input (	type=>'submit',
+		value=>$lang{save});
+
+  Input (	type=>'reset',
+		float=>'left',
+		value=>$lang{restore});
+
+  TaskFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+#############################################################################
+#############################################################################
+sub prefs_profile_agg
+ {
+  if (!$on{passwd})
+   {
+    push @IG::errmsg, $lang{Err_passwd};
+    $lang{password} = Blush($lang{password});
+   }
+
+  if ( !($on{birthday} = CkDate($on{birthday},1)) )
+   {
+    push @IG::errmsg, $lang{Err_birth_date};
+    $lang{birth_date} = Blush($lang{birth_date});
+   }
+
+  prefs_profile() && return if @IG::errmsg;
+
+  QuoteParams();
+  DbQuery("update users set email='$in{email}', address='$in{address}',".
+  	  " city='$in{city}', zip='$in{zip}', prov='$in{prov}',".
+	  " birthday='$in{birthday}', personalphone='$in{personalphone}', mobilephone='$in{mobilephone}',".
+	  " passwd='$in{passwd}', isosyncpwd='$in{isosyncpwd}',".
+	  " pop3login='$in{pop3login}', pop3pwd='$in{pop3pwd}',".
+	  " signature='$in{signature}', lastpwdchange='$tv{today}' ".
+	  "where login='$auth_user'");
+
+  LogD('update user profile','update', 'users'); 
+
+  ## Update Apache authentication file
+  if ( $ENV{APACHE_CONFIGURED_BY_IGSUITE} )
+   {
+    require IG::Utils;
+    IG::HtPasswd( htaccess_file => $IG::cgi_dir.$S.
+                                   'data'.$S.
+                                   'apache'.$S.
+                                   'igsuite_users.db',
+                  login         => $auth_user,
+                  password      => $on{passwd}
+                ) or die("Can't update Apache accounts database in ".
+                         "to insert user '$auth_user' login account.\n");
+   }
+
+  IG::Redirect("preferences");
+ }
+
+#############################################################################
+#############################################################################
+sub prefs_global
+ {
+  require IG::Utils;
+
+  my $pagetitle = "$lang{preferences} - $lang{globals} - ".
+                  "$lang{user}: " . IG::UsrInf('name') . ' - '.
+		  "Host: $IG::remote_host";
+  HtmlHead(     shortcuts=>_short_cuts(),
+                title=>$pagetitle );
+  TaskHead(	title=>$pagetitle,
+		minwidth=>'600px',
+		icon=>1);
+
+  FormHead (	cgiaction=>'prefs_global_agg',
+		labelstyle=>'width: 270px;',
+  		target=>'_top');
+
+  Input (	show=>$lang{link_format},
+  		type=>'select',
+		name=>'link',
+		style=>'width:250px',
+		value=>$IG::link,
+		data=>{	'auto'   => $lang{link_auto},
+			'igfile' => $lang{link_igfile},
+			'http'   => $lang{link_http} });
+
+  Input (	show=>$lang{language},
+		style=>'width:250px',
+  		type=>'select',
+		value=>$IG::lang,
+		name=>'lang',
+		data=>IG::GetAvailableResource('languages'));
+
+  Input (	show=>$lang{date_format},
+		style=>'width:250px',
+  		type=>'select',
+  		readonly=> $IG::db_driver eq 'sqlite' ? 1 : 0,
+		name=>'date_format',
+		value=>$IG::date_format,
+		data=>{	'German'=>	'DD.MM.YYYY',
+			'European'=>	'DD-MM-YYYY',
+			'Sql'=>		'MM/DD/YYYY',
+			'Iso'=>		'YYYY-MM-DD'});
+
+  Input (	show  => $lang{timezone},
+		style=>'width:250px',
+  		type  => 'select',
+		value => $IG::timeoffset,
+		name  => 'timeoffset',
+		data  => IG::GetAvailableResource('timezones'));
+
+  Input (       show  => $lang{automatic_logout},
+                style => 'width:250px',
+                type  => 'select',
+                name  => 'session_timeout',
+                value => $IG::session_timeout,
+                data  => [( ['100',     $lang{never}],
+                            ['0.02083', sprintf( $lang{after_minutes}, 30)],
+                            ['0.0416',  sprintf( $lang{after_minutes}, 60)],
+                            ['0.0625',  sprintf( $lang{after_minutes}, 90)],
+                            ['0.083',   sprintf( $lang{after_hours}, 2)],
+                            ['0.15',    sprintf( $lang{after_hours}, 4)],
+                            ['0.3',     sprintf( $lang{after_hours}, 8)],
+                            ['0.5',     sprintf( $lang{after_hours}, 12)],
+                         )] );
+
+  Input (	show=>$lang{skin},
+  		type=>'select',
+		style=>'width:250px',
+		value=>$IG::tema,
+  		name=>'tema',
+		data=>IG::GetAvailableResource("tema") );
+
+  Input (	show=>$lang{screen_size},
+		type=>'select',
+		value=>$IG::screen_size,
+		style=>'width:250px',
+		name=>'screen_size',
+		data=>[( ['noframe','No Frames Fixed Menu (320x200)'],
+			 ['noframe2','No Frames No MenuDiv (320x200)'],
+			 ['medium', 'No Shortcuts with Frames (800x600)',],
+			 ['large',  'All features with Frames (1024x768)'])]);
+
+  Input (	show=>$lang{results_per_page},
+  		type=>'text',
+		name=>'page_results',
+		value=>$IG::page_results,
+		style=>'width:250px',
+		maxlen=>2);
+
+  Input (	show=>$lang{list_order},
+  		type=>'select',
+		style=>'width:250px',
+		value=>$IG::list_order,
+		name=>'list_order',
+		data=>{	'desc'	=>$lang{desc_order},
+			'asc'	=>$lang{asc_order}});
+
+  Input (	type=>'select',
+		style=>'width:190px',
+		value=>$IG::barrafontname,
+		show=>$lang{bar_font_name},
+		zerovalue=>'true',
+		name=>'barrafontname',
+		data=>\@fonts);
+
+  Input (	type=>'select',
+		style=>'width:60px',
+  		value=>$IG::barrafontsize,
+		float=>'left',
+  		name=>'barrafontsize',
+		data=>\@sizes);
+
+  Input (	show=>$lang{menu_font_name},
+		style=>'width:190px',
+  		type=>'select',
+		value=>$IG::menufontname,
+		zerovalue=>'true',
+		name=>'menufontname',
+		data=>\@fonts);
+
+  Input (	type=>'select',
+		style=>'width:60px',
+  		value=>$IG::menufontsize,
+		float=>'left',
+  		name=>'menufontsize',
+		data=>\@sizes);
+
+  Input (	type=>'select',
+		style=>'width:190px',
+		show=>$lang{task_font_name},
+		value=>$IG::tasksfontname,
+		zerovalue=>'true',
+		name=>'tasksfontname',
+		data=>\@fonts);
+
+  Input (	type=>'select',
+		style=>'width:60px',
+  		value=>$IG::tasksfontsize,
+  		name=>'tasksfontsize',
+		float=>'left',
+		data=>\@sizes);
+
+  Input (	type=>'select',
+		style=>'width:190px',
+		value=>$IG::buttonfontname,
+		show=>$lang{button_font_name},
+		zerovalue=>'true',
+		name=>'buttonfontname',
+		data=>\@fonts);
+
+  Input (	type=>'select',
+		style=>'width:60px',
+  		value=>$IG::buttonfontsize,
+  		name=>'buttonfontsize',
+		float=>'left',
+		data=>\@sizes);
+
+  Input (	type=>'submit',
+		style=>'margin-top: 20px',
+  		value=>$lang{save});
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub prefs_global_agg
+ {
+  push @IG::errmsg, $lang{Err_pages}
+    if $on{page_results} && $on{page_results}<1;
+
+  if ( @IG::errmsg )
+    {
+     $on{action} = 'prefs_global';
+     prefs_global();
+     return;
+    }
+
+  ## make configuration file
+  $on{page_results} += 0;
+
+  ## check user directory
+  if (! -d $IG::user_dir)
+   {
+    mkdir( $IG::user_dir, 0770 )
+      or die("Can't create directory '$IG::user_dir'. ".
+             "Check file permissions.\n");
+   }
+
+  open (DAT, '>', "$IG::user_dir${S}$IG::remote_host.cf")
+    or die("Can't write to '$IG::user_dir${S}$IG::remote_host.cf' ".
+	   "for '$auth_user' configuration file.\n");
+
+  print DAT "## IGSuite user global preferences\n".
+            "## last update $IG::tv{today}\n\n";
+  
+  for ( qw ( tema	   screen_size	 page_results	list_order
+             lang          date_format	 link		timeoffset
+             tasksfontname tasksfontsize barrafontname	barrafontsize
+             menufontname  menufontsize  buttonfontname buttonfontsize
+             session_timeout ) )
+   {
+    no strict 'refs';
+    $on{$_} ||= ${"IG::".$_};
+    print DAT "\$IG::$_ = '$on{$_}';\n";
+   }
+
+  print DAT "1;\n";
+  close (DAT);
+  LogD('update user preferences', 'configure', 'profile'); 
+
+  IG::FileCopy( "$IG::user_dir/$IG::remote_host.cf",
+		"$IG::user_dir/$IG::auth_user.cf");
+
+  ## restart the suite (transport session ID!)
+  IG::Redirect('igsuite'.
+               ( $on{igsuiteid}
+                 ? "?igsuiteid=".MkUrl($on{igsuiteid})
+                 : '' )
+              );
+ }
+
+#############################################################################
+#############################################################################
+sub prefs_apps
+ {
+  my $current_section;
+  my $pagetitle = "$lang{preferences} - ".
+                            "$lang{applications} - ".
+		  "Host: $IG::remote_host";
+  HtmlHead(     shortcuts  => _short_cuts(),
+                title      => $pagetitle );
+  TaskHead(	title      => $pagetitle,
+		minwidth   => '630px',
+		icon       => 1 );
+
+  FormHead (	cgiaction  => 'prefs_apps_agg',
+                name       => 'proto',
+                target     => '_top',
+		labelstyle => 'width: 270px');
+
+  foreach my $key ( sort keys %apps_param )
+   {
+    my ($section, $nfield ) = $key =~ /^([^\.]+)\.(.+)$/;
+    my $fname = $section . '_' . $nfield;
+    my $label = $lang{"$1_$2"} || $lang{$nfield} || ucfirst($nfield);
+       $label =~ s/\_/ /g;
+
+    ## show only preferences related to authorized features
+    next if $section !~ /^(igsuite|calendar|asterisk)$/
+            && !CheckPrivilege("${section}_view");
+    
+    if ( $section ne $current_section )
+     {
+      Input( type => 'label',
+             labelstyle => 'margin-top:10px; '.
+                           'width:auto; '.
+                           'border:0px; '.
+                           'background-color:transparent;'.
+                           'font-weight:bold',
+             show => "<a name=\"$section\">".
+                     ( $lang{$section} || ucfirst $section ).
+                     "</a>" );
+      $current_section = $section;
+     } 
+
+    if ( $apps_param{$key}{type} eq 'select' )
+     {
+      ## It's a select box
+      my @values;
+      if ( ref $apps_param{$key}{values} eq 'ARRAY')
+       {
+        for my $vl ( @{$apps_param{$key}{values}} )
+         { push @values, [ $vl, $lang{$vl} || ucfirst($vl) ]; }
+       }
+      else
+       {
+        for my $k ( sort keys %{$apps_param{$key}{values}} )
+         { push @values, [ $k, $apps_param{$key}{values}{$k} ]; }
+       }
+
+      Input ( type  => 'select',
+              show  => $label,
+              name  => $fname,
+              value => IG::ConfigParam($key) || $apps_param{$key}{default},
+              data  => \@values,
+              style => 'width: auto;' );
+     }
+    elsif ( $apps_param{$key}{type} eq 'multiselect' )
+     {
+      ## It's a multiselect field
+      my @values;
+      if ( ref $apps_param{$key}{values} eq 'ARRAY')
+       {
+        for my $vl ( @{$apps_param{$key}{values}} )
+         { push @values, [ $vl, $lang{$vl} || ucfirst($vl) ]; }
+       }
+      else
+       {
+        for my $k ( sort keys %{$apps_param{$key}{values}} )
+         { push @values, [ $k, $apps_param{$key}{values}{$k} ]; }
+       }
+
+      my $value = IG::ConfigParam($key) || $apps_param{$key}{default};
+      $value =~ s/\|/\r\n/g;
+
+      Input ( type  => 'multiselect',
+              show  => $label,
+              name  => $fname,
+              value => $value,
+              style => 'width:120px; height:160px;',
+              data  => \@values );
+     }
+    elsif ( $apps_param{$key}{type} eq 'checkbox' )
+     {
+      ## It's a checkbox
+      Input ( type     => 'checkbox',
+              show     => $label,
+              name     => $fname,
+              override => 'true',
+              checked  => IG::ConfigParam($key) );
+     }
+    elsif ( $apps_param{$key}{type} eq 'text' )
+     {
+      ## It's a text field
+      Input ( type     => 'text',
+              show     => $label,
+              size     => $apps_param{$key}{size} || 30,
+              name     => $fname,
+              override => 'true',
+              value    =>    IG::ConfigParam($key)
+                          || $apps_param{$key}{default} );
+     }
+   }
+
+  Input (	type=>'submit',
+		style=>'margin-top: 20px',
+  		value=>$lang{save});
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+ 
+#############################################################################
+#############################################################################
+sub prefs_apps_agg
+ {
+  my ( $cfg, $_is_a_new_file );
+  require IG::ConfigSimple;
+
+  my $config_file = $IG::user_dir . $S . 'preferences.conf';
+  
+  if ( -e $config_file )
+   {
+    $cfg = new Config::Simple( $config_file );
+   }
+  else
+   {
+    $_is_a_new_file++;
+    $cfg = new Config::Simple( syntax => 'ini' );
+   }
+
+  ## in this way only defined parameters can be written inside config file
+  foreach my $key ( sort keys %apps_param )
+   {
+    my $fname = $key;
+       $fname =~ s/\./\_/;
+
+    if ($apps_param{$key}{type} eq 'checkbox')
+     { $on{$fname} = $on{$fname} ? 'true' : 'false'; }
+    elsif ($apps_param{$key}{type} eq 'multiselect')
+     { $on{$fname} =~ s/\r\n/\|/g; } 
+
+    ## we prefer to quote values from our self than use Config::Simple->import('-strict');
+    $on{$fname} =~ s/\'|\"//g;
+    $on{$fname} = "'$on{$fname}'";
+
+    $cfg->param( $key, $on{$fname} );
+   }
+
+  $_is_a_new_file ? $cfg->write( $config_file) : $cfg->save();
+
+  ## restart the suite (transport session ID!)
+  IG::Redirect('igsuite'.
+               ( $on{igsuiteid}
+                 ? "?igsuiteid=".MkUrl($on{igsuiteid})
+                 : '' )
+              );
+ }
+ 
+#############################################################################
+#############################################################################
+## Needed by langtool
+
+## $lang{igchats_messages_order}
+## $lang{contactname_capitalization_mode}
+
+## $lang{igsuite_news_rss_url}  $lang{igsuite_default_application}
+## $lang{igsuite_protocol_search}
+
+## $lang{calendar_first_hour}   $lang{calendar_last_hour}
+## $lang{calendar_share_mode}   $lang{calendar_week_view_mode}
+
+## $lang{webmail_auto_download} $lang{webmail_fixed_font}
+## $lang{webmail_html_ok}       $lang{webmail_keep_messages}
+## $lang{webmail_no_extsrc}     $lang{webmail_short_date}
+## $lang{webmail_trash_spam}    $lang{webmail_compose_method}
+## $lang{webmail_share_mode}    $lang{webmail_automatic_protocol}
+## $lang{webmail_thread}        $lang{webmail_compact_list}
+## $lang{webmail_notify_request}
+
+## $lang{asterisk_call_manager_extension}
+## $lang{asterisk_call_manager_hostname}
+## $lang{asterisk_call_manager_password}
+## $lang{asterisk_call_manager_port}
+## $lang{asterisk_call_manager_status}
+## $lang{asterisk_call_manager_username}
+## $lang{asterisk_call_manager_numberprefix}
+
+## $lang{direct_editing}
+## $lang{panels_order}
+## $lang{show_drafts}
+## $lang{show_toolbar}
+## $lang{window_target}

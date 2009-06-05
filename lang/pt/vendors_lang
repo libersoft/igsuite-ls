@@ -1,0 +1,19 @@
+## IGSuite 4.0.0
+## Language: vendors_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+valuation		=>'Validação',
+supervision		=>'Supervisão',
+first_valuation		=>'Primeira data validação',
+remark			=>'Observação',
+unqualified_vendors	=>'Fornecedor desqualificado',
+Err_start_qualify	=>'Erro: início da data de qualificação inválida',
+Err_end_qualify		=>'Erro: fim da data de qualificação inválida',
+check_rules		=>'Verificar regras',
+vendors_report		=>'Relatório',
+  ));
+
+1;

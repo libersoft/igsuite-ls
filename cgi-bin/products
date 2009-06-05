@@ -1,0 +1,1468 @@
+#! /usr/bin/perl
+# Procedure: products
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+#XXX2REWRITE
+# CheckResourcePrivilege()
+# FormValidate()
+
+use strict;
+use IG;
+use IG::Utils;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable(	revisione	=> sub { CheckPrivilege('products_view')    },
+		proto		=> sub { CheckPrivilege('products_new')     },
+		report1		=> sub { CheckPrivilege('products_view')    },
+		protoagg	=> sub { CheckPrivilege('products_edit')    },
+		delexec		=> sub { CheckPrivilege('products_new')     },
+		modiproto	=> sub { CheckPrivilege('products_edit')    },
+		offproto	=> sub { CheckPrivilege('products_edit')
+		                         && CheckPrivilege('offers_edit')   },
+		offprotoagg	=> sub { CheckPrivilege('products_edit')
+		                         && CheckPrivilege('offers_edit')   },
+		lettproto	=> sub { CheckPrivilege('products_edit')
+		                         && CheckPrivilege('letters_edit')  },
+		lettprotoagg	=> sub { CheckPrivilege('products_edit')
+		                         && CheckPrivilege('letters_edit')  },
+		ordproto	=> sub { CheckPrivilege('products_edit')
+		                         && CheckPrivilege('orders_edit')   },
+		ordprotoagg	=> sub { CheckPrivilege('products_edit')
+		                         && CheckPrivilege('orders_edit')   },
+		stampamenu	=> sub { CheckPrivilege('products_view')    },
+		history		=> sub { CheckPrivilege('products_history') },
+		report		=> sub { CheckPrivilege('products_view')    },
+		disablepricelist=> sub { CheckPrivilege('products_edit')    },
+		findshow	=> sub { CheckPrivilege('products_view')    },
+		findexec	=> sub { CheckPrivilege('products_view')    },
+		default_action	=> sub { CheckPrivilege('products_view')    });
+
+
+##########################################################################
+##########################################################################
+sub stampamenu
+ {
+  if    ( $on{offer}  eq $lang{make_offer}  )	{ offproto()  }
+  elsif ( $on{order}  eq $lang{make_order}  )	{ ordproto()  }
+  elsif ( $on{report} eq $lang{make_summary})	{ report()    }
+  else						{ lettproto() }
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+         TaskHead( title=>$lang{last_documents},
+                   icon=>2,
+                   width=>180 ).
+         IG::LastDocuments().
+         TaskFoot();
+ }
+
+############################################################################
+############################################################################
+sub default_action
+ {
+  Header();
+  HLayer( 
+	 MkButton( text => $lang{articles_mng}, link => 'articles'),
+	 MkButton( text => $lang{update_list},  link => 'products')
+	);
+
+  ## Mk Query
+  $on{alphabet} ||= 'A';
+  $on{view}     ||= 'allvalid';
+  my $order = "order by contactname, contactid";
+  my $query = "pricelistflag='s' and contacttype<>1 and contacttype<>8 ";
+     $query.= "and contacttype = ".DbQuote($on{contacttype}) if $on{contacttype};
+
+  if ($on{alphabet} ne 'all')
+   {
+    $query = "substr(contactname,1,1)='".DbQuote($on{alphabet}).
+             "' and ".$query;
+   }
+
+  ## Create alphabet index
+  IG::AlphabetSelector
+    (	param    => 'alphabet',
+	link     => "products?contacttype=$on{contacttype}",
+	filter   => Input( type=>'select',
+			   onchange=>"location.href = 'products?alphabet=$on{alphabet}&amp;contacttype=' + this.options[this.selectedIndex].value;",
+			   data=>[([0, $lang{all}],
+				   [3, $lang{qualified_customers}],
+				   [4, $lang{partners}],
+				   [5, $lang{competitors}])],
+			   name=>'contacttype')
+    );
+
+  TaskListMenu (	[$lang{code}],
+			[$lang{contact_name}],
+			[$lang{operations_headquarters}],
+			[$lang{last_prices_update}], );
+
+  DbQuery("select contactname, contactid, city1, address1, city2, address2,".
+	  " owner, pricelistupdate FROM contacts ".
+	  "where master='0' and $query $order");
+  while (my @row = FetchRow())
+   {
+    TaskListItem (
+	[substr("000000".$row[1],-6,6),
+	 "products?action=revisione&amp;contactid=$row[1]"],
+	[$row[0]],
+	["$row[2] - $row[3]"],
+	[$row[7]],);
+   }
+  TaskListFoot();
+
+  Footer();
+ }
+
+##########################################################################
+##########################################################################
+sub revisione
+ {
+  my $filter_query;
+  HtmlHead();
+  TaskHead(	title=>$lang{products_mng},
+		width=>'100%');
+  DbQuery("SELECT contactname, address1, city1, zip1, category, contactid ".
+	  "FROM contacts where contactid = '".DbQuote($on{contactid})."'");
+  my @cntrow = FetchRow();
+
+  HLayer(
+	 MkButton( text => $lang{new_product},
+	           link => "products?".
+                           "action=proto&amp;".
+                           "contactid=$on{contactid}&amp;".
+                           "filter_type=$on{filter_type}&amp;".
+                           "filter_key=" . MkUrl($on{filter_key}) ),
+
+         MkButton( text => $lang{history_view},
+                   link => "products?action=history&amp;".
+                           "contactid=$on{contactid}" ),
+
+         MkButton( text => $lang{back_to_list},
+                   link => "products" ),
+	);
+
+  TaskMsg(FormHead(	cgiaction=>'revisione').
+
+	  Input (	type=>'hidden',
+			name=>'contactid').
+
+	  Input (	type=>'label',
+			labelstyle=>'width: 130px;',
+			show=>$lang{contact_name},
+			data=> "<a href=\"contacts?action=showrecord&amp;contactid=$cntrow[5]\">
+				$cntrow[5]</a> $cntrow[0] - $cntrow[1] - $cntrow[2]").
+
+	  Input (	type=>'select',
+			show=>$lang{filter_set},
+			labelstyle=>'width: 130px;',
+			name=>'filter_type',
+			data=>[(['articleid',	$lang{with_code}],
+				['description',	$lang{with_description}],
+				['price',	$lang{price}],
+				['note',	$lang{with_notes}],
+				['docid',	$lang{rif}],
+			       )]).
+
+	  Input (	type=>'text',
+			float=>'left',
+			name=>'filter_key',
+			style=>'width:150px').
+
+	  Input (	type=>'submit',
+			float=>'left',
+			show=>'Ok').
+	  FormFoot(),4) if !$on{print};
+
+  FormHead(	method=>'post',
+		float=>'left',
+		cgiaction=>'stampamenu');
+
+  Input (	type=>'hiddens',
+		data=> { contactid  => '',
+			 filter_type=> '',
+			 filter_key => ''} );
+
+  TaskListMenu (
+		[$lang{code}],
+		[$lang{description}],
+		[$lang{rif}],
+		[$lang{price}],
+		[$lang{start_from}],
+		[$lang{due_date}],
+		['']
+		);
+
+  QuoteParams();
+  $filter_query = " and $in{filter_type} ~* '$in{filter_key}'" if $in{filter_key};
+  DbQuery("SELECT * FROM prices where contactid = '$in{contactid}'".
+	  " and todate>='$tv{today}'$filter_query order by articleid");
+
+  while (my @row = FetchRow())
+   {
+    my $edit_link = "products?".
+			"action=modiproto&amp;".
+			"id=$row[0]&amp;".
+			"filter_type=$on{filter_type}&amp;".
+			"filter_key=".MkUrl($on{filter_key});
+
+    $row[4] = '' if !CkDate($row[4]);
+
+    $row[5] = CheckPrivilege("products_edit")
+	    ? "<a href=\"$edit_link\">$row[5]</a>"
+	    : $row[5];
+    $row[5] = Input (type=>"checkbox", name=>$row[0]). $row[5] if !$on{print};
+   
+    $row[9] &&="<div style=\"border-top: 1px black solid; color: gray; font-size: 80%\">$lang{result}: ",MkLink($row[9]),"</div>\n";
+ 
+    if ($row[11])
+     { $row[9].="<div style=\"width: 100%; border-top: 1px black solid; color: gray; font-size: 80%\">$lang{notes}: $row[11]</div>\n" }
+
+    TaskListItem (
+	[$row[5],
+	 '',
+	 "nowrap align=right"],
+	["$row[1]<br>$row[9]"],
+	[MkLink($row[8])],
+	["$row[2] $row[10]",
+	 '',
+	 'nowrap align=right'],
+	[$row[3]],
+	[$row[4]],
+	[!$on{print} && CheckPrivilege('products_edit')
+         ? Img( src    => "$IG::img_url/delete.gif",
+		title  => $lang{delete},
+		href   => "products?action=delexec&amp;".
+		                   "contactid=$on{contactid}&amp;".
+		                   "id=$row[0]",
+		onlick => IG::JsConfirm( $lang{are_you_sure} ) ).
+
+ 	   Img( src    => "$IG::img_url/edit.gif",
+		title  => $lang{edit},
+		href   => $edit_link)
+	 : '','','nowrap']
+		);
+   } 
+  TaskListFoot();
+
+  Input(type=>'submit',
+	name=>'offer',
+	value=>$lang{make_offer} ) if CheckPrivilege('offers_edit');
+
+  Input(type=>'submit',
+	name=>'letter',
+	value=>$lang{make_letter} ) if CheckPrivilege('letters_edit');
+
+  Input(type=>'submit',
+	name=>'order',
+	value=>$lang{make_order} ) if CheckPrivilege('orders_edit');
+
+  Input(type=>'submit',
+	name=>'report',
+	value=>$lang{make_summary} );
+
+  FormFoot();
+
+  if ( CheckPrivilege('products_edit') )
+   {
+    FormHead(	onsubmit  => IG::JsConfirm( $lang{are_you_sure} ),
+		cgiaction => 'disablepricelist');
+
+    Input (	type=>'hidden', name=>'contactid');
+    Input (	type=>'submit',
+		float=>'right',
+		name=>'disablepricelist',
+		value=>$lang{disable_prices_list} );
+    FormFoot();
+   }
+
+  Footer();
+  LogD($cntrow[0], 'view', 'products', $on{contactid});
+ }
+
+##########################################################################
+##########################################################################
+sub disablepricelist
+ {
+  DbQuery("update contacts set pricelistflag='n' ".
+	  "where contactid='".DbQuote($on{contactid})."'");
+
+  default_action();
+ }
+
+##########################################################################
+##########################################################################
+sub history
+ {
+  my ($oldvalue, $bg);
+  HtmlHead();
+  TaskHead(	title=>$lang{products_mng},
+		width=>'100%');
+  DbQuery("SELECT contactname, address1, city1, zip1, category, contactid ".
+	  "FROM contacts where contactid = '".DbQuote($on{contactid})."'");
+  my @row = FetchRow();
+
+  HLayer(
+	 MkButton( text => $lang{back_to_prices},
+	           link => "products?action=revisione&amp;".
+	                   "contactid=$on{contactid}" ),
+
+         MkButton( text => $lang{back_to_list},
+                   link => "products" ),
+	);
+
+  TaskMsg("$lang{prices_history}: ".
+	  "<a href=\"contacts?action=showrecord&amp;contactid=$row[5]\">".
+	  "$row[5]</a> $row[0] $row[1] - $row[2]", 2);
+
+  TaskListMenu	(
+		[$lang{code}],
+		[$lang{description}],
+		[$lang{price}],
+		[$lang{unit}],
+		[$lang{rebate}],
+		[$lang{start_from}],
+		[$lang{due_date}],
+		[$lang{rif}],
+		[""]
+		);
+
+  DbQuery("SELECT * FROM prices ".
+	  "where contactid = '".DbQuote($on{contactid})."' and todate <'$tv{today}' ".
+	  "order by articleid, description, fromdate desc");
+
+  while (my @row = FetchRow())
+   {
+    $bg = $oldvalue ne ($row[5].$row[1]) ? 'link' : 'list';
+    $oldvalue = $row[5].$row[1];
+
+    TaskListItem (
+	[$row[5],
+	 "products?action=modiproto&amp;backto=history&amp;id=$row[0]",
+	 '',
+	 $bg],
+	[$row[1]],
+	[$row[2],'','align=right'],
+	[$row[10]],
+	[$row[6]],
+	[$row[3]],
+	[$row[4]],
+	[MkLink($row[8])],
+        [Img(	src    => "$IG::img_url/delete.gif",
+		title  => $lang{delete},
+		onlick => IG::JsConfirm( $lang{are_you_sure} ),
+		href   => "products?action=delexec&amp;".
+		                   "contactid=$on{contactid}&amp;".
+		                   "id=$row[0]&amp;".
+		                   "backto=history" ) ]
+		 );
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+##########################################################################
+##########################################################################
+sub proto
+ {
+  HtmlHead();
+  TaskHead(	title    => $lang{products_mng},
+		minwidth => 650 );
+  FormHead (	labelstyle=>'width:20%',
+		cgiaction=>'protoagg');
+
+  Input (	type=>"hiddens",
+		data=> {	backto		=>'',
+				contactid	=>'',
+				id		=>'',
+				docnotes	=>'',
+				filter_type	=>'',
+				filter_key	=>'' } );
+
+  Input (	show=>$lang{article},
+		type=>'select',
+		style=>'width: 500px',
+		data=>'SELECT id, id, shortdescription FROM articles '.
+		      'ORDER BY id', 
+		name=>'articleid');
+
+  Input (	show=>$lang{start_from},
+		type=>'date',
+		value=>$tv{today},
+		name=>'fromdate');
+
+  Input (	show=>$lang{due_date},
+		type=>'date',
+		name=>'todate');
+
+  Input (	show=>$lang{price},
+		type=>'text',
+		name=>'price',
+		size=>20,
+		maxlen=>20);
+
+  Input (	show=>$lang{unit_measure},
+		type=>'text',
+		name=>'measureunit',
+		value=>'Euro/Ton',
+		size=>20,
+		maxlen=>20);
+
+  Input (	show=>$lang{rebate},
+		type=>'text',
+		name=>'rebate',
+		size=>20,
+		maxlen=>20);
+
+  Input (	show=>$lang{document_reference},
+		type=>'text',
+		name=>'docid',
+		size=>20,
+		maxlen=>10);
+
+  Input (	show=>$lang{min_quantity},
+		type=>'text',
+		name=>'minquantity',
+		size=>20,
+		maxlen=>20);
+
+  Input (	show=>$lang{max_quantity},
+		type=>'text',
+		name=>'maxquantity',
+		size=>20,
+		maxlen=>20);
+
+  Input (	show=>$lang{delivery_modality},
+                type=>'basictable',
+                zerovalue=>'true',
+                table=>'products_delivery_mode',
+		name=>'deliverymode');
+
+  Input (	show=>$lang{delivery_time},
+                type=>'basictable',
+                zerovalue=>'true',
+                table=>'products_delivery_time',
+		name=>'deliverytime');
+
+  Input (	show=>$lang{packaging},
+                type=>'basictable',
+                zerovalue=>'true',
+                table=>'products_packaging',
+		name=>'packaging');
+
+  Input (	show=>$lang{description},
+		type=>'textarea',
+		name=>'description',
+		style=>'width:500px; height:40px;' );
+
+  Input (	show=>$lang{additional_information},
+		type=>'textarea',
+		name=>'note',
+		style=>'width:500px; height:60px;' );
+
+  Input (	type=>'submit',
+		value=>$lang{save});
+
+  FormFoot();
+  Footer();
+  1;
+ }
+
+##########################################################################
+##########################################################################
+sub protoagg
+ {
+  if (!$on{price})
+   { push @IG::errmsg, "$lang{Err_price}"; }
+ 
+  if (!($on{fromdate}=CkDate($on{fromdate})))
+   { push @IG::errmsg, "$lang{Err_start_date}";}
+ 
+  if (!($on{todate}=CkDate($on{todate},1)))
+   { push @IG::errmsg, "$lang{Err_due_date}\n";}
+ 
+  proto() && return if @IG::errmsg;
+
+  if (!$on{description})
+   {
+    DbQuery("SELECT shortdescription FROM articles ".
+	    "where id='".DbQuote($on{articleid})."'");
+    $on{description} = FetchRow();
+   }
+
+  $on{id} ||= MkId();
+
+  QuoteParams();
+  DbQuery(query =>[( "DELETE from prices where id='$in{id}'",
+
+		     "INSERT INTO prices VALUES ('$in{id}', '$in{description}',".
+		     " '$in{price}','$in{fromdate}', '$in{todate}',".
+	 	     " '$in{articleid}', '$in{rebate}', '$in{contactid}',".
+		     " '$in{docid}', '$in{docnotes}', '$in{measureunit}',".
+		     " '$in{note}', '$in{minquantity}', '$in{maxquantity}',".
+		     " '$in{deliverymode}', '$in{deliverytime}',".
+		     " '$in{packaging}')",
+
+		     "update contacts set pricelistupdate = '$tv{today}' ".
+		     "where contactid = '$in{contactid}'"
+		   )] );
+
+  LogD( "linked to contact $on{contactid} code $on{articleid}",
+	"insert",
+	"prices",
+	$on{id});
+  $on{backto} ||= 'revisione';
+
+  IG::Redirect( "products?".
+		"action=$on{backto}&amp;".
+		"contactid=$on{contactid}&amp;".
+		"filter_type=$on{filter_type}&amp;".
+		"filter_key=" . MkUrl($on{filter_key}) );
+ }
+
+############################################################################
+############################################################################
+sub modiproto
+ {
+  DbQuery("SELECT * FROM prices where id='".DbQuote($on{id})."'");
+  (	$on{id},
+	$on{description},
+	$on{price},
+	$on{fromdate},
+	$on{todate},
+	$on{articleid},
+	$on{rebate},
+	$on{contactid},
+	$on{docid},
+	$on{docnotes},
+	$on{measureunit},
+	$on{note},
+	$on{minquantity},
+	$on{maxquantity},
+	$on{deliverymode},
+	$on{deliverytime},
+	$on{packaging}	) = FetchRow();   
+
+  proto();
+ }
+
+#############################################################################
+#############################################################################
+sub delexec
+ {
+  DbQuery("delete from prices where id='".DbQuote($on{id})."'");
+  LogD("linked to contact $on{contactid}","delete","prices",$on{id});
+
+  $on{backto} ||= 'revisione';
+  IG::Redirect( "products?".
+		"action=$on{backto}&amp;".
+		"contactid=$on{contactid}" );
+ } 
+
+#############################################################################
+#############################################################################
+sub _prices_list
+ {
+  my $noteslink;
+  my $counter = 0;
+
+  HTitle(level => 3,
+	 style => 'clear:both; margin-bottom:20px;',
+	 title => $lang{prices});
+
+  if ( CheckPrivilege('products_edit') )
+   {
+    Input (	type		=> 'checkbox',
+		labelstyle	=> 'background: transparent; width: auto',
+		show		=> $lang{update_prices},
+		name		=> 'updateprices');
+
+    Input (	type		=> 'checkbox',
+		labelstyle	=> 'background: transparent;width: auto',
+		float		=> 'left',
+		show		=> $lang{update_reference},
+		name		=> 'updatereference');
+   }
+
+  TaskListMenu (
+		[$lang{description}],
+		['UM'],
+		[$lang{price}],
+		[$lang{rebate}]
+		);
+
+  DbQuery("SELECT description, price, rebate, id, docid,".
+	  " articleid, measureunit, note ".
+	  "FROM prices ".
+	  "WHERE contactid = '".DbQuote($on{contactid})."'".
+	  " and todate > '$tv{today}'");
+
+  while( my @row = FetchRow() )
+   {
+    if ( $on{$row[3]} )
+     {
+	PrOut '<td>';
+
+	Input (	type=>'text',
+		name=>"desc$counter",
+		size=>40,
+		maxlen=>150,
+		value=>$row[0]);
+
+	PrOut "</td><td>$row[6]</td><td>";
+
+	Input (	type=>'text',
+		name=>"price$counter",
+		size=>10,
+		value=>$row[1]);
+
+	PrOut '</td><td>';
+
+	Input (	type=>'text',
+		name=>"rebate$counter",
+		size=>10,
+		value=>$row[2]);
+
+	PrOut "</td></tr><td colspan=4>$lang{notes}<br>";
+
+	Input (	type=>'textarea',
+		fieldstyle=>'width: 100%',
+		style=>'width:100%; height:60px;',
+		name=>"nota$counter",
+		value=>$row[7]);
+
+	PrOut "<br><br></td></tr>\n";
+	Input (	type=>'hidden', name=>"ids$counter",	value=>$row[3]);
+	Input (	type=>'hidden', name=>$row[3],		value=>$row[3]);
+	Input (	type=>'hidden', name=>"measureunit$counter",value=>$row[6]);
+	Input (	type=>'hidden', name=>"id$counter",	value=>$row[5]);
+	++$counter;
+
+	if ( $row[4] && $noteslink !~ /$row[4]/ )
+	 { $noteslink .= " $row[4]"; } 
+     }
+   }
+  PrOut '</table>';
+
+  Input (	type => 'hidden',
+		name => 'quanti',
+		value=> $counter );
+
+  Input (	type=>'hidden',
+		name=>'noteslink',
+		value=>$noteslink);
+ }
+
+#############################################################################
+#############################################################################
+sub _prices_update
+ {
+  my ($desc, $ids, $price, $id, $rebate, $nota, $measureunit);
+  $on{priceshtable} = "<table width=\"100%\" border=1 cellspacing=0 cellpadding=0>\n";
+  $on{priceshtable} .= "<tr><td><b>$lang{code}</td>
+			<td><b>$lang{description}</td>
+			<td><b>UM</tD><td><b>$lang{price}</td></tr>\n";
+
+
+  ## Adjust old prices expiration date
+  my $date = IG::SumDate(IG::GetValuesByDate($on{fromdate}),-1);
+
+  for my $counter( 0..$on{quanti}+2 )
+   {
+    $desc   = "desc$counter";
+    $ids    = "ids$counter";
+    $price  = "price$counter";
+    $id     = "id$counter";
+    $rebate = "rebate$counter";
+    $nota   = "nota$counter"; 
+    $measureunit = "measureunit$counter";
+
+    if ($on{$desc})
+     {
+      if (!$on{updateprices})
+       {
+        if ($on{updatereference})
+         {
+          QuoteParams();
+          DbQuery("update prices set docid='$in{docid}' ".
+		  "where id='$in{$ids}'");
+          LogD('set docid','update','prices',$on{$ids});
+         }
+       }
+      else
+       {
+        my $price_id = MkId();
+        QuoteParams();
+        DbQuery(query=>[( "UPDATE prices set todate='$date' ".
+			  "where id='$in{$ids}'",
+
+			  "INSERT INTO prices VALUES ('$price_id', '$in{$desc}',".
+		  	  " '$in{$price}','$in{fromdate}', '$in{todate}', '$in{$id}',".
+			  " '$in{$rebate}', '$in{contactid}', '$in{docid}',".
+			  " '$in{$nota}', '$in{$measureunit}','','','','','','')"
+			)] );
+
+        LogD("revision from $on{$ids}", 'insert', 'prices', $price_id);
+       }
+
+      $on{priceshtable} .= "<tr><td nowrap><b>$on{$id}</td>
+				<td>$on{$desc}<hr>$on{$nota}</td>
+				<td nowrap>$on{$measureunit}</td>
+				<td nowrap align=right>$on{$price}</td>
+			    </tr>\n";
+
+      $on{pricesvtable} .= "<table border=1 cellspacing=0 cellpadding=0 width=100%>
+			<td><b>$lang{code}</td>
+			<td align=right width=100%>$on{$id}</td><tr>
+			<td><b>$lang{description}</td>
+			<td align=right>$on{$desc}</td><tr>
+			<td><b>$lang{price}</td>
+			<td align=right>$on{$measureunit} $on{$price}</td><tr>
+			<td><b>$lang{delivery}</td>
+			<td align=right>&nbsp;$on{consegna}</td><tr>
+			<td><b>Produttore</td>
+			<td align=right>&nbsp;</td><tr>
+	 		<td><b>Imballo</td>
+			<td align=right>&nbsp;</td><tr>
+ 			<td><b>Quantita' presunta</td>
+			<td align=right>&nbsp;</td><tr>
+ 			<td><b>$lang{infos}</td>
+			<td align=right>&nbsp;$on{$nota}</td><tr>
+ 			</table><br>\n";
+     }
+   }
+
+  ## Adjust prices list date
+  DbQuery("update contacts set pricelistupdate = '$tv{today}' ".
+	  "where contactid = '".DbQuote($on{contactid})."'");
+  $on{priceshtable}.="</table>\n";
+ }
+
+#############################################################################
+#############################################################################
+sub offproto
+ {
+  $on{updatereference} = 'on' if $on{offer} eq $lang{make_offer};
+
+  HtmlHead();
+  TaskHead();
+
+  FormHead(cgiaction=>'offprotoagg');
+
+  Input (type=>'template',
+	 name=>'tip',
+	 show=>$lang{document_type},
+         dir=> $IG::htdocs_dir .$IG::S.
+               $IG::default_lang{offers} .$IG::S.
+               $IG::default_lang{templates} . $IG::S );
+
+  Input (type=>'text',
+         pattern=>'\d\d\d\d\d\d.\d\d|^$',
+	 show=>$lang{protocol_number},
+	 name=>'docid');
+
+  Input (type=>'logins',
+	 show=>$lang{rif},
+	 name=>'owner');
+
+  Input (type=>'sendmode');
+
+  Input (type=>'contactfinder',
+	 extraselection=>1,
+	 show=>$lang{receiver});
+
+  Input (type=>'select',
+	 show=>$lang{category},
+	 name=>'category',
+	 data=>\%IG::offers_category);
+
+  Input (type=>'text',
+	 name=>'days',
+	 size=>3,
+	 pattern=>'\d+',
+	 show=>$lang{days_notice},
+	 value=>'0');
+
+  Input (type=>'date',
+	 name=>'issue',
+	 value=>$tv{today},
+	 show=>$lang{issue});
+
+  Input (type=>'date',
+	 name=>'fromdate',
+	 value=>$tv{today},
+	 show=>$lang{start_from});
+
+  Input (type=>'date',
+	 name=>'todate',
+	 value=>$tv{end_year},
+	 show=>$lang{due_date});
+
+  Input (   show      => $lang{amount},
+            name      => 'amount',
+            size      => 20,
+            maxlen    => 30,
+            type      => 'currency');
+
+  Input(    name      => 'npa',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 50,
+            show      => $lang{archive_position});
+
+  Input (type=>'text',
+	 show=>$lang{result},
+	 name=>'note',
+	 size=>50);
+
+  Input (type=>'textarea',
+         style=>'width:300px; height:40px;',
+	 show=>$lang{notes},
+	 name=>'note1');
+
+  _prices_list();
+
+  Input (	type=>'submit',
+		value=>$lang{save});
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub offprotoagg
+ {
+  $on{note1} .= ( $on{note1} ? ' - ' : '').
+                "Revisiona ns off. nr. ". #XXX2TRANSLATE
+		DbQuote($on{noteslink}) if $on{noteslink};
+ 
+  if (!($on{issue} = CkDate($on{issue})))
+   { push @IG::errmsg, $lang{Err_issue}; }
+ 
+  if (!($on{fromdate} = CkDate($on{fromdate})))
+   { push @IG::errmsg, $lang{Err_start_date}; }
+ 
+  if (!($on{todate} = CkDate($on{todate},1)))
+   { push @IG::errmsg, $lang{Err_due_date}; }
+ 
+  push @IG::errmsg, IG::ContactFinder('receiver');
+ 
+  offproto() && return if @IG::errmsg;
+ 
+  $on{docid} ||= IG::MkLastNum('offers');
+  $on{amount}  .= '00' if $on{amount} !~ /$IG::decimal_separator/;
+  $on{amount}  =~ s/[^\d]//g;
+ 
+  QuoteParams();
+  DbQuery(query =>[( "DELETE FROM offers where id = '$in{docid}'",
+
+		     "INSERT INTO offers VALUES ('$in{docid}', '$in{issue}',".
+		     " '$in{contactname}', '$in{note}', '$in{owner}',".
+	 	     " '$in{todate}', '$in{category}', '$in{days}', 'N',".
+	 	     " '$in{issue}', '$in{note1}','','','', $in{contactid},".
+	 	     " '$in{npa}', '$in{amount}')"
+		   )] );
+ 
+  LogD('from products', 'insert', 'offers', $on{docid});
+ 
+  $on{note} = $on{note1};
+  
+  ## Adjust prices document references
+  _prices_update();
+ 
+  ## parsing template
+  if ( $on{tip} ne 'Only_protocol' )
+   {
+    IG::ParseDoc( 'offers',
+                  $on{tip},
+                  $on{docid} ) or return;
+   }
+ 
+  IG::Redirect( 'offers' );
+ }
+
+#############################################################################
+#############################################################################
+sub lettproto
+ {
+  $on{updatereference} = 'on' if $on{letter} eq $lang{make_letter};
+
+  HtmlHead();
+  TaskHead();
+
+  FormHead( cgiaction=>'lettprotoagg' );
+
+  Input ( show=>$lang{document_type},
+	  name=>'tip',
+	  dir=> $IG::htdocs_dir . $IG::S.
+	        $IG::default_lang{letters} .$IG::S.
+	        $IG::default_lang{templates} .$IG::S,
+	  type=>'template');
+
+  Input ( show=>$lang{protocol_number},
+	  name=>'docid',
+          pattern=>'\d\d\d\d\d\d.\d\d|^$',
+          type=>'text');
+
+  Input ( show=>$lang{rif},
+	  name=>'owner',
+	  type=>'logins');
+
+  Input ( type=>'sendmode');
+
+  Input ( show=>$lang{receiver},
+	  extraselection=>1,
+	  type=>'contactfinder');
+
+  Input ( show=>$lang{issue},
+	  type=>'date',
+	  value=>$tv{today},
+	  name=>'issue');
+
+  Input ( show=>$lang{start_from},
+	  type=>'date',
+	  value=>$tv{today},
+	  name=>'fromdate');
+
+  Input ( show=>$lang{due_date},
+	  type=>'date',
+	  value=>$tv{end_year},
+	  name=>'todate');
+
+  Input ( show=>$lang{reserve},
+	  type=>'select',
+	  name=>'sharemode',
+	  data=>[(	['0',$lang{public}],
+			['1',$lang{private}]
+		  )] );
+
+  Input(    name      => 'npa',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 50,
+            show      => $lang{archive_position});
+
+  Input(    name      => 'docref',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 30,
+            show      => $lang{document_reference});
+
+  Input ( show=>$lang{notes},
+	  type=>'textarea',
+	  name=>'note',
+	  rows=>3,
+	  cols=>50);
+
+  _prices_list();
+
+  Input ( show=>$lang{save},
+	  type=>'submit');
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub lettprotoagg
+ {
+  if (!($on{issue} = CkDate($on{issue})))
+   { push @IG::errmsg, $lang{Err_issue}; }
+
+  if (!($on{fromdate} = CkDate($on{fromdate})))
+   { push @IG::errmsg, $lang{Err_start_date}; }
+
+  if (!($on{todate} = CkDate($on{todate},1)))
+   { push @IG::errmsg, $lang{Err_due_date}; }
+
+  push @IG::errmsg, IG::ContactFinder('receiver');
+
+  lettproto() && return if @IG::errmsg;
+
+  ## INSERISCE NEL DATABASE
+  $on{docid} ||= IG::MkLastNum('letters');
+  $on{note}  ||= $on{tip};
+ 
+  QuoteParams();
+  DbQuery(query =>[( "DELETE FROM letters where id = '$in{docid}'",
+
+		     "INSERT INTO letters VALUES ('$in{docid}', '$in{issue}',".
+		     " '$in{contactname}', '$in{owner}', '$in{note}',".
+		     " $in{sharemode}, '$auth_user', '$in{contactid}',".
+		     " '$in{npa}', '$in{docref}')"
+		   )] );
+  LogD("", "insert", "letters", $on{docid});
+
+  ## Adjust prices document references
+  _prices_update();
+ 
+  ## parsing template
+  if ( $on{tip} ne 'Only_protocol' )
+   {
+    IG::ParseDoc( 'letters',
+                  $on{tip},
+                  $on{docid} ) or return;
+   }
+
+  IG::Redirect( 'letters' );
+ }
+
+#############################################################################
+#############################################################################
+sub ordproto
+ {
+  $on{updatereference} = 'on'  if $on{order} eq 'Elabora Ordine';
+
+  HtmlHead();
+  TaskHead();
+
+  FormHead(cgiaction=>'ordprotoagg');
+
+  Input (type=> 'template',
+	 name=> 'tip',
+	 show=> $lang{document_type},
+         dir => $IG::htdocs_dir .$IG::S.
+                $IG::default_lang{orders}. $IG::S.
+                $IG::default_lang{templates}. $IG::S );
+
+  Input (type=>'text',
+	 show=>$lang{protocol_number},
+	 pattern=>'\d\d\d\d\d\d.\d\d|^$',
+	 name=>'docid');
+
+  Input (type=>'logins',
+	 show=>$lang{rif},
+	 name=>"owner");
+
+  Input (type=>'sendmode');
+
+  Input (type=>'contactfinder',
+	 show=>$lang{vendor});
+
+  Input (type=>'text',
+	 name=>'docref',
+	 size=>'15',
+	 show=>$lang{order_reference});
+
+  Input (type=>'date',
+	 name=>'docissue',
+	 value=>$tv{today},
+	 show=>$lang{issue});
+
+  Input (type=>'date',
+	 name=>'duedate',
+	 show=>$lang{delivery});
+
+  Input (type=>'date',
+	 name=>'fromdate',
+	 value=>$tv{today},
+	 show=>$lang{start_from});
+
+  Input (type=>'date',
+	 name=>'todate',
+	 value=>$tv{end_year},
+	 show=>$lang{due_date});
+
+  Input(    name      => 'npa',
+            type      => 'text',
+            style     => 'width:300;',
+            maxlen    => 50,
+            show      => $lang{archive_position});
+
+  Input (type=>'textarea',
+         style=>'width:300px; height:40px;',
+	 show=>$lang{request_reference},
+	 name=>'note');
+
+  _prices_list();
+
+  Input (type=>'submit',
+	 name=>'submit',
+	 show=>$lang{save});
+
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub ordprotoagg
+{
+ if (!($on{docissue}=CkDate($on{docissue})))
+  {
+   push @IG::errmsg, $lang{Err_issue};
+   $lang{issue} = Blush($lang{issue});
+  }
+
+ if (!($on{fromdate}=CkDate($on{fromdate})))
+  { push @IG::errmsg, $lang{Err_start_date}; }
+
+ if (!($on{duedate}=CkDate($on{duedate},1)))
+  { push @IG::errmsg, $lang{Err_delivery}; }
+
+ if (!($on{todate}=CkDate($on{todate})))
+  { push @IG::errmsg, $lang{Err_due_date}; }
+
+  push @IG::errmsg, IG::ContactFinder('vendor');
+ 
+  ordproto() && return if @IG::errmsg;
+
+  if (!$on{docid}) 
+   {
+    my $nuovo;
+    DbQuery("SELECT id FROM orders ".
+	    "where issue>='$tv{start_year}' and issue<='$tv{end_year}' ".
+	    "ORDER BY id desc");
+    ($nuovo) = FetchRow();
+    $nuovo ||= "900000.$tv{ye}";
+    $nuovo =~ /(\d)(\d\d\d\d\d)\.(\d\d)/i;
+    $on{docid} = (($1.$2)+1).".".$3;
+    $on{docref} ||= ($2+1).".".$3;
+   }
+
+  QuoteParams();
+  DbQuery(query =>[( "DELETE FROM orders where id='$in{docid}'",
+
+		     "INSERT INTO orders VALUES ('$in{docid}',".
+		     " '$in{docissue}', '$in{order}', '$in{contactname}',".
+		     " '$in{note}', '$in{owner}', '$in{todate}', 'N',".
+		     " '$in{duedate}','$in{contactid}','$in{npa}')"
+		  )] );
+
+  LogD("", "insert", "order", $on{docid});
+
+  ## Adjust prices document references
+  _prices_update();
+
+  ## parsing template
+  if ( $on{tip} ne 'Only_protocol' )
+   {
+    IG::ParseDoc( 'orders',
+                  $on{tip},
+                  $on{docid} ) or return;
+   }
+
+  IG::Redirect( 'orders' );
+ }
+
+##########################################################################
+##########################################################################
+sub report
+ {
+  DbQuery("SELECT contactname, address1, city1, zip1, category, contactid ".
+	  "FROM contacts where contactid = '".DbQuote($on{contactid})."'");
+  my @row = FetchRow();
+  $IG::clr{bg}           =
+  $IG::clr{bg_link}      =
+  $IG::clr{bg_list}      =
+  $IG::clr{bg_menu_task} = 'white';
+  HtmlHead();
+
+  PrOut <<FINE;
+<TABLE style="width: 21cm"><TR><TD>
+$IG::soc_logo<br><br>
+<TABLE BORDER=0 COLS=2 WIDTH="100%" >
+<TR>
+<TD VALIGN=TOP><FONT SIZE=-1>$IG::soc_address</FONT>
+<BR><FONT SIZE=-1>$IG::soc_cap $IG::soc_city $IG::soc_prov</FONT>
+<BR><FONT SIZE=-1>Tel&nbsp; $IG::soc_tel</FONT>
+<BR><FONT SIZE=-1>E-mail: $IG::soc_email</FONT>
+<P><FONT SIZE=-1>&nbsp;</FONT></TD>
+
+<TD VALIGN=TOP>
+<BR><B>$row[0]</B>
+<BR><B>$row[1]</B>
+<BR><B>$row[3] $row[2]</B>
+</TD>
+</TR>
+<TR><TD><B><U><FONT SIZE=-1></FONT></U></B>
+<BR><FONT SIZE=-1></FONT>
+<BR><FONT SIZE=-1></FONT></TD>
+
+<TD ALIGN=LEFT VALIGN=BOTTOM><B><U></FONT></U></B></TD>
+</TR>
+</TABLE>
+
+<br><br><br>
+<table border=2 width="100%">
+ <td align=center><b>$lang{make_summary}</b></td></tr>
+</table>
+<br><br><br>
+FINE
+
+  TaskListMenu( [$lang{code}],
+		[$lang{description}],
+		[$lang{price}],
+		[$lang{rebate}],
+		[$lang{start_from}],
+		[$lang{due_date}],
+		[$lang{document_reference}]);
+
+  QuoteParams();
+  my $filter_query = " and $in{filter_type} ~* '$in{filter_key}'" if $in{filter_key};
+  DbQuery("SELECT * FROM prices where contactid = '$in{contactid}'".
+	  " and todate>'$tv{today}'$filter_query order by articleid");
+
+  while (my @row = FetchRow())
+   {
+    if ( !CkDate($row[4]) )
+     { $row[4] = "nuove revisioni"; }
+
+    if (CheckPrivilege("products_edit"))
+     {
+      $row[5]="<a href=\"products?action=modiproto&amp;id=$row[0]\">$row[5]</a>";
+     }
+
+    TaskListItem (
+			[$row[5]],
+			[$row[1]],
+			["$row[2] $row[10]"],
+			[$row[6]],
+			[$row[3]],
+			[$row[4]],
+			[MkLink($row[8])] );
+   }
+  TaskListFoot();
+  PrOut "</TD></TR></TABLE>";
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub findshow
+ {  
+  HtmlHead();
+  if ($auth_user ne "guest")
+   {
+    HLayer( bottom_space => 0,
+            right_layers=>[(
+		    FormHead (	name=>'navi',
+				method=>'get',
+				target=>'mainf',
+				autofocus=>'false',
+				cgiaction=>'findexec',
+                                labelstyle=>'border:0px; width:auto;',
+				float=>'left' ),
+
+		    Input (	type=>'findable' ),
+
+		    Input (	type=>'select',
+				name=>'fieldtofind',
+				data=>[(['id',		$lang{with_code}],
+					['contactname',	$lang{with_header}],
+					['description',	$lang{with_description}],
+					['note',	$lang{with_notes}])]),
+
+		    Input (	type=>'text',
+				name=>'keytofind',
+				value=>$IG::cookie{lastsearch},
+                                focus => 'true',
+                                style=>'width:100px; margin-right: -5px;',
+				onblur=>"document.cookie='lastsearch=' + escape(this.value)"),
+
+		    Input (	type=>'image',
+				name=>$lang{find},
+				src=>"$IG::img_url/${IG::tema}search.gif",
+				alt=>$lang{find}),
+				
+		    FormFoot()
+		)]
+	 );
+   }
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub findexec
+ {
+  my ($lun, $query, @soc, $counter);
+
+  if ($on{fieldtofind} eq 'contactname')
+   {
+    IG::Redirect( "contacts?".
+		  "action=findexec&amp;".
+		  "linktoproducts=1&amp;".
+		  "method=I&amp;".
+		  "fieldtofind=name&amp;".
+		  "keytofind=" . MkUrl($on{keytofind}) );
+    return;
+   }
+
+  $IG::set_cookie{lastsearch}=$on{keytofind};
+  HtmlHead( shortcuts => _short_cuts() );
+  TaskHead( title     => $lang{find_products},
+	    width     => '100%');
+  HLayer( MkButton( text => $lang{articles_mng},
+                    link => "articles"),
+
+          MkButton( text => $lang{back_to_list},
+                    link => "products"),
+        );
+
+  TaskMsg("$lang{find_products} - $lang{find}: <b>$on{keytofind}</b>",4);
+
+  ## Build Query
+  $lun = length($on{keytofind});
+  $on{keytofind} = uc($on{keytofind});
+
+  QuoteParams();
+  if (length($on{keytofind}) <2)
+   {
+    push @IG::errmsg, $lang{Err_find};
+    $query = '1=0';
+   }
+  elsif ($on{fieldtofind} eq "id")
+   { $query="substr(articleid,1,$lun)='$in{keytofind}'"; }
+  elsif ($on{fieldtofind} eq "description")
+   { $query="description~*'$in{keytofind}'";}
+  elsif ($on{fieldtofind} eq "note")
+   { $query="note~*'$in{keytofind}'";}
+
+  ##XXX2FIX ORROR! need a relation
+  DbQuery("SELECT contactid, contactname FROM contacts ".
+	  "where pricelistflag='s' and contacttype<>8");
+  my @row;
+  $soc[$row[0]] = $row[1] while @row = FetchRow();
+ 
+  DbQuery("SELECT * FROM prices where $query and todate>'$tv{today}' ".
+	  "order by contactid");
+
+  TaskListMenu (
+		[$lang{contact}],
+		[$lang{code}],
+		[$lang{description}],
+		[$lang{price}],
+		[$lang{start_from}],
+		[$lang{due_date}],
+		[$lang{document_reference}]
+		 );
+
+  while ( my @row = FetchRow() )
+     {
+      ++$counter;
+      if ($soc[$row[7]])
+       {
+        TaskListItem
+	 (
+	  [$soc[$row[7]],
+	   "products?action=revisione&amp;contactid=$row[7]"],
+	  [$row[5],
+	   "products?action=modiproto&amp;id=$row[0]",
+	   "nowrap"],
+	  ["$row[1]<hr><font color=gray>$row[11]"],
+	  ["$row[2] $row[10]"],
+	  [$row[3]],
+	  [$row[4]],
+	  [MkLink($row[8])]
+	 );
+       }
+     }
+  push @IG::errmsg, $lang{no_items} if !$counter && length($on{keytofind}) >1;
+  LogD( $IG::query_string, 'search', 'search_products', undef);
+  TaskListFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+##XXX2TEST
+sub report1
+ {
+  my ($lun, $query, @soc, $counter);
+
+  HtmlHead();
+  TaskHead( title=>$lang{find_products},
+	    width=>'100%');
+  HLayer(
+	 MkButton( text => $lang{articles_mng},
+	           link => "articles"),
+
+         MkButton( text => $lang{back_to_list},
+                   link => "products"),
+	);
+
+  DbQuery("select prices.articleid, contacts.contactname, prices.price, ".
+          "prices.measureunit, prices.description, prices.note ".
+          "from prices ".
+          "left join contacts ".
+          "on prices.contactid = contacts.contactid ".
+          "where contacts.contacttype=4 ".
+          " and prices.todate >= '$tv{today}' ".
+          "order by prices.articleid, contacts.contactname");
+
+  TaskListMenu (
+		[$lang{code}],
+		[$lang{contact}],
+		[$lang{description}],
+		[$lang{price}],
+		['UM']
+		 );
+ 
+  my $old_code;
+  while (my @row = FetchRow())
+     {
+      ++$counter;
+      if ($row[0] eq $old_code)
+       { $row[0] = ''; }
+      else
+       { $old_code = $row[0]; }
+
+      TaskListItem
+	 (
+	  [$row[0]],
+	  [$row[1]],
+	  ["$row[4]<br> $row[5]"],
+	  [$row[2]],
+	  [$row[3]],
+         );
+     }
+
+  TaskListFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }
+
+sub Header 
+ {
+  HtmlHead(	shortcuts=>_short_cuts() );
+  TaskHead(	title=>$lang{products_mng},
+		width=>'100%');
+ }

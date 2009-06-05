@@ -1,0 +1,677 @@
+#! /usr/bin/perl
+# Procedure: checkshow
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+use IG::MimeBase64;
+use IG::TimeLocal;
+use IG::MailPOP3Client;
+
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	checkmsg	=> sub { $on{ajax} || CheckPrivilege() },
+		showmsg		=> sub { CheckPrivilege() },
+		nopopup		=> sub { CheckPrivilege() },
+		default_action	=> sub { CheckPrivilege() } );
+
+############################################################################
+############################################################################
+sub default_action
+ {
+  HtmlHead();
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub checkmsg
+ {
+  ## we need s1 and s2 value to avoid cache results. We will use s1 
+  ## when we haven't any active popup, and s2 when a popup is already showen.
+  ## By 'jump' we can check some things each 120+120 seconds.
+
+  my $onload;
+  my $icon;
+  my $seconds      = time;
+  my $flags        = "s1=$seconds" . ( !$on{jump} ? '&amp;jump=1' : '');
+  my $is_ajax      = $on{ajax} || 0;
+  my $page_timeout = 120;
+  my $update_url   = "checkmsg?action=checkmsg&amp;$flags";
+
+  ## Check session in ajax context ###########################################
+  if ( $is_ajax && $auth_user eq 'guest' )
+   {
+    $icon         = $lang{alert_timeout};
+    my $link      = "igsuite?".
+                    "action=summary&amp;".
+                    "errmsg=". MkUrl( $lang{alert_timeout} );
+    $page_timeout = 60;
+    $update_url   = $link;
+    $onload       = "window.top.location = '$link';";
+   }
+
+  ## Check session timeout ###################################################
+  elsif (    $IG::cookie{igsuiteid}
+       && ( -M $IG::logs_dir.
+               $IG::S.
+               $IG::cookie{igsuiteid} ) > ( $IG::session_timeout - (0.1/24) ) )
+   {
+    $icon         = $lang{alert_timeout};
+    my $link      = "igsuite?".
+                    "action=summary&amp;".
+                    "errmsg=". MkUrl( $lang{alert_timeout} );
+    $page_timeout = 60;
+    $update_url   = $link;
+    $onload       = "window.top.location = '$link';";
+    
+    ## Disconnect user from IG
+    IG::Logout();
+   }
+
+  ## Check chat invite #######################################################
+  elsif ( -e "$IG::user_dir${S}igchats" && CheckPrivilege('igchats_view') )
+   {
+    my $local_time = time;
+
+    ## read chat invitation
+    open (DAT, '<', "$IG::user_dir${S}igchats")
+      or die("Can't read from '$IG::user_dir${S}igchats'.\n");
+
+    chomp(my $user = <DAT> || 'guest');
+    chomp(my $room = <DAT> || 'Hall');
+    close(DAT);
+
+    ## check if invitation is still valid
+    DbQuery("select username, lastmsg from chats_users ".
+            "where room='$room' and username='$user'");
+    my ($_chat_username, $_chat_lastmsg) = FetchRow();
+
+    if ( $_chat_username && (($local_time - $_chat_lastmsg) < 90) )
+     {
+      $icon = Img( href   => IG::ConfigParam('igchats.window_target') eq 'same'
+                          ?  'igchats'
+                          :  "javascript:winPopUp('igchats',650,400,'igchatspanel')",
+                   target => 'mainf',
+                   src    => "$IG::img_url/new_chat_invitation.gif",
+                   title  => $lang{chat_invitation} );
+
+      $page_timeout = 60;
+      $update_url   = "checkmsg?action=checkmsg&amp;s2=$seconds";
+      
+      $onload       = "winPopUp('checkmsg?".
+                                       "action=showmsg&amp;".
+                                       "msg=". MkUrl($lang{chat_invitation}).
+                                       "&amp;tipo=igchats',".
+				"350,170,'MsgAlert');" if !$on{s2};
+     }
+    else
+     {
+      ## delete chat invitation
+      IG::FileUnlink("$IG::user_dir${S}igchats")
+       or die("Can't delete '$IG::user_dir${S}igchats'. Check permissions.\n");
+     }
+   }
+
+  ## Check new isms messages #################################################
+  elsif ( -e "$IG::user_dir${S}isms" )
+   {
+    $icon = Img( href   => 'isms?recheck=1',
+                 target => 'mainf',
+                 src    => "$IG::img_url/new_isms.gif",
+                 title  => $lang{new_isms} );
+
+    $page_timeout   = 60;
+    $update_url     = "checkmsg?action=checkmsg&amp;s2=$seconds";
+    $onload         = "winPopUp('checkmsg?".
+                                         "action=showmsg&amp;".
+                                         "msg=".MkUrl($lang{new_isms})."&amp;".
+                                         "tipo=isms',".
+				"350,170,'MsgAlert');" if !$on{s2};
+   }
+   
+  ## Check new e-mail messages ###############################################
+  elsif (   CheckPrivilege('webmail_view')
+         && ( -e "$IG::user_dir${S}email_alert" || _ck_new_email() ) )
+   {
+    $icon = Img( href  => "javascript:winPopUp('webmail?".
+                          "action=getnewmessages',350,170,'MsgAlert');",
+                 src   => "$IG::img_url/new_email.gif",
+                 title => $lang{new_email});
+                 
+    $page_timeout    = 60;
+    $update_url      = "checkmsg?action=checkmsg&amp;s2=$seconds";
+    $onload          = "winPopUp('checkmsg?".
+                                          "action=showmsg&amp;".
+                                          "msg=".MkUrl($lang{new_email}).
+                                          "&amp;tipo=email_msgs',".
+				 "350,170,'MsgAlert');" if !$on{s2};
+   }
+
+  ## Check calendar events to popup ##########################################
+  else
+   {
+    my $msg;
+    my $day = IG::GetDayByDate( $tv{day}, $tv{month}, $tv{year} );
+
+    DbQuery("SELECT starttime, endtime, eventtext, activepopup,".
+            " popupstatus, eventid ".
+	    "FROM calendar ".
+	    "WHERE activepopup > 0".
+	    " and startdate='$tv{today}'".
+	    " and popupstatus <> 1".
+	    " and eventtype <> 5".
+	    " and (touser='$auth_user' or touser='all')".
+	    " and (day=$tv{day} or day=0)".
+	    " and (month=$tv{month} or month=0)".
+	    " and (year=$tv{year} or year=0)".
+	    " and (weekday=$day or weekday=8) ".
+	    "order by starttime");
+
+    while ( my @row = FetchRow() )
+     {
+      my $_sms_reminder;
+      
+      if ( $row[3] > 3600 )
+       {
+        $_sms_reminder++;
+        $row[3] /= 100;
+       }
+      
+      my $event_time = Time::Local::timelocal( 0,
+				               substr( $row[0], -2, 2 ),
+				               substr( '0'.$row[0], -4, 2 ),
+				               $tv{day},
+				               ($tv{month}-1),
+				               $tv{year} );
+
+      next if ($event_time-$row[3]) > time || $event_time < time;
+
+      $row[0] = substr( '0'.$row[0], -4, 2 ) . ':' . substr( $row[0], -2, 2);
+      my $event_msg = "$row[0] - $lang{calendar_event}<br>".
+	              "$lang{description}: $row[2]<br><br>";
+
+      if ( $_sms_reminder )
+       {
+        require IG::SmsGateway;
+        my $obj = SmsGateway->new( $IG::plugin_conf{sms}{username},
+                                   $IG::plugin_conf{sms}{password});
+
+        my $credit = $obj->getcredit();
+        next if !$credit;
+
+        my $conn = DbQuery("select mobilephone from users ".
+                           "where login = '$auth_user'");
+        my $mobilephone = FetchRow($conn);
+        next if !$mobilephone;
+        $event_msg =~ s/<br>/ /g;
+
+        my $sender = $IG::plugin_conf{sms}{sender} || $IG::soc_tel;
+        my $sms_id = $obj->sendmsg( sender       => $sender,
+                                    receiver     => $mobilephone,
+                                    text         => $event_msg );
+
+        $conn = DbQuery("update calendar set popupstatus=1 ".
+                        "where eventid = '".DbQuote($row[5])."'" ) if $sms_id;
+       }
+      else
+       {
+        $msg .= $event_msg;
+
+        my $conn = DbQuery("update calendar set popupstatus=1 ".
+                           "where eventid = '".DbQuote($row[5])."'" );
+       }
+     }
+
+    if ($msg)
+     {
+      $onload = "javascript:winPopUp('checkmsg?action=showmsg&amp;".
+                "msg=$msg&amp;tipo=calendar',350,170,'MsgAlert');";
+
+      $icon   = Img( href   => 'calendar',
+		     target => 'mainf',
+		     src    => "$IG::img_url/alarmd.gif",
+		     title  => $lang{alert_events} );
+     }
+    elsif( _count_claimed_bookings() > 0 )
+     {
+      $icon = Img( href   => 'calendar?action=claimedbookings',
+                   target => 'mainf',
+                   src    => "$IG::img_url/booking_claimed.gif",
+                   title  => $lang{bookings_claimed_exist} );
+     }
+    elsif( _count_bookings_to_approve() > 0 )
+     {
+      $icon = Img( href   => 'calendar?action=bookingtoapprove',
+                   target => 'mainf',
+                   src    => "$IG::img_url/booking_toapprove.gif",
+                   title  => $lang{bookings_2approve_exist} );
+     }
+   }
+
+  if( !$is_ajax )
+   {
+    $onload = "onload=\"$onload\"" if $onload;
+    HtmlHead(	expire  => 60000000000, ##$page_timeout,
+		onevent => $onload,
+		align   => 'center');
+    PrOut "<div id=\"chkmsg_content\">";
+   }
+  else 
+   {
+    HttpHead( expires => 'now' );
+    $onload = "IG_TOEXEC: $onload TOEXECEND" if $onload;
+    PrOut "$onload\n"; ## first line of ajax response is the executable part
+    PrOut "IG_UPDATEURL: $update_url UPDATEURLEND\n" ## second line of ajax is the next URL to fetch
+   }
+   
+  ## record in a hidden div the update time of the frame. 
+  ## this value is checked by a JavaScript code in every IGSuite page.
+  ## (See IG::HtmlFoot())
+  PrOut "<div id=\"chkmsg_updatetime\" style=\"display:none\">".time."</div>";
+
+  ## Show current date & time
+  if (     !$icon
+        && $IG::browser ne 'mozilla-linux'
+	&& $IG::browser ne 'mozilla-win'
+	&& $auth_user ne 'guest'
+     )
+   {
+    my $extdate = ($tv{day}+0).
+		' '. substr($IG::months{$tv{month}}[0],0,3). " $tv{year}<br>".
+		$IG::days[$tv{wday}]." $tv{hours}:$tv{minuts}";
+
+    PrOut <<END;
+<div id="serverclock"
+     onclick="window.location.reload();"
+     style="font-size:11px;
+            cursor:pointer;
+            padding: 1px;
+            text-align: center;
+            line-height: 1em;
+            color:$IG::clr{font_menu_title};
+            background-color:$IG::clr{bg_menu_title}">
+     $extdate
+</div>
+END
+   }
+  else
+   {
+    ## Show Icon
+    PrOut $icon;
+   }
+
+  if ( !$is_ajax ) 
+   {
+    PrOut "</div>";
+    my $updateURLBase = "checkmsg?action=checkmsg&amp;";
+    PrOut <<END;
+<script language="javascript" type="text/javascript">
+
+var ajax_in_progress = 0;
+var connection_lost_alerted = 0;
+var updateURL = "$update_url";
+
+// Pre-load a lost connection icon
+connection_lost_img = new Image(30,30);
+connection_lost_img.src = '$IG::img_url/lost_connection.gif';
+
+function connectionLost()
+ {
+  var cL = "<img src='$IG::img_url/lost_connection.gif'" +
+           " alt='Connection Lost' title='Connection Lost'" +
+           " width=30 height=30>";
+  \$(chkmsg_content).innerHTML = cL;
+
+  if ( connection_lost_alerted == 0 )
+   {
+    alert('Server Connection Lost!');
+    connection_lost_alerted = 1;
+   }
+
+  ajax_in_progress = 0;
+ }
+
+function ajaxUpdate()
+ {
+  if ( ajax_in_progress ) 
+    return false;
+  
+  ajax_in_progress = 1;
+  new Ajax.Request(updateURL+'&amp;ajax=1',
+   {
+    method:'get',
+    onSuccess: function(transport)
+     {
+      ajax_in_progress = 0;
+      var s = transport.responseText || "";
+      var p = s.search( "\\n" );
+      if ( p < 0 )
+       {
+        connectionLost();
+        return;
+       }
+
+      var toExec = s.slice(0, p);
+      s = s.slice(p+1);
+      p = s.search( "\\n" );
+      var url = s.slice(0, p);
+      if ( url.match( /^IG_UPDATEURL: (.+) UPDATEURLEND\$/ ) )
+        updateURL = url.replace( /^IG_UPDATEURL: (.+) UPDATEURLEND\$/, "\$1" );
+      
+      var content = s.slice(p+1);
+      
+      if ( toExec.match( /^IG_TOEXEC: (.+) TOEXECEND\$/ ) )
+        eval( toExec.replace( /^IG_TOEXEC: (.+) TOEXECEND\$/, "\$1" ) );
+      
+      if ( content.length > 0 ) 
+        \$(chkmsg_content).innerHTML = content;
+     },
+    onFailure: function()
+     {
+      connectionLost();
+     },
+    onException: function()
+     {
+      connectionLost();
+     }
+  });
+  return true;
+}
+
+new PeriodicalExecuter( ajaxUpdate, 60 );
+</script>
+END
+    HtmlFoot();
+   }
+ }
+
+########################################################################
+########################################################################
+sub showmsg
+ {
+  my $dest;
+  my $action  = 'show';
+  my $target  = 'mainf';
+  my $onclick = "window.opener.focus();setTimeout('self.close()',500);";
+  $IG::clr{bg} = $IG::clr{bg_task};
+
+  if ($on{tipo} eq 'calendar')
+   {
+    $dest    = 'calendar';
+    $action  = 'default_action';
+   }
+  elsif ($on{tipo} eq 'email_msgs')
+   {
+    $onclick = $target = '';
+    $dest    = 'webmail';
+    $action  = 'getnewmessages';
+   }
+  elsif ($on{tipo} eq 'isms')
+   {
+    $dest    = 'isms';
+    $action  = 'isms_arrived';
+   }
+  elsif ($on{tipo} eq 'igchats')
+   {
+    $dest    = 'igchats';
+    $action  = 'default_action';
+   }
+  elsif ($on{tipo} eq 'timeout')
+   {
+    $lang{view} = 'Reset timer';
+    $dest    = 'igsuite';
+    $action  = 'summary';
+   }
+
+  HtmlHead();
+  TaskMsg("<h2>IGSuite</h2>$on{msg}<br><br>".
+		FormHead( cgiaction => $action,
+		          formaction=> $dest,
+		          target    => $target,
+		          float     => 'left' ).
+
+		Input(    type      => 'hidden',
+		          name      => 'recheck',
+		          value     => 1 ).
+
+		Input(    type      => 'submit',
+		          name      => 'view',
+		          value     => $lang{view},
+		          onclick   => $onclick).
+		FormFoot().
+	
+		FormHead( cgiaction => 'nopopup',
+		          float     => 'left',
+		          target    => 'chkmsg' ).
+
+		Input(    type      => 'button',
+		          name      => 'close',
+		          show      => $lang{close},
+		          onclick   => 'self.close()').
+
+		Input(    type      => 'submit',
+		          float     => 'right',
+		          value     => $lang{stop_popup},
+		          onclick   => "setTimeout('self.close()',500);").
+
+
+		FormFoot()
+	   ,4);
+	   
+  HtmlFoot();
+ }
+
+###############################################################################
+###############################################################################
+sub nopopup
+ {
+  HtmlHead();
+  PrOut "<a href=\"checkmsg?action=checkmsg\">".
+        "<div style=\"text-decoration: underline;\">NO POPUP</div>".
+        "<div style=\"font-size:10px;\">Click to reactivate</div></a>";
+  HtmlFoot();
+ }
+
+###############################################################################
+###############################################################################
+sub _ck_new_email
+ {
+  my $new_email = 0;
+  my $pop3_login;
+  my $pop3_pwd;
+
+  return if $on{jump};
+  
+  ## Check new email message
+  if ( CheckPrivilege('webmail_view') )
+   {
+    if ( $IG::pop3_conf{host} )
+     {
+      ## Check email by POP3 protocol
+    
+      if ( IG::UsrInf('pop3login') && IG::UsrInf('pop3pwd') )
+       {
+        $pop3_login = IG::UsrInf('pop3login');
+        $pop3_pwd   = IG::UsrInf('pop3pwd');
+       }
+      else
+       {
+        $pop3_login = $IG::pop3_conf{login} || $auth_user;
+        $pop3_pwd   = $IG::pop3_conf{pwd}   || IG::UsrInf('passwd');
+       } 
+      $new_email = _ck_new_email_pop3
+                     ( user      => $pop3_login,
+  		       password  => $pop3_pwd,
+		       host      => $IG::pop3_conf{host},
+		       port      => $IG::pop3_conf{port}    || 110,
+		       auth      => $IG::pop3_conf{auth}    || 'BEST',
+		       timeout   => $IG::pop3_conf{timeout} || 20,
+		       usessl    => $IG::pop3_conf{usessl}  || '0',
+		       debug     => $IG::pop3_conf{debug}   || '0' );
+     }
+    else
+     {
+      ## Check email by a spoolfile
+      my $spoolfile;
+    
+      if ($IG::homedirspools eq 'yes')
+       {
+        die("Set a value to '\$homedirspoolname' in ".
+            "IGSuite configuration file.\n") if !$IG::homedirspoolname;
+
+        my ($homedir) = (getpwnam($auth_user))[7]
+                        or die("User '$auth_user' doesn't exist!\n");
+        $spoolfile = $homedir . ${S} . $IG::homedirspoolname;
+       }
+      elsif ($IG::hashedmailspools eq 'yes')
+       {
+        $auth_user =~ /^(.)(.)/;
+        my $firstchar  = $1;
+        my $secondchar = $2;
+        $spoolfile = $IG::mailspooldir . ${S} .
+                     $firstchar        . ${S} .
+                     $secondchar       . ${S} .
+                     $auth_user;
+       }
+      else
+       {
+        $spoolfile = $IG::mailspooldir . ${S} . $auth_user;
+       }
+
+      my ($mailsize, $ggmail) = (stat $spoolfile)[7,9];
+      my ($gglast) = (stat "$IG::user_dir${S}MailBox")[9];
+
+      $new_email = 1 if	   $ggmail   >  $gglast
+  	 		&& $mailsize >  0
+			&& $mailsize != 520
+			&& $mailsize != 519;
+     }
+   }
+
+  ## check in email_imports to autodownload
+  if( !$new_email ) 
+   {
+    DbQuery( "select host, port, login, password, authmode, usessl ".
+             "from email_imports ".
+             "where owner='$auth_user' and autodownload='y' ".
+             "order by id" );
+    while( my ($host, $port, $login, $password, $authmode, $usessl) = FetchRow() )
+     {
+      $new_email = _ck_new_email_pop3
+                     ( user      => $login,
+  		       password  => $password,
+		       host      => $host,
+		       port      => $port                   || 110,
+		       auth      => $authmode               || 'BEST',
+		       timeout   => $IG::pop3_conf{timeout} || 20,
+		       usessl    => $usessl                 || '0',
+		       debug     => $IG::pop3_conf{debug}   || '0' );
+      last if $new_email;
+     }
+   }
+
+  ## touch or delete email flag
+  $new_email
+  ? IG::FileTouch ( IG::UserDir($auth_user) . "${S}email_alert" )
+  : IG::FileUnlink( IG::UserDir($auth_user) . "${S}email_alert" );
+
+  return $new_email;
+ }
+
+###############################################################################
+###############################################################################
+sub _ck_new_email_pop3
+ {
+  my %data = @_;
+  my $pop = new Mail::POP3Client
+                 ( USER      => $data{user},
+		   PASSWORD  => $data{password},
+		   HOST      => $data{host},
+		   PORT      => $data{port}    || 110,
+		   AUTH_MODE => $data{auth}    || 'BEST',
+		   TIMEOUT   => $data{timeout} || 20,
+		   USESSL    => $data{usessl}  || '0',
+		   DEBUG     => $data{debug}   || '0' );
+
+  my $new_email = $pop->Count();
+
+  if ( $new_email < 1 )
+   {
+    $new_email = 0;
+   }
+  else 
+   {
+    ## Check and adjust uidl
+    my $lastmsgid = $pop->Uidl($new_email);
+    die("Your POP3 Server doesn't support UIDL feature!.\n")
+      if !$lastmsgid;
+
+    (undef, $lastmsgid) = split /\s/, $lastmsgid, 2;
+    chomp( $lastmsgid = Mime::Base64::encode_base64($lastmsgid) );
+    $lastmsgid =~ tr/\/\+/\_\-/; ##We want to use uidl as a valid filename
+    die("Strange Uidl! it has more of 300 chars!\n")
+      if length($lastmsgid) > 300;
+
+    DbQuery("select sender from email_msgs ".
+            "where id='$lastmsgid' and owner='$auth_user' limit 1");
+    $new_email = 0 if FetchRow();
+   }
+  $pop->Close();
+
+  return $new_email;
+ }
+
+###############################################################################
+###############################################################################
+sub _count_bookings_to_approve
+ {
+  DbQuery( "select count(*) ".
+           "from bookings ".
+	   "join calendar on calendar.eventid = bookings.eventid ".	     
+	   "join equipments on equipments.id = bookings.equipmentid ".
+	   "left join users_groups_link".
+	   " on users_groups_link.groupid = equipments.booking_approve_group".
+	   "    and users_groups_link.userid = '$auth_user'".
+	   "where bookings.approvedby='' and claimed=0".
+	   " and (users_groups_link.userid='$auth_user'".
+	   "      or equipments.booking_approve_group='')");
+
+  return FetchRow();
+ }
+
+###############################################################################
+############################################################################### 
+sub _count_claimed_bookings
+ {
+  DbQuery( "select count(*) ".
+           "from bookings ".
+	   "join calendar on calendar.eventid = bookings.eventid ".	     
+	   "join equipments on equipments.id = bookings.equipmentid ".
+	   "left join users_groups_link".
+	   " on users_groups_link.groupid = equipments.booking_admin_group".
+	   "    and users_groups_link.userid = '$auth_user'".
+	   "where claimed<>0".
+	   " and (users_groups_link.userid='$auth_user'".
+	   "      or equipments.booking_admin_group='all')");
+
+  return FetchRow();
+ }

@@ -1,0 +1,16 @@
+## IGSuite 4.0.0
+## Language: igsms_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+wait_for_status_update  =>'Please wait for status update',
+available_msgs		=>'Available Sms Messages',
+available_chars		=>'Available Chars',
+err_no_credit		=>'Attention! unavailable credit or impossible to contact Sms server',
+err_no_text		=>'Error: text message is missing',
+err_wrong_number	=>'Error: wrong phone number',
+err_send_failed		=>'Error: send failed',
+  ));
+
+1;

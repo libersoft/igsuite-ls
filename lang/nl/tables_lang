@@ -1,0 +1,34 @@
+## IGSuite 4.0.0
+## Language: tables_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+table		=>'Table',
+tables_1	=>'Contacten verkoop beleid',
+tables_2	=>'Product categorie',
+tables_3	=>'Contact origine',
+tables_4	=>'Niveau van vertrouwen',
+tables_5	=>'Contacten divisie op basis van belang',
+tables_6	=>'Delen verkoop regio',
+tables_7	=>'Leveranciers kwalificatie',
+tables_8	=>'Leveranciers categorie',
+tables_9	=>'Leveranciers methode check',
+tables_10	=>'Goederen onderwerp',
+tables_11	=>'Diensten typologie',
+tables_12	=>'Diensten prioriteit',
+tables_13	=>'Contract type',
+tables_14	=>'Materiaal type',
+tables_15       =>'Product levering mode',
+tables_16       =>'Product levering tijd',
+tables_17       =>'Goederen verpakking',
+tables_18       =>'Taken Categorie',
+tables_19	=>'Verkoop lead',
+tables_20	=>'lead voortgang',
+tables_21	=>'Calendar event categories',
+tables_22       =>'Operative functions of contacts personnel',
+  ));
+
+1;
+
+

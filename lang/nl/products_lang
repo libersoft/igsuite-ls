@@ -1,0 +1,39 @@
+## IGSuite 4.0.0
+## Language: products_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+prices			=>'Prijzen',
+additional_information  =>'Extra Informatie',
+delivery_time           =>'Levertijd',
+delivery_modality       =>'Levering modaliteit',
+packaging               =>'Verpakking',
+min_quantity		=>'Min Hoeveelheid',
+max_quantity		=>'Max Hoeveelheid',
+qualified_customers	=>'Gekwalificeerde Klanten',
+partners		=>'Partners',
+competitors		=>'Concurrenten',
+disable_prices_list	=>'Prijzen Lijst Uitschakelen',
+last_prices_update	=>'Laatste Prijs Update',
+history_view		=>'Bekijk Historie',
+unit_measure		=>'Eenheids maten',
+back_to_prices		=>'Terug naar prijzen lijst',
+new_product		=>'Nieuw Product',
+Err_price		=>'Attentie: voeg een geldige prijs toe',
+update_prices		=>'Update Prijzen',
+update_reference	=>'Update Referentie',
+article			=>'Artikel',
+make_offer		=>'Plaats een Offerte',
+make_order		=>'Plaats een Bestelling',
+make_letter		=>'Stel een Brief op',
+make_summary		=>'Samenvatting',
+prices_history		=>'Prijzen Geschiedenis',
+unit			=>'UM',
+with_code		=>'Bevattend de code',
+find_products		=>'Lokaliseer Producten',
+  ));
+
+1;
+
+

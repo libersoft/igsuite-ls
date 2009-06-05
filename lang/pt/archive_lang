@@ -1,0 +1,12 @@
+## IGSuite 4.0.0
+## Language: archive_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+days_before_alert	=>'Avisar antes do dia do término',
+save_archive		=>'Salvar em Protocolo de arquivo',
+  ));
+
+1;

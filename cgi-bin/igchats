@@ -1,0 +1,1003 @@
+#! /usr/bin/perl
+# Procedure: igchats
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+## Get localtime;
+my $local_time = time;
+
+## First check sessionid
+my $sessionid = chat_login( room => $on{room},
+                            nick => $on{nick} );
+
+## Retrieve chat information
+my %chat      = chat_status( $sessionid );
+
+## Dispatch actions
+IG::DTable ( get_logs		=> sub { CheckPrivilege('igchats_view') },
+             chat_ajx_req	=> sub { 1 },
+             default_action	=> sub { 1 } );
+
+############################################################################
+############################################################################
+sub chat_ajx_req
+ {
+  no strict 'refs';
+   
+  $on{ajaxaction} =~ /^(get_topic|
+                        logout|
+                        send_msg|
+                        reset_msgs|
+                        check_cookie|
+                        get_rooms|
+                        users_list|
+                        msgs_list|
+                        previous_msg|
+                        invite|
+                        go_away)$/x
+                   ? &{$1}
+                   : die("Bad Ajax request.\n");
+ }
+
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  ## delete invitation flag
+  unlink "$IG::user_dir${S}igchats";
+
+  ## save sessionid to a cookie
+  $IG::set_cookie{igchats_sessionid} = $sessionid;
+
+  ## Messages order
+  my $msg_order = IG::ConfigParam('igchats.messages_order') || 'asc';
+  my $scroll_down_code = $msg_order eq 'asc' ? "scroll_down();\n" : "\n";
+
+  ## Check how many users there are in channel
+  my $users_cnt = $chat{room}{$chat{session}{$sessionid}{room}}{users} || '0';
+  my $users_alert = IG::JsQuote( $lang{nousers_alert} );
+  if (!$users_cnt && $auth_user eq 'guest')
+   {
+    ## find all IG available users and invite him to chat
+
+    ## first Remove old sessions
+    require IG::Utils;
+    IG::CleanSessions();
+
+    opendir (DIR, $IG::logs_dir);
+    for my $session_name (sort grep /\-session\-/, readdir(DIR) )
+     {
+      $session_name =~ /^(.+)\-session\-/;
+      my $user = $1;
+      _invite_user( $user, $chat{session}{$sessionid}{room})
+        if    $user ne 'guest'
+           && IG::CheckPrivilege('igchats_available_to_chat', $user);
+     }
+    close(DIR);
+   }
+   
+  my $chat_height = $IG::client_browser eq 'msie'
+                  ? 'chatHeight - 15'
+                  : 'chatHeight';
+  
+  ## javascipt engine
+  my $javascript_engine = <<END;
+<script language="JavaScript">
+ <!--
+ var oMsgField;
+ var oMsgBox;
+ var oIframe;
+ var myMsgsInterval;
+ var myUsersInterval;
+ var myScrollInterval;
+ var myRoomsInterval;
+ var myCkCookieInterval;
+ var previous_msg = 0;
+ var slide_status = 'off';
+
+ window.onload = chat_start;
+ window.onresize = chat_maximize;
+ window.onbeforeunload = chat_go_away;
+ window.onunload = chat_go_away;
+
+ if (! $users_cnt && '$auth_user' == 'guest')
+  { 
+   alert('$users_alert');
+  }
+ 
+ if (parent.chkmsg && parent.chkmsg.ajaxUpdate) 
+   parent.chkmsg.ajaxUpdate();
+
+ function chat_start()
+  {
+   oMsgField = document.getElementById("msg");
+   oMsgBox = document.getElementById("msgs_box");
+   oIframe = document.getElementById("iframe_box");
+
+   myMsgsInterval  = window.setInterval('refresh_msgs_box()', 3000);
+   myUsersInterval = window.setInterval('refresh_users_box()', 5000);
+   myRoomsInterval = window.setInterval('refresh_rooms_box()', 6000);
+   myCkCookieInterval = window.setInterval('check_cookie()', 20000);
+
+   chat_maximize();
+   refresh_boxes();
+  }
+
+ function chat_maximize()
+  {
+   getSize();
+   if ( maxHeight > 250 )
+    {
+     slide_status = 'off';
+     \$('container_slide').style.display = 'none';
+     \$('maximize').style.display = 'none';
+     var chatHeight = maxHeight - 170;
+     \$('msgs_box').style.height = chatHeight + 20;
+     \$('container_users').style.height = $chat_height;
+    }
+  }
+
+ function refresh_boxes()
+  {
+   check_cookie();
+   refresh_msgs_box();
+   refresh_topic_box();
+   oMsgField.focus();
+  }
+
+ function refresh_topic_box()
+  {
+   chat_ajx_req(['NO_CACHE',
+                 'ajaxaction__get_topic',
+                 'sessionid__$sessionid'],
+                ['topic_box']);
+  }
+  
+ function refresh_rooms_box()
+  {
+   chat_ajx_req(['NO_CACHE',
+                 'ajaxaction__get_rooms',
+                 'sessionid__$sessionid'],
+                ['rooms_box']);
+  }
+
+ function refresh_users_box()
+  {
+   chat_ajx_req(['NO_CACHE',
+                 'ajaxaction__users_list',
+                 'sessionid__$sessionid'],
+                ['users_box']);
+  }
+
+ function refresh_msgs_box()
+  {
+   chat_ajx_req(['NO_CACHE',
+                 'ajaxaction__msgs_list',
+                 'order__$msg_order',
+                 'sessionid__$sessionid'],
+                ['msgs_box']);
+   $scroll_down_code
+  }
+
+ function check_cookie()
+  {
+   chat_ajx_req(['NO_CACHE',
+                 'ajaxaction__check_cookie',
+                 'sessionid__$sessionid'],
+                [ck_cookie]);
+  }
+  
+ function ck_cookie()
+  {
+   var session_exists = arguments[0];
+   if ( session_exists == 0 )
+    {
+     clearInterval(myMsgsInterval);
+     clearInterval(myUsersInterval);
+     clearInterval(myRoomsInterval);
+     clearInterval(myCkCookieInterval);
+     alert("$lang{connection_lost}");
+     document.cookie = 'igchats_sessionid=; path=/';
+     window.location = 'igchats';
+    }
+  }
+  
+ function chat_go_away()
+  {
+   chat_ajx_req(['NO_CACHE',
+                 'ajaxaction__go_away',
+                 'sessionid__$sessionid'],
+                ['msgs_box']);
+  }
+
+ function chat_logout()
+  {
+   if ( confirm("$lang{close_session_alert}") )
+    {
+     chat_ajx_req(['NO_CACHE',
+                   'ajaxaction__logout',
+                   'sessionid__$sessionid'],
+                  ['msgs_box']);
+     document.cookie = 'igchats_sessionid=; path=/';
+
+     if (window.top != window)
+      { window.location = 'igsuite?action=summary'; }
+     else
+      { self.close(); }
+    }
+  }
+
+
+ function scroll_down()
+  {
+   oMsgBox.scrollTop = oMsgBox.scrollHeight;
+  }
+
+
+ function ckKey(event)
+  {
+   if (event.keyCode == 13)
+    {
+     previous_msg = 0;
+
+     if ( oMsgField.value == '/leave' || oMsgField.value == '/quit')
+      {
+       chat_logout();
+       return;
+      }
+     else if ( oMsgField.value == '/slide on' )
+      {
+       slide_on();
+      }
+     else if ( oMsgField.value == '/slide off' )
+      {
+       chat_maximize();
+      }
+     else
+      {
+       chat_ajx_req(['NO_CACHE',
+                     'ajaxaction__send_msg',
+                     'order__$msg_order',
+                     'msg',
+                     'sessionid__$sessionid'],
+                    ['msgs_box']);
+      }
+
+     if ( oMsgField.value.substr(0,1) == '/' )
+      {
+       refresh_boxes();
+      }
+     oMsgField.value = '';
+     $scroll_down_code
+    }
+   else if (event.keyCode == 38)
+    {
+     previous_msg++;
+     chat_ajx_req(['NO_CACHE',
+                   'ajaxaction__previous_msg',
+                   'msg',
+                   'msgs_count__' + previous_msg,
+                   'sessionid__$sessionid'],
+                  ['msg']);
+    }
+   else if (event.keyCode == 40)
+    {
+     previous_msg--;
+     if ( previous_msg < 1 )
+      { previous_msg = 1; }
+     else
+      {
+       chat_ajx_req(['NO_CACHE',
+                     'ajaxaction__previous_msg',
+                     'msg',
+                     'msgs_count__' + previous_msg,
+                     'sessionid__$sessionid'],
+                    ['msg']);
+      }
+    }
+  }
+
+ function slide_on()
+  {
+   getSize();
+   if ( maxHeight < 300 )
+    {
+     alert('Too small');
+     return;
+    }
+   else
+    {
+     slide_status = 'on';
+     var slideHeight = maxHeight - 250;
+     \$('container_slide').style.display = 'block';
+     \$('container_slide').style.height = slideHeight;
+     \$('maximize').style.display = 'block';
+     \$('msgs_box').style.height = 100;
+     \$('container_users').style.height = 80;
+    }
+  }
+  //-->
+</script>
+END
+  
+  HtmlHead( ajax_req   => { chat_ajx_req=> "igchats?action=chat_ajx_req" },
+            javascript => $javascript_engine,
+            title      => "IGChat - $IG::soc_name" );
+                         
+  TaskHead( title    => "IGChat $IG::VERSION - ".
+                        "$IG::auth_user\@$IG::remote_host",
+            width    => '100%',
+            minwidth => 500,
+            icon     => 1 );
+
+  my $input_bar   = Input( type       => 'text',
+                           name       => 'msg',
+                           onkeyup    => 'ckKey(event);',
+                           onlyfield  => 'true',
+                           fieldstyle => 'width:100%; margin:5px 0 5px 0;',
+                           style      => 'font-size:12px;width:100%');
+                             
+  my $command_bar = HLayer
+                     ( bottom_space =>'0',
+                       layers=>[(
+                       Input( type   => 'button',
+                              id     => 'maximize',
+                              output => 'onlyfield',
+                              onclick=> "chat_maximize();",
+                              style  => 'font-size:10px;display:none;',
+                              show   => 'Maximize' ),
+
+                       Input( type   => 'button',
+                              output => 'onlyfield',
+                              style  => 'font-size:10px;',
+                              onclick=> "chat_logout();",
+                              show   => $lang{disconnect} ),
+
+                       Input( type   => 'button',
+                              output => 'onlyfield',
+                              onclick=> "window.location='igchats?action=get_logs&amp;sessionid=$sessionid'",
+                              style  => 'font-size:10px;',
+                              show   => 'GetLogs' ),
+
+                       Input( type   => 'button',
+                              output => 'onlyfield',
+                              onclick=> "chat_ajx_req(".
+                                        "['NO_CACHE',".
+                                        "'ajaxaction__reset_msgs',".
+                                        "'sessionid__$sessionid'],".
+                                        "['msgs_box']);",
+                              style  => 'font-size:10px;',
+                              show   => $lang{clean_msgs} )
+                          )]);
+
+  ## Draw Interface and start Ajax requests           
+  PrOut <<END;
+<div style="border:1px solid #999999;-moz-border-radius:5px; background:#CCCCCC; padding:5px;">
+
+ <!-- Slide box -->
+ <div id="container_slide"
+      style="border:1px solid #999999; height: 1px; display:none;
+             margin:0px 0px 5px 0px;">
+  <iframe frameborder="0"
+          id="iframe_box"
+          style="width:100%; height:100%;"
+          src="">
+  </iframe>
+ </div>
+
+ <!-- Users box -->
+ <div id="container_users"
+      style="font-size:11px;overflow:auto; float:right; clear:right;
+             background:#EEEEEE; height:270px; width:150px; border:1px solid #999999;">
+   <div id="users_box" style="padding:5px; line-height:10px">
+    <img src="$IG::img_url/progress.gif"> Loading...
+   </div>
+ </div>
+
+ <!-- Rooms box -->
+ <div id="container_rooms"
+      style="overflow:auto; margin-top:5px; float:right; clear:both;
+             background:#EEEEEE; height:80px; width:150px; border:1px solid #999999;">
+   <div id="rooms_box" style="padding:5px">
+    <img src="$IG::img_url/progress.gif"> Loading...
+   </div>
+ </div>
+
+ <!-- Command and Topic box -->
+ <div style="position:relative;margin: 0px 170px 0px 0px;
+             background:#CCCCCC; height:30px;">
+   <div style="padding:3px 0px 3px 10px;background:#CCCCCC;
+               position:absolute;right:0px;">$command_bar</div>
+   <div id="topic_box" style="padding-left:3px; font-size:14px;
+            font-weight:bold;background:#FFFFFF;line-height:25px;">&nbsp;</div>
+ </div>
+
+ <!-- Messages box -->
+ <div style="margin: 0px 155px 0px 0px;">
+   <div id="msgs_box"
+        style="font-size:12px; background:#EEEEEE; height:295px;
+               padding:5px; overflow:scroll; border:1px solid #999999;">
+    <div id="inner_msgs_box">&nbsp;</div>
+   </div>
+ </div>
+
+ <!-- Input box -->
+ <div style="margin: 0px 160px 0px 0px; background:#CCCCCC; height:25px">
+   <div id="command_box" style="float:left;width:100%;">$input_bar</div>
+ </div>
+
+</div>
+END
+
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub msgs_list
+ {
+  HttpHead( expires => 'now' );
+  PrOut('Session lost! '.
+        'try to reconnect') && return if !$chat{session}{$sessionid}{room};
+  
+  PrOut "<br><div id=\"inner_msgs_box\">"; #IE/Safari Hack
+
+  DbQuery("select * from chats_msgs ".
+          "where room='".DbQuote( $chat{session}{$sessionid}{room} )."'".
+          " and issuetime >= '".DbQuote( $chat{session}{$sessionid}{sessionstart} )."' ".
+          "order by issuetime ".DbQuote( $on{order} ).
+          ( $on{order} eq 'desc' ? ' limit 100' : '') );
+
+  while ( my @row = FetchRow() )
+   {
+    $row[2] = parse_message( MkLink($row[2]) );
+    PrOut $row[1] ne 'System'
+          ? "<strong>$row[1] :</strong> $row[2]<br>"
+          : "<span style=\"color:#AAAAAA\">$row[1] : $row[2]</span><br>";
+   }
+
+  PrOut "</div>";
+ }
+
+#############################################################################
+#############################################################################
+sub parse_message
+ {
+  ## convert emoticon
+  my $text = shift;
+  $text =~ s/href\=\"([^\"]+)\"/href="javascript:slide_on();oIframe.src='$1';void(0);"/g;
+  $text =~ s/target\=\"[^\"]+\"//g;
+  
+  $text =~ s/[\:8][o\-\=]*[\)\]\>]
+            /<img src=\"$IG::img_url\/emoticon_smile.png\" align=\"top\">/xg;
+  $text =~ s/[\:8][o\-\=]*[\(\[\<]
+            /<img src=\"$IG::img_url\/emoticon_unhappy.png\" align=\"top\">/xg;
+  $text =~ s/[\:8][o\-\=][pP]
+            /<img src=\"$IG::img_url\/emoticon_tongue.png\" align=\"top\">/xg;
+  $text =~ s/[\;\,][o\-\=]*[\)\]\>]
+            /<img src=\"$IG::img_url\/emoticon_wink.png\" align=\"top\">/xg;
+  $text =~ s/[\:\,][o\-\=][O]
+            /<img src=\"$IG::img_url\/emoticon_surprised.png\" align=\"top\">/xg;
+  return $text;
+ }
+
+#############################################################################
+#############################################################################
+sub get_logs
+ {
+  IG::DocHead( type       => 'text/plain',
+               expires    => 'now',
+               attachment => 'igchats.log');
+           
+  DbQuery("select * from chats_msgs ".
+          "where room='".DbQuote($chat{session}{$sessionid}{room})."'".
+          " and issuetime >= '".DbQuote($chat{session}{$sessionid}{sessionstart})."' ".
+          "order by issuetime");
+  while ( my @row = FetchRow() )
+   {
+    PrOut "$row[1] : $row[2]\n";
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub check_cookie
+ {
+  HttpHead( expires => 'now' );
+  my $session_status = $chat{session}{$sessionid}{nick} ? 1 : 0;
+  PrOut $session_status;
+ }
+ 
+#############################################################################
+#############################################################################
+sub invite
+ {
+  if ( IG::UsrInf('name', $on{invited_user}) )
+   {
+    _insert_msg( user => 'System',
+                 msg  => "User $chat{session}{$sessionid}{nick} has invited ".
+                         IG::UsrInf( 'name', $on{invited_user} ).
+                         " in room '$chat{session}{$sessionid}{room}'",
+                 room => $chat{session}{$sessionid}{room} );
+
+    _invite_user( $on{invited_user},
+                  $chat{session}{$sessionid}{room} );
+   }
+
+  users_list();
+ }
+ 
+#############################################################################
+#############################################################################
+sub _invite_user
+ {
+  my ($user, $room) = @_;
+  if ( $user )
+   {
+    $room ||= 'Hall';
+    my $invited_home = IG::UserDir( $user );
+  
+    open ( DAT, '>', "$invited_home${S}igchats" )
+      or die("Can't write on '$invited_home${S}igchats'.\n");
+    print DAT "$auth_user\n$room\n";
+    close(DAT);
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub users_list
+ {
+  my %ig_user;
+  HttpHead( expires => 'now' );
+  PrOut('No users') && return if !$chat{session}{$sessionid}{room};
+
+  ## find all IG user
+  opendir (DIR, $IG::logs_dir);
+  for my $session_name (sort grep /\-session\-/, readdir(DIR) )
+   {
+    $session_name =~ /^(.+)\-session\-/;
+    $ig_user{$1}++ if $1;
+   }
+  close(DIR);
+
+  ## show all igchat user
+  foreach my $session (sort { $chat{session}{$a}{name} cmp
+                              $chat{session}{$b}{name} }
+                       keys %{$chat{session}} )
+   {
+    delete $ig_user{$chat{session}{$session}{login}};
+    
+    next if    $chat{session}{$session}{room}
+            ne $chat{session}{$sessionid}{room};
+
+    PrOut Img( src=> $chat{session}{$session}{login} eq 'guest'
+                     ? "$IG::img_url/user_guest.gif"
+                     : "$IG::img_url/user.gif",
+               align=>'bottom',
+               style=>"margin:0 3px -3px 0;").
+               
+          ( $chat{session}{$session}{status}
+            ? "<div style=\"display:inline;font-weight:bold;\">"
+            : "<div style=\"color:#BBBBBB;display:inline;font-weight:bold;\">").
+
+          "$chat{session}{$session}{name}</div>".
+          "<div style=\"margin:0 0 4px 20px;font-size:10px;color:#BBBBBB;\">".
+          "$chat{session}{$session}{login}\@$chat{session}{$session}{host}</div>";
+   }
+
+  ## list all user connected to IGSuite but not in chat
+  ## remember, only ig user can invite other users to chat
+  if ($auth_user ne 'guest')
+   { 
+    for my $user ( sort { IG::UsrInf('name',$a) cmp IG::UsrInf('name',$b) }
+                   keys %ig_user )
+     {
+      next if $user eq 'guest';
+
+      PrOut Img( src=> "$IG::img_url/user_guest.gif",
+                 align=>'bottom',
+                 style=>"margin:0 3px -3px 0;").
+               
+            "<div style=\"color:#BBBBBB;display:inline;font-weight:bold;\">".
+            IG::UsrInf( 'name', $user ).
+            "</div>".
+            "<div style=\"margin:0 0 4px 20px;font-size:10px;\">".
+            "<a href=\"javascript:chat_ajx_req(['NO_CACHE',".
+                                              "'ajaxaction__invite',".
+                                              "'invited_user__$user',".
+                                              "'room__$chat{session}{$sessionid}{room}',".
+                                              "'sessionid__$sessionid'],".
+                                             "['users_box']);\">".
+            "[ $lang{chat_invite} ]</a></div>";
+     }
+   }
+
+   
+  ## keep user live
+  DbQuery("update chats_users set lastmsg=$local_time ".
+          "where sessionid='".DbQuote($sessionid)."'");
+ }
+
+#############################################################################
+#############################################################################
+sub get_topic
+ {
+  HttpHead( expires => 'now' );
+  PrOut $chat{session}{$sessionid}{topic};
+ }
+
+#############################################################################
+#############################################################################
+sub previous_msg
+ {
+  my $text;
+  HttpHead( expires => 'now' );
+
+  if ( $on{msgs_count} )
+   {
+    DbQuery("select message from chats_msgs ".
+            "where issuetime >= '".DbQuote( $chat{session}{$sessionid}{sessionstart} )."'".
+            " and room='".DbQuote( $chat{session}{$sessionid}{room} )."'".
+            " and nick='".DbQuote( $chat{session}{$sessionid}{nick} )."' ".
+            "order by issuetime desc limit ".DbQuote( $on{msgs_count} ) );
+
+   for ( 1 .. $on{msgs_count} )
+    {
+     $text = FetchRow();
+     last if !$text;
+    }
+   }
+  PrOut $text || $on{msg};
+ }
+
+#############################################################################
+#############################################################################
+sub get_rooms
+ {
+  HttpHead( expires => 'now' );
+  my $users;
+  my $rooms;
+  my $flag;
+
+  PrOut('No rooms') && return if !$chat{session}{$sessionid}{room};
+
+  foreach my $room (sort keys %{$chat{room}})
+   {
+    $flag++ if $room eq 'Hall';
+    _print_room($room);
+   }
+   
+  _print_room('Hall') if !$flag;
+ }
+
+sub _print_room
+ {
+  my $room = shift;
+  my $users   = $chat{room}{$room}{users} + $chat{room}{$room}{guests};
+     $users ||= '0';
+
+  PrOut   Img( src   => "$IG::img_url/chat_rooms.gif",
+               align => 'bottom',
+               style => "margin:0 3px -3px 0;").
+          ( CheckPrivilege('igchats_change_room')
+            ? "<a href=\"javascript:chat_ajx_req(['NO_CACHE',".
+                                            "'ajaxaction__send_msg',".
+                                            "'msg__/room $room',".
+                                            "'sessionid__$sessionid'],".
+                                            "['msgs_box']);".
+              "refresh_boxes();\">".
+              "$room ($users)</a><br>\n"
+            : "$room ($users)<br>" );
+ }
+  
+#############################################################################
+#############################################################################
+sub send_msg
+ {
+  ## against dos attack
+  die("Message too long!\n") if length($on{msg}) > 500;
+  
+  DbQuery("update chats_users set status=1 ".
+          "where sessionid='".DbQuote($sessionid)."'")
+    if !$chat{session}{$sessionid}{status};
+
+  if ( $on{msg} =~ /^\/nick (.+)$/ )
+   {
+    change_nick($1);
+   }
+  elsif ( $on{msg} =~ /^\/topic (.+)$/ )
+   {
+    change_topic($1) if $auth_user ne 'guest';
+   }
+  elsif ( $on{msg} =~ /^\/away$/ )
+   {
+    change_away_status();
+   }
+  elsif ( $on{msg} =~ /^\/(room|join) \#*(.+)$/ )
+   {
+    change_room($2) if CheckPrivilege('igchats_change_room');
+   }
+  elsif ( $on{msg} )
+   {
+    _insert_msg( user => $chat{session}{$sessionid}{name},
+                 msg  => $on{msg},
+                 room => $chat{session}{$sessionid}{room} );
+   }
+   
+  msgs_list();
+ }
+
+#############################################################################
+#############################################################################
+sub reset_msgs
+ {
+  DbQuery("update chats_users set sessionstart=$local_time ".
+          "where sessionid='".DbQuote($sessionid)."'");
+   
+  msgs_list();
+ }
+ 
+#############################################################################
+#############################################################################
+sub logout
+ {
+  _insert_msg( user => 'System',
+               msg  => "User $chat{session}{$sessionid}{nick} ".
+                       "connection closed (logout)",
+               room => $chat{session}{$sessionid}{room} );
+
+  DbQuery("delete from chats_users ".
+          "where sessionid='".DbQuote($sessionid)."'");
+  HttpHead( expires => 'now' );
+ }
+
+#############################################################################
+#############################################################################
+sub go_away
+ {
+  DbQuery("update chats_users set status=0 ".
+          "where sessionid='".DbQuote($sessionid)."'");
+  HttpHead( expires => 'now' );
+ }
+
+#############################################################################
+#############################################################################
+sub chat_login
+ {
+  ## Questa sub viene chiamata in questi 3 casi:
+  ## 1) Durante una prima connessione (action=default_action) quando
+  ##    (non esiste ne sessione ne cookie)
+  ## 2) Al ritorno in igchat quando esiste già una sessione aperta. In questo
+  ##    caso vi è la possiblità che si abbia il cookie di sessione ma la
+  ##    sessione sia morta o viceversa che non si abbia più il cookie ma la
+  ##    sessione sia ancora viva.
+  ## 3) Durante l'esecuzione di una richiesta Ajax. Come sopra la richiesta
+  ##    Ajax potrebbe pervenire accidentalmente per una sessione morta.
+  ## 
+  ## Il passaggio della sessionid da parte delle chiamate a igchats perviene
+  ## o attraverso il cookie igchats_sessionid o attraverso il parametro
+  ## cgi 'sessionid'.
+  my %data = @_;
+
+  my $room = $data{room} || 'Hall';
+     $room =~ s/[^a-z-A-Z0-9\s\_\-]//g;
+     $room = substr($room, 0, 20);
+
+  my $nick =    $data{nick}
+             || IG::ConfigParam('igchats.default_nickname')
+             || IG::UsrInf('name');
+     $nick =~ s/[^a-z-A-Z0-9\s\_\-\[\]]//g;
+     $nick = substr($nick, 0, 20);
+
+  ## Check existing sessions
+  if ( $on{action} eq 'default_action' && $IG::cookie{igchats_sessionid} )
+   {
+    ## it's a come back to an existing session
+    my $sid = DbQuote($IG::cookie{igchats_sessionid});
+
+    DbQuery("update chats_users set room='".DbQuote($room)."' ".
+            "where sessionid='".DbQuote($sid)."'") if $on{room};
+
+    DbQuery("update chats_users set nick='".DbQuote($nick)."' ".
+            "where sessionid='".DbQuote($sid)."'") if $on{nick};
+
+    DbQuery("select sessionid from chats_users ".
+            "where sessionid='".DbQuote($sid)."'");
+    return $sid if FetchRow();
+   }
+  elsif ( $on{action} ne 'default_action' )
+   {
+    ## it's an Ajax request
+    my $sid = $IG::cookie{igchats_sessionid} || $on{sessionid};
+    $sid ? return $sid : die("Any available session id.\n");
+   }
+
+  ## Make a new connection
+  my $sessionid = MkId(20);
+
+  ## Clean existant connection with the same sessionid or username
+  DbQuery("delete from chats_users where sessionid='".DbQuote($sessionid)."'".
+          " or ( username='$auth_user' and username<>'guest' )");
+
+  ## Load topic of the room
+  DbQuery("select topic from chats_users ".
+          "where room='".DbQuote($room)."' limit 1");
+  my $topic = DbQuote( FetchRow() );
+
+  DbQuery("insert into chats_users ".
+          "values ('$auth_user', '$IG::remote_host', $local_time, $local_time,".
+          " '".DbQuote($room)."', '".DbQuote($nick)."', '".DbQuote($sessionid)."', 1, '$topic')");
+
+  _insert_msg( user => 'System',
+               msg  => "$nick start session",
+               room => $room );
+
+  sleep(1);
+  return $sessionid;
+ }
+ 
+#############################################################################
+############################################################################# 
+sub change_nick
+ {
+  my $nick = shift;
+     $nick =~ s/[^a-z-A-Z0-9\s\_\-\[\]]//g;
+     $nick = substr($nick,0,20);
+
+  if ( $chat{session}{$sessionid}{name} ne $nick )
+   {
+    _insert_msg( user => 'System',
+                 msg  => "$chat{session}{$sessionid}{name} is now $nick",
+                 room => $chat{session}{$sessionid}{room} );
+
+    $chat{session}{$sessionid}{name} = $nick;
+  
+    DbQuery("update chats_users set nick='".DbQuote($nick)."' ".
+            "where sessionid='".DbQuote($sessionid)."'");
+   }
+ }
+
+#############################################################################
+############################################################################# 
+sub change_topic
+ {
+  my $topic = shift;
+
+  if ( $topic )
+   {
+    _insert_msg( user => 'System',
+                 msg  => $chat{session}{$sessionid}{name}.
+                         " as set topic to $topic",
+                 room => $chat{session}{$sessionid}{room} );
+
+    $chat{session}{$sessionid}{topic} = $topic;
+  
+    DbQuery("update chats_users set topic='".DbQuote($topic)."' ".
+            "where room='".DbQuote($chat{session}{$sessionid}{room})."'");
+   }
+ }
+
+#############################################################################
+############################################################################# 
+sub change_away_status
+ {
+  my $newstatus = not($chat{session}{$sessionid}{status}) || '0';
+  my $statusflag = ('ON','OFF')[$newstatus];
+
+  _insert_msg( user => 'System',
+               msg  => "$chat{session}{$sessionid}{name} has set away to ".
+                       $statusflag,
+               room => $chat{session}{$sessionid}{room} );
+
+  DbQuery("update chats_users set status=".DbQuote($newstatus).
+          " where sessionid='".DbQuote($sessionid)."'");
+ }
+
+#############################################################################
+############################################################################# 
+sub change_room
+ {
+  my $room = shift;
+     $room =~ s/[^a-z-A-Z0-9\s\_\-]//g;
+     $room = substr($room, 0, 20);
+
+  if ( $chat{session}{$sessionid}{room} ne $room )
+   {
+    _insert_msg( user => 'System',
+                 msg  => "$chat{session}{$sessionid}{name} has changed room",
+                 room => $chat{session}{$sessionid}{room} );
+
+    $chat{session}{$sessionid}{room} = $room;
+  
+    DbQuery("update chats_users set room='".DbQuote($room)."' ".
+            "where sessionid='".DbQuote($sessionid)."'");
+   }
+ }
+
+#############################################################################
+############################################################################# 
+sub chat_status
+ {
+  my $sid = shift;
+  my %chat;
+  
+  my $conn = DbQuery("select * from chats_users");
+  while (my @row = FetchRow($conn))
+   {
+    ## Delete disconnected users or old sessions
+    if ( (   $row[0] ne $auth_user
+          || $row[0] eq 'guest' )                          ## not my connection
+        &&
+         (   ( ($local_time-$row[3]) > 20 && $row[7]   )   ## check connected users
+          || ( ($local_time-$row[3]) > 300 && !$row[7] ) ) ## check away users
+       )
+     {
+      DbQuery( query => "delete from chats_users where sessionid='$row[6]'" );
+
+      _insert_msg( user => 'System',
+                   msg  => "User $row[5] connection closed (timeout)",
+                   room => $row[4] );
+      next;
+     }
+
+    ## store sessions info     
+    $chat{session}{$row[6]}{login}   = $row[0];
+    $chat{session}{$row[6]}{host}    = $row[1];
+    $chat{session}{$row[6]}{sessionstart} = $row[2] || $local_time;
+    $chat{session}{$row[6]}{lastmsg} = $row[3] || $local_time;
+    $chat{session}{$row[6]}{room}    = $row[4] ||= 'Hall';
+    $chat{session}{$row[6]}{nick}    = $row[5];
+    $chat{session}{$row[6]}{status}  = $row[7];
+    $chat{session}{$row[6]}{name}    = $row[5] || IG::UsrInf('name',$row[0]);
+    $chat{session}{$row[6]}{topic}   = $row[8] 
+                                       || "$lang{welcome_to}: ".
+                                          $chat{session}{$sessionid}{room};
+    ## store rooms info
+    $row[0] eq 'guest'
+    ? $chat{room}{$row[4]}{guests}++
+    : $chat{room}{$row[4]}{users}++;
+
+    $chat{room}{$row[4]}{topic}      = $chat{session}{$row[6]}{topic};
+   }  
+
+  return $chat{session}{$sid}{login} ? %chat : undef;
+ }
+
+#############################################################################
+############################################################################# 
+sub _insert_msg
+ {
+  my %data = @_; 
+  $data{msg}    = DbQuote($data{msg});
+  $data{room} ||= 'Hall';
+  DbQuery("insert into chats_msgs ".
+          "values ($local_time, '$data{user}', '$data{msg}', '".DbQuote($data{room})."')" );
+ }
+
+#############################################################################
+#############################################################################  
+## LANG
+## $lang{available_rooms} $lang{connected_users}

@@ -1,0 +1,45 @@
+## IGSuite 4.0.0
+## Language: igsuite_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+first_connection        =>'My Compliment! This is your first access to IGSuite. Please update your %1$s',
+file_zip_ok             =>'The File was successfully compressed',
+file_unzip_ok           =>'The File was successfully uncompressed',
+Err_module_zip          =>'Sorry, you have to install Perl module \'Archive::Zip\' if you want to compress documents.',
+Err_host_deny           =>'Sorry you can\'t login from this client host! Administrator has set some IP address restrictions',
+Err_disabled_user	=>'Attention! disabled user please contact your system administrator',
+maximize		=>'Maximize',
+active_sessions		=>'Active Sessions',
+my_pipeline             =>'My Pipeline',
+top_open_opportunities  =>'Top Open Opportunities',
+password_expired        =>'Your password is expired. Please change by your %1$s',
+new_comments            =>'New comments from ',
+change_user             =>'Change user',
+weather                 =>'Weather',
+personal_calendar	=>'Personal Calendar',
+personal_links		=>'Personal Links',
+igsuite_login		=>'IGSuite Login',
+personal_info		=>'Personal Info',
+news			=>'News',
+internal_news		=>'Internal News',
+personal_documents	=>'Personal Documents',
+poll			=>'Poll',
+wellcome_message	=>'Thank you for choosing this product. At this point of installation it is necessary to insert the user\'s account and their privileges. User admin has been inserted automatically; he/she will have the privilege to insert all the other users. Click <a href="users">Here</a> to insert another user, or reload the page to update the menu.',
+no_event		=>'No events in your Calendar',
+no_tasks		=>'No tasks in your To do list',
+connected_users		=>'Connected Users',
+connected_guest		=>'Connected Guest',
+unread_msgs		=>'Messages not read',
+registered_users	=>'Registered Users',
+vote			=>'Vote',
+my_letters		=>'My Letters',
+my_offers		=>'My Offers',
+my_orders		=>'My Orders',
+my_archive		=>'My Archive',
+my_contracts		=>'My Contracts',
+my_fax_received		=>'My Faxes',
+  ));
+
+1;

@@ -1,0 +1,21 @@
+## IGSuite 4.0.0
+## Language: offers_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+offer_not_accepted      =>'Offer not accepted',
+new_revision		=>'Nova revisão',
+accepted		=>'Aceitado',
+not_accepted		=>'Não aceitado',
+offers_protocol		=>'Protocolo ofertas',
+save_offer		=>'Salvar como novo Protocolo Ofertas',
+offers_stats		=>'Estatísticas',
+stat_0			=>'Total tipo ofertas e resultados',
+stat_1			=>'Andamento de ofertas criadas nos últimos 12 meses',
+stat_2			=>'Andamento dos últimos 12 meses',
+find_offers		=>'Procurar ofertas',
+  ));
+
+1;

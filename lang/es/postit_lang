@@ -1,0 +1,15 @@
+## IGSuite 4.0.0
+## Language: postit_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+web_site                =>'Web Site',
+personal_links		=>'Enlaces Personales',
+link_name		=>'Nombre Enlace',
+attachments		=>'Adjuntos',
+save_link		=>'Guarda como nuevo enlace',
+Err_nolink		=>'Error: falta el nombre del enlace',
+  ));
+
+1;

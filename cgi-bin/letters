@@ -1,0 +1,573 @@
+#! /usr/bin/perl
+# Procedure: letters
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	proto		=> sub { CheckPrivilege('letters_edit') },
+		protoagg	=> sub { CheckPrivilege('letters_edit') },
+		protomodi	=> sub { CheckPrivilege('letters_edit') },
+		findshow	=> sub { CheckPrivilege('letters_view') },
+		findexec	=> sub { CheckPrivilege('letters_view') },
+		delshow		=> sub { CheckPrivilege('letters_edit') },
+		delexec		=> sub { CheckPrivilege('letters_edit') },
+		cetegories	=> sub { CheckPrivilege('letters_view') },
+		docview		=> sub { CheckPrivilege('letters_view') },
+		sign		=> sub { CheckPrivilege('letters_view') },
+		default_action	=> sub { CheckPrivilege('letters_view') } );
+
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  my (	$query,
+	$alphabet_selector,
+	$page_selector ) = IG::MkProtocolList(); 
+
+  Header( $alphabet_selector, $page_selector );
+
+  my $base_link = "alphabet=$on{alphabet}&amp;".
+		  "view=$on{view}";
+
+  TaskListMenu
+   (
+    [$lang{number},			"order=id&amp;$base_link"],
+    [$lang{receiver},			"order=contactname&amp;$base_link"],
+    [$lang{issue},			"order=issue&amp;$base_link"],
+    [Img(src=>"$IG::img_url/user.gif"),	"action=cetegories&amp;variabile=owner"],
+    [$lang{notes},			"order=note&amp;$base_link"],
+   );
+ 
+  QuoteParams();
+  DbQuery( "SELECT letters.id, letters.issue, letters.contactname,".
+           " letters.owner, letters.note, users.initial ".
+           "FROM letters ".
+           "LEFT JOIN users ON letters.owner=users.login ".
+           "WHERE $query" );
+
+  while (my @row = FetchRow())
+   {
+    TaskListItem (
+		[ParseLink($row[0])],
+		[$row[2]],
+		[$row[1],
+		 '',
+		 'nowrap'],
+		[$row[5]],
+		[MkLink($row[4])]
+		   );
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub docview
+ {
+  ## Change id if user request next or previous ID
+  $on{id} = IG::SearchProtocolId( direction => $on{change_id_to},
+                                  id        => $on{id} ) if $on{change_id_to};
+
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'r' ) || return;
+
+  ## retriew document info
+  DbQuery("SELECT * FROM letters WHERE id='".DbQuote($on{id})."' limit 1");
+  my @row = FetchRow();
+
+  ## check if document exists
+  IG::Warn( $lang{Err_nodocument} ) && return if !$row[0];
+  
+  ## adjust some values
+  $row[9] = MkLink($row[9]);
+  $row[4] = MkLink($row[4]);
+  my $direct_link = "$lang{letter} ".
+                    IG::DirectLink($row[0]).
+                    IG::WebDavLink($row[0]);
+
+  ## renders the page
+  Header();
+
+  IG::ShowProtocolInfo
+   ( id     => $row[0],
+     title  => $lang{letters_protocol},
+     fields => [( [ $lang{contact_name},
+                    "<a href=\"contacts?".
+			      "action=showrecord&amp;".
+			      "contactid=$row[7]\">".
+			      "$row[7] $row[2]</a>"],
+		  [ $lang{referring},
+		    IG::UsrInf('name',$row[3]) ],
+		  [ $lang{document_integrity},
+		    IG::CkSign(id=>$row[0],owner=>$row[3]) ],
+		  [ $lang{issue},
+		    $row[1] ],
+                  [ $lang{archive_position},
+                    $row[8] ],
+                  [ $lang{document_reference},
+                    $row[9] ],
+		  [ $lang{notes},
+		    $row[4] ],
+                )] );
+
+  ## Related Documents
+  IG::RelatedTo( $on{id}, $row[7] );
+
+  TaskFoot(	comments	=> 'yes',
+		commentid	=> $on{id},
+		commentbackurl	=> "action=docview&amp;id=$on{id}");
+  HtmlFoot();
+  LogD($row[2], 'view', 'letters', $on{id});
+ }
+
+##############################################################################
+##############################################################################
+sub sign
+ {
+  my $sign;
+  ## find owner
+  DbQuery("select owner from letters where id='".DbQuote($on{id})."'");
+  my $owner = FetchRow();
+
+  $sign = IG::Sign(     id     => $on{id},
+                        action => 'update') if $owner eq $auth_user;
+
+  LogD('sign', 'update', 'letters', $on{id}) if $sign;
+  docview();
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+         TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
+         IG::LastDocuments().
+         TaskFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub cetegories
+ {
+  DbQuery("SELECT owner, count(*) FROM letters ".
+	  "where issue>='$tv{start_year}' and issue<='$tv{end_year}' ".
+	  "group by owner");
+
+  Header();
+  TaskListMenu ([$lang{rif}],
+	        [$lang{number}]  );
+
+  while ( my @row = FetchRow() )
+   {
+    TaskListItem(
+			[IG::UsrInf('name',$row[0]), "letters?flpers=$row[0]"],
+			[$row[1]]
+		);
+   }
+  TaskListFoot(3);
+  Footer();
+ }
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  ## Check document accessibility
+  my $doc_status = IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' );
+  return if ! $doc_status;
+
+  HtmlHead();
+  TaskHead( title     => $lang{letters_protocol},
+	    minwidth  => 500,
+	    icon      => 0);
+
+  FormHead( cgiaction => 'protoagg',
+            labelstyle=> 'width:130px',
+            autofocus => 'false' );
+
+  Input(    show      => $lang{protocol_number},
+	    name      => 'id',
+            style     => 'width:80px;',
+            readonly  => $doc_status == -1 ? 0 : 1,
+	    validate  => { pattern   => '^(5\d\d\d\d\d.\d\d)*$',
+                           onerror   => $lang{Err_protocol} },
+            type      => 'text');
+
+  Input(    type      => 'label',
+            show      => 'File',
+            fieldstyle=> 'padding:0px',
+            data      => IG::InputDocBox
+                          ( dir => $IG::htdocs_dir . $IG::S .
+                                   $IG::default_lang{letters} . $IG::S .
+                                   $IG::default_lang{templates} . $IG::S)
+       ) if !$on{print};
+
+  Input(    show      => $lang{rif},
+            readonly  => $doc_status == -1 ? 0 : 1,
+	    name      => 'owner',
+	    type      => 'logins');
+
+  Input(    type      => 'sendmode');
+
+  Input(    show      => $lang{receiver},
+            validate  => { mandatory => 'true' },
+            extraselection => 1,
+	    type      => 'contactfinder');
+
+  Input(    show      => $lang{issue},
+            type      => 'date',
+	    validate  => { onerror   => $lang{Err_issue},
+	                   mandatory => 'true' },
+	    value     => $tv{today},
+            name      => 'issue');
+
+  Input(    name      => 'npa',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 50,
+            show      => $lang{archive_position});
+
+  Input(    name      => 'docref',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 30,
+            show      => $lang{document_reference});
+
+  Input(    show      => $lang{notes},
+            type      => 'textarea',
+	    name      => 'note',
+            style     => 'width:350px; height:60px;' );
+
+  Input(    show      => $lang{save_letter},
+            style     => 'margin-top:15px',
+	    type      => 'submit');
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  ## Validate Form values
+  push @IG::errmsg, IG::FormValidate();
+  proto() && return if @IG::errmsg;
+
+  ## make a new protocol and insert data in db
+  $on{id}        ||= IG::MkLastNum('letters');
+  $on{sharemode} ||= '0';
+
+  QuoteParams();
+  DbQuery(query =>[( "DELETE FROM letters where id = '$in{id}'",
+
+		     "INSERT INTO letters VALUES ('$in{id}', '$in{issue}',".
+		     " '$in{contactname}', '$in{owner}', '$in{note}',".
+		     " $in{sharemode}, '$auth_user', $in{contactid},".
+		     " '$in{npa}', '$in{docref}')"
+		 )] );
+
+  LogD('', 'insert', 'letters', $on{id});
+
+  IG::BuildDoc();
+ }
+
+#############################################################################
+#############################################################################
+sub protomodi
+ {
+  QuoteParams();
+  DbQuery("SELECT * FROM letters where id='$in{id}'");
+    (	$on{id},
+	$on{issue},
+	$on{contactname},
+	$on{owner},
+	$on{note},
+	$on{sharemode},
+	$on{free},
+	$on{contactid},
+	$on{npa},
+	$on{docref}	) = FetchRow();
+
+  proto();
+ }
+
+############################################################################
+############################################################################
+sub findshow
+ {
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer
+     ( bottom_space => 0,
+       right_layers
+        =>[(FormHead( name       => 'findnavi',
+		      method     => 'get',
+		      target     => 'mainf',
+		      autofocus  => 'false',
+		      cgiaction  => 'findexec',
+                      labelstyle => 'border:0px; width:auto;',
+		      float      => 'left' ),
+
+	    Input(    type       => 'findable' ),
+		
+	    Input(    type       => 'select',
+		      name       =>'fieldtofind',
+		      data       =>[(['from',	 $lang{with_header}],
+				     ['id',      $lang{with_protocol}],
+			             ['date', 	 $lang{with_date}],
+			             ['npa', 	 $lang{with_npa}],
+			             ['notes',   $lang{with_notes}])]),
+	
+	    Input(    type       => 'text',
+		      name       => 'keytofind',
+		      value      => $IG::cookie{lastsearch},
+                      style      => 'width:100px; margin-right: -5px;',
+                      focus      => 'true',
+      		      onblur     => "document.cookie='lastsearch=' + escape(this.value)"),
+	
+	    Input(    type       => 'image',
+		      name       => $lang{find},
+		      src        => "$IG::img_url/${IG::tema}search.gif",
+		      alt        => $lang{find}),
+		      
+	    FormFoot())]
+	 );
+   }
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub findexec
+ {
+  my $query;
+  my $counter = 0;
+
+  if ( $on{ajax_request} )
+   {
+    HttpHead( expires => '+30s' );
+
+    TaskMsg( Input( type       => 'button',
+                    float      => 'right',
+                    onclick    => "document.location = '".
+                                  "letters?".
+                                         "action=proto&amp;".
+                                         "contactid=$on{contactid}&amp;".
+                                         "backtoreferer=1';",
+                    show       => $lang{new_item},
+                    fieldstyle => 'margin:0px',
+                    style      => 'margin:0px;font-size:10px; height:15px' ).
+                    
+	     Img(   src        => "$IG::img_url/mime_mini_letter.png",
+                    style      => 'margin-right:2px',
+                    align      => 'absmiddle').
+
+             "<a href=\"letters\">$lang{letters}</a>"
+
+            ,7 );
+   }
+  else
+   {
+    $IG::set_cookie{lastsearch} = $on{keytofind};
+    Header();
+
+    TaskMsg( "$lang{letters_protocol} - ".
+             "$lang{find}: <strong>$on{keytofind}</strong>",4 );
+   }
+
+  ## Build query
+  QuoteParams();
+  if ( $on{ajax_request} )
+   { $query = "letters.contactid = '$on{contactid}'"; }
+  elsif ( length($on{keytofind}) < 2 )
+   {
+     $query = '1=0';
+     push @IG::errmsg, $lang{Err_find};
+   }
+  elsif ( $on{fieldtofind} eq 'id' || $on{keytofind} =~ /5\d\d\d\d\d\.\d\d/ )
+   { $query = "letters.id ~* '$in{keytofind}'"; }
+  elsif ( $on{fieldtofind} eq 'from' )
+   { $query = "letters.contactname ~* '$in{keytofind}'"; }
+  elsif ( $on{fieldtofind} eq 'npa' )
+   { $query = "letters.npa ~* '$in{keytofind}'"; }
+  elsif ( $on{fieldtofind} eq 'date' )
+   {
+    $in{keytofind} = $on{keytofind} = CkDate($on{keytofind});
+    $query = "letters.issue = '$in{keytofind}'";
+   }
+  elsif ($on{fieldtofind} eq 'notes')
+   { $query = "letters.note ~* '$in{keytofind}'"; }
+
+  TaskListMenu
+   (
+    [$lang{number}],
+    [$lang{receiver}],
+    [$lang{issue}],
+    [$lang{rif}],
+    [$lang{notes}],
+   );
+
+  DbQuery( "SELECT letters.id, letters.issue, letters.contactname,".
+           " letters.owner, letters.note, users.initial ".
+           "FROM letters ".
+           "LEFT JOIN users ON letters.owner=users.login ".
+           "WHERE $query ".
+           "ORDER BY letters.issue desc, letters.id desc");
+
+  while ( my @row = FetchRow() )
+   {
+    ++$counter;
+
+    TaskListItem( [ ParseLink($row[0]) ],
+                  [ $row[2] ],
+                  [ $row[1] ],
+                  [ $row[5] ],
+                  [ MkLink($row[4]) ]
+                );
+   }
+
+  if ( $on{ajax_request} )
+   {
+    TaskListFoot(7);
+   }
+  else
+   {
+    push @IG::errmsg, $lang{no_items}
+      if !$counter && length($on{keytofind}) > 1;
+
+    TaskListFoot();
+    Footer();
+    LogD( $IG::query_string, 'search', 'search_letters', undef);
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub delshow
+ {
+  Header();
+  TaskMsg( $lang{warn_before_delete}.Br(2).
+
+	   FormHead( cgiaction=> 'delexec',
+		     float    => 'left',	
+		     onsubmit => IG::JsConfirm( $lang{are_you_sure} ) ).
+
+	  Input(     type     => 'select',
+		     name     => 'id',
+		     zerovalue=> 'true',
+		     style    => 'width: 350',
+		     data     => CheckPrivilege('sys_user_admin')
+		               ? 'SELECT id, id, contactname '.
+		                 'FROM letters '.
+		                 "where issue>='$tv{start_year}'".
+		                 " and issue<='$tv{end_year}' ".
+		                 'ORDER BY id desc'
+			       : 'SELECT id, id, contactname '.
+			         'FROM letters '.
+			         "where owner='$auth_user'".
+			         " and issue>='$tv{start_year}'".
+			         " and issue<='$tv{end_year}' ".
+			         'ORDER BY id desc',
+                     show     => $lang{protocol_number} ).
+
+	  Input(     type     => 'submit',
+	             show     => $lang{delete} ).
+
+	  FormFoot()
+	  ,2);
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub delexec
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  QuoteParams();
+  if (CheckPrivilege('sys_user_admin') )
+   { DbQuery("delete from letters where id='$in{id}'") }
+  else
+   { DbQuery("delete from letters where id='$in{id}' and owner='$auth_user'") }
+
+  IG::TrashDoc($on{id});
+
+  LogD('', 'delete' ,'letters', $on{id});
+  IG::Redirect('letters');
+ }
+ 
+############################################################################
+############################################################################
+sub Header
+ {
+  my ( $alphabet_selector, $page_selector) = @_;
+
+  HtmlHead( shortcuts => _short_cuts());
+  TaskHead( title     => $lang{letters_protocol},
+	    width     => '100%');
+
+  HLayer( left_layers=>[(
+
+	  MkButton( text      => $lang{back_to_list},
+	            privilege => $on{action} eq 'docview',
+	            link      => 'letters'),
+
+	  MkButton( text      => $lang{new_protocol},
+		    link      => "letters?action=proto"),
+		    
+	  MkButton( text      => $lang{delete},
+	            link      => "letters?action=delshow"),
+
+	  MkButton( text      => $lang{reports},
+		    link      => "reports?table=letters",
+                    privilege => CheckPrivilege('letters_report') ),
+
+	  MkButton( text      => $lang{model_mng},
+		    link      => "docmaker?category=letters",
+                    privilege => CheckPrivilege('letters_template') ),
+
+          $page_selector
+          )],
+	) if !$on{print};
+
+  PrOut $alphabet_selector;
+ }
+
+
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }

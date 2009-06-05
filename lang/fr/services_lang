@@ -1,0 +1,28 @@
+## IGSuite 4.0.0
+## Language: services_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+back_to_services	=>'Rentre à la liste services',
+close_service		=>'De fermer',
+do_services		=>'Effectues les services',
+done_services		=>'Effectués',
+del_service		=>'Effaces service',
+Err_service_date	=>'Erreur introduction date service',
+ext_equipment		=>'Équipement externe',
+material		=>'Matériel',
+new_service		=>'Nouveau Service',
+request_date		=>'Date demandée',
+service_date		=>'Date réalisation',
+service_type		=>'Type service',
+service_todo		=>'Services d\’effectuer',
+service_note		=>'Note sur service',
+service_check		=>'Contrôles post-service',
+today_services		=>'D’aujourd\’hui',
+planned_services	=>'Programmés',
+plan_service		=>'Planifies services',
+Warn_service_notes	=>'ATTENTION!! Le service qu\’on est en train de registrer, il doit être signalé pour la motivation suivante...',
+  ));
+
+1;

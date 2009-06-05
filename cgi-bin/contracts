@@ -1,0 +1,1301 @@
+#! /usr/bin/perl
+# Procedure: contracts
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+use IG::Utils;
+IG::MkEnv(__PACKAGE__);
+
+my @contracts_duration = (	[ 0,	"Spot"            ],
+				[ 1,	"3 $lang{months}" ],
+				[ 2,	"6 $lang{months}" ],
+				[ 3,	"1 $lang{year}"   ],
+				[ 4,	"2 $lang{years}"  ],
+				[ 5,	"5 $lang{years}"  ]);
+
+
+IG::DTable (	reviewlist	=> sub { CheckPrivilege('contracts_view') },
+		proto		=> sub { CheckPrivilege('contracts_edit') },
+		protoagg	=> sub { CheckPrivilege('contracts_edit') },
+		protomodi	=> sub { CheckPrivilege('contracts_edit') },
+		phaseslist	=> sub { CheckPrivilege('contracts_phases_edit') },
+		phase		=> sub { CheckPrivilege('contracts_phases_edit') },
+		phaseagg	=> sub { CheckPrivilege('contracts_phases_edit') },
+		phasemodi	=> sub { CheckPrivilege('contracts_phases_edit') },
+		insertphases	=> sub { CheckPrivilege('contracts_phases_edit') },
+		nextphase	=> sub { CheckPrivilege('contracts_view') },
+		mynextdoc	=> sub { CheckPrivilege('contracts_view') },
+		contractstype	=> sub { CheckPrivilege('contracts_view') },
+		docview		=> sub { CheckPrivilege('contracts_view') },
+		sign		=> sub { CheckPrivilege('contracts_view') },
+		delshow		=> sub { CheckPrivilege('contracts_edit') },
+		delexec		=> sub { CheckPrivilege('contracts_edit') },
+		chflagstatus	=> 1,
+		findshow	=> sub { CheckPrivilege('contracts_view') },
+		findexec	=> sub { CheckPrivilege('contracts_view') },
+		default_action	=> sub { CheckPrivilege('contracts_view') });
+
+#############################################################################
+#############################################################################
+sub mynextdoc
+ {
+  DbQuery(	"SELECT contracts.id ".
+		"FROM contracts LEFT JOIN contracts_phases ".
+		"ON contracts.phase = contracts_phases.id ".
+		"WHERE".
+		" contracts_phases.owner='$auth_user' or".
+		" contracts_phases.owner1='$auth_user' ".
+		"LIMIT 1");
+  my $nextid = FetchRow();
+
+  push @IG::errmsg, $lang{no_other_revision} if !$nextid;
+  $on{id} = $nextid if $nextid;
+  docview();
+ }
+
+#############################################################################
+#############################################################################
+sub _automatic_events
+ {
+  ## Change automatically contract phase and expire when action1 is true
+  my $conn = DbQuery("SELECT contracts.id, contracts_phases.action1val,".
+	  " contracts_phases.action2, contracts.expire, contracts.duration ".
+	  "FROM contracts, contracts_phases ".
+	  "WHERE".
+	  " contracts.phase = contracts_phases.id".
+	  " and contracts_phases.action1<>'' and".
+	  " (( contracts_phases.whenapply='0'".
+	      " and ".
+	 	 "( ( contracts_phases.contractfield='expire' and contracts.expire-contracts_phases.days<=current_date )".
+			 " or ".
+		   "( contracts_phases.contractfield='issue' and contracts.issue-contracts_phases.days<=current_date )".
+			 " or ".
+		   "( contracts_phases.contractfield='startdate' and contracts.startdate-contracts_phases.days<=current_date)".
+		 ")".
+	     ") ".
+	    "or ".
+	     "( contracts_phases.whenapply='1'".
+	      " and".
+		 "( ( contracts_phases.contractfield='expire' and contracts.expire+contracts_phases.days<=current_date )".
+			 " or ".
+		   "( contracts_phases.contractfield='issue' and contracts.issue+contracts_phases.days<=current_date )".
+			 " or ".
+		   "( contracts_phases.contractfield='startdate' and contracts.startdate+contracts_phases.days<=current_date)".
+		 ")".
+	     ") ".
+	   ")");
+
+  while ( my @row = FetchRow($conn) )
+   {
+    if ($row[2])
+     {
+      my $vl = ('0','+3m','+6m','+1y','+2y','+5y')[$row[4]];
+      $vl ||= '+1y';
+      $row[3] = IG::SumDate(IG::GetValuesByDate($row[3]),$vl);
+      DbQuery("update contracts set expire='$row[3]', phase='$row[1]' ".
+	      "where id='$row[0]'");
+     }
+    else
+     {
+      DbQuery("update contracts set phase='$row[1]' where id='$row[0]'");
+     }
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  $on{order} ||= 'id';
+
+  ## Check if there are automatic event in contract phases
+  _automatic_events();
+
+  my (	$query,
+	$alphabet_selector,
+	$page_selector ) = IG::MkProtocolList();
+
+  Header( $page_selector, $alphabet_selector );
+
+  my $base_link = "alphabet=$on{alphabet}&amp;".
+		  "view=$on{view}";
+
+  TaskListMenu
+   (
+    [$lang{number},
+     "order=id&amp;$base_link"],
+    [$lang{contact_name},
+     "order=contactname&amp;$base_link"],
+    [$lang{issue},
+     "order=issue&amp;$base_link"],
+    [$lang{due_date},
+     "order=expire&amp;$base_link"],
+    [$lang{contract_type},
+     "$base_link&amp;action=contractstype&amp;variabile=type"],
+    [Img( src=>"$IG::img_url/user.gif" ),
+     "$base_link&amp;action=contractstype&amp;variabile=owner"],
+    [$lang{phase_name}],
+   );
+
+  DbQuery("SELECT contracts.id, contracts.issue, contracts.contactname,".
+	  " contracts.owner, contracts.note, contracts.expire,".
+	  " contracts.startdate, contracts.phase, contracts.type,".
+	  " contracts.docref, contracts.duration, contracts.flag1,".
+	  " contracts.flag2, contracts.flag3, contracts.contactid,".
+	  " contracts.expire-current_date, contracts_phases.name,".
+	  " contracts_phases.bgcolor, users.initial ".
+	  "FROM contracts ".
+	  "LEFT JOIN contracts_phases ".
+	  "ON contracts.phase = contracts_phases.id ".
+	  "LEFT JOIN users ".
+	  "ON contracts.owner = users.login ".
+	  "WHERE $query");
+
+  while ( my @row = FetchRow() )
+   {
+    $row[17] &&= "style=\"background-color: $row[17]\"";
+    $row[5] = IG::Blush($row[5]) if $row[15]<1;
+
+    TaskListItem(
+	[MkLink($row[0])],
+	[$row[2]],
+	[$row[1]],
+	[$row[5]],
+	[GetTableVal('contracts_type', $row[8])],
+	[$row[18]],
+	[$row[16],'',$row[17]],
+		);
+   }
+
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub reviewlist
+ {
+  my $query;
+  $on{order}         ||= 'id';
+  $on{sortdirection} ||= $IG::list_order;
+
+  ## set a per page view
+  my $base_query = "SELECT COUNT(*) FROM contracts ".
+		   "where issue>='$tv{start_year}'".
+		   " and issue<='$tv{end_year}' $query";
+
+  my $base_url = "contracts?".
+		 "action=reviewlist&amp;".
+		 "order=$on{order}&amp;".
+		 "sortdirection=$on{sortdirection}";
+
+  my ( $limit,
+       $offset,
+       $page_selector ) = IG::MkTaskPaging($base_query, $base_url);
+
+  my $base_link = "action=reviewlist&amp;".
+		  "pos=$on{pos}";
+
+  Header( $page_selector );
+  TaskListMenu
+   (
+    [$lang{number},		"$base_link&amp;order=id"],
+    [$lang{contact_name},	"$base_link&amp;order=contactname"],
+    [$lang{issue},		"$base_link&amp;order=issue"],
+    [$lang{due_date},		"$base_link&amp;order=expire"],
+    [$lang{commercial_review}],
+    [$lang{technical_review}],
+    [$lang{operating_review}]
+   );
+
+  QuoteParams();
+  DbQuery("SELECT *,expire-current_date ".
+	  "FROM contracts ".
+	  "WHERE issue>='$tv{start_year}' and issue<='$tv{end_year}' $query ".
+	  "order by $in{order} $in{sortdirection} ".
+	  "limit $limit offset $offset");
+  while ( my @row = FetchRow() )
+   {
+    $row[5] = IG::Blush($row[5]) if $row[18]<1;
+
+    ## COMMERCIAL
+    my $ima1 = $row[11] eq 'V' ? Img(src=>"$IG::img_url/green.gif")
+             : $row[11] eq 'R' ? Img(src=>"$IG::img_url/red.gif")
+	     :                   Img(src=>"$IG::img_url/orange.gif");
+
+    ## TECHNICAL
+    my $ima2 = $row[12] eq 'V' ? Img(src=>"$IG::img_url/green.gif")
+	     : $row[12] eq 'R' ? Img(src=>"$IG::img_url/red.gif")
+	     :                   Img(src=>"$IG::img_url/orange.gif");
+
+    ## OPERATING
+    my $ima3 = $row[13] eq 'V' ? Img(src=>"$IG::img_url/green.gif")
+             : $row[13] eq 'R' ? Img(src=>"$IG::img_url/red.gif")
+	     :                   Img(src=>"$IG::img_url/orange.gif");
+
+    TaskListItem
+     (
+	[MkLink($row[0])],
+	[$row[2],
+	 "contracts?action=protomodi&amp;id=$row[0]"],
+	[$row[1],
+	 "","nowrap"],
+	[$row[5],
+	 "","nowrap"],
+	[$ima1,
+	 "contracts?action=chflagstatus&amp;id=$row[0]&amp;stato=$row[11]&amp;flag=1&amp;pos=$on{pos}","align=center"],
+	[$ima2,
+	 "contracts?action=chflagstatus&amp;id=$row[0]&amp;stato=$row[12]&amp;flag=2&amp;pos=$on{pos}","align=center"],
+	[$ima3,
+ 	 "contracts?action=chflagstatus&amp;id=$row[0]&amp;stato=$row[13]&amp;flag=3&amp;pos=$on{pos}","align=center"]
+     );
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub phaseslist
+ {
+  $on{contracttype} ||= 1;
+
+  DbQuery("SELECT count(*) from contracts_phases ".
+	  "where contracttype=".DbQuote($on{contracttype}) );
+  my $howmany_phases = FetchRow();
+
+  HtmlHead( shortcuts => _short_cuts());
+  TaskHead( title     => $lang{contracts_protocol},
+	    width     => '100%');
+
+  HLayer( left_layers =>
+           [(
+             MkButton( text => $lang{new_phase},
+                       link => "contracts?".
+			       "action=phase&amp;".
+			       "contracttype=$on{contracttype}" ),
+
+             MkButton( text => $lang{make_standard_phases},
+                       privilege =>    !$howmany_phases
+                                    && $IG::default_lang eq 'it',
+                       link => "contracts?".
+			       "action=insertphases&amp;".
+			       "contracttype=$on{contracttype}" ),
+
+             MkButton( text => $lang{back_to_list},
+                       link => 'contracts')
+            )],
+	 right_layers =>
+	  [(
+	    Input( name     => 'contracttype',
+	    	   type     => 'basictable',
+	    	   show     => $lang{contract_type},
+	    	   style    => 'font-size:10px;widht:250px',
+	    	   table    => 'contracts_type',
+	    	   onchange => "window.location = 'contracts?action=phaseslist&amp;contracttype=' + this.options[this.selectedIndex].value",
+	    	   value    => 1 )
+	   )]
+       );
+
+  TaskListMenu
+   (
+    [$lang{name}],
+    [$lang{priority}],
+    [$lang{phase_manager}],
+    [$lang{notes}],
+   );
+
+  DbQuery("SELECT priority, name, owner, note, id, bgcolor, owner1 ".
+	  "from contracts_phases ".
+	  "where contracttype=".DbQuote($on{contracttype})." order by priority");
+  while ( my @row = FetchRow() )
+   {
+    $row[5] &&= "style=\"background: $row[5]\"";
+    my $owners  = IG::UsrInf('name',$row[2]);
+       $owners .= ' - ' . IG::UsrInf('name',$row[6]) if $row[6];
+
+    TaskListItem(
+	[$row[1],	"contracts?action=phasemodi&amp;id=$row[4]"],
+	[$row[0],	'',$row[5]],
+	[$owners],
+	[$row[3]],
+		);
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+##############################################################################
+##############################################################################
+sub insertphases
+ {
+  ## AVAILABLE ONLY TO ITALIAN USERS
+  my ($priority,$id);
+  for (	'REGISTRAZIONE ACCETTAZIONE',
+	'ATTIVAZIONE FORMALE',
+	'AVVIAMENTO OPERATIVO',
+	'FASE AMMINISTRATIVA',
+	'IN VIGORE',
+	'RIESAME DEL CONTRATTO',
+	'CHIUSURA OPERATIVA',
+	'CHIUSURA FORMALE',
+	'CONCLUSO')
+   {
+    $id = MkId();
+    $priority += 10;
+
+    QuoteParams();
+    DbQuery("insert into contracts_phases".
+	    " values ('$id', $in{contracttype}, '$_', '$IG::login_admin',".
+	    "'', $priority, '', 0, '0', '', '', '', '', 0, '')");
+   } 
+
+  IG::Redirect( "contracts?".
+		"action=phaseslist&amp;".
+		"contracttype=$on{contracttype}" );
+ }
+
+##############################################################################
+##############################################################################
+sub nextphase
+ {
+  DbQuery("select type, phase from contracts where id='".DbQuote($on{id})."'");
+  my ($type,$phase) = FetchRow();
+
+  DbQuery("select id, owner, name, owner1 from contracts_phases ".
+	  "where contracttype=$type order by priority");
+  while ( my @row = FetchRow() )
+   {
+     next if $row[0] ne $phase;
+     my $phase_owner  = $row[1];
+     my $phase_owner1 = $row[3];
+     my ($phase_id, $i, $phase_name) = FetchRow();
+     last if !$phase_id ||
+	     (   $phase_owner ne $auth_user
+	      && $phase_owner1 ne $auth_user
+	      && !CheckPrivilege('sys_user_admin') );
+
+     DbQuery("update contracts set phase='$phase_id' ".
+             "where id='".DbQuote($on{id})."'");
+
+     LogD("Set phase '$phase_name'", 'update', 'contracts', $on{id});
+     last;
+   }
+
+  IG::Redirect("contracts?action=docview&amp;id=$on{id}");
+ }
+
+##############################################################################
+##############################################################################
+sub contractstype
+ {
+  Header();
+  QuoteParams();
+  DbQuery("SELECT $in{variabile},count(*) ".
+	  "FROM contracts ".
+	  "WHERE issue>='$tv{start_year}' and issue<='$tv{end_year}' ".
+	  "GROUP BY $in{variabile}");
+
+  TaskListMenu( [$on{variabile}], [''] );
+
+  while ( my @row = FetchRow() )
+   {
+    if ($on{variabile} eq 'type')
+     {
+      TaskListItem (
+	[GetTableVal(	"contracts_type",
+			$row[0] ),
+	 "contracts?order=$on{order}"],
+	[$row[1],
+	 "",
+	 "align=right"]
+		   );
+     }
+    else
+     {
+      TaskListItem (
+	[IG::UsrInf('name',$row[0]),
+	 "contracts?order=$on{order}"],
+	[$row[1],
+	 "",
+	 "align=right"]
+		   );
+     }
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub docview
+ {
+  ## Change id if user request next or previous ID
+  $on{id} = IG::SearchProtocolId( direction => $on{change_id_to},
+                                  id        => $on{id} ) if $on{change_id_to};
+
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'r' ) || return;
+
+  ## retriew document info
+  DbQuery("SELECT contracts.id, contracts.issue, contracts.contactname,".
+	  " contracts.owner, contracts.note, contracts.expire,".
+	  " contracts.startdate, contracts.phase, contracts.type,".
+	  " contracts.docref, contracts.duration, contracts.flag1,".
+	  " contracts.flag2, contracts.flag3, contracts.contactid,".
+	  " contracts.expire-current_date, contracts_phases.name,".
+	  " contracts_phases.owner, contracts.dayalert,". #dayalert=free
+	  " contracts_phases.contractstatus, contracts_phases.owner1, ".
+	  " contracts.npa, contracts.amount ".
+	  "FROM contracts LEFT JOIN contracts_phases ".
+	  "ON contracts.phase = contracts_phases.id ".
+	  "WHERE contracts.id='".DbQuote($on{id})."'");
+  my @row = FetchRow();
+
+  IG::Warn( $lang{Err_nodocument} ) && return if !$row[0];
+  
+  ## adjust some values
+  $row[4]  = MkLink($row[4]);
+  $row[9]  = MkLink($row[9]);
+  $row[8]  = GetTableVal('contracts_type',$row[8]);
+  $row[5]  = IG::Blush($row[5]) if $row[15]<1;
+  $row[22] = IG::Currency($row[22]);
+  
+  my $day_to_expire = $row[15] > 0 ? $row[15] : '0';
+
+  ## renders the page
+  Header( undef,
+          undef,
+          MkButton( text => $lang{next_revue},
+                    link => "contracts?action=mynextdoc&amp;id=$on{id}" ),
+          $on{id} );
+
+  IG::ShowProtocolInfo
+   ( id     => $row[0],
+     title  => $row[19] == 1
+            ? "$lang{active_contract} ".
+              Img( src=>"$IG::img_url/green.gif", align=>'absmiddle' )
+            : $row[19] == 2
+              ? "$lang{in_revision_contract} ".
+                Img( src=>"$IG::img_url/orange.gif", align=>'absmiddle' )
+              :  "$lang{inactive_contract} ".
+                Img( src=>"$IG::img_url/red.gif", align=>'absmiddle' ),
+     fields => [( [ $lang{contact_name},
+                    "<a href=\"contacts?".
+                              "action=showrecord&amp;".
+                              "contactid=$row[14]\">$row[14] $row[2]</a>" ],
+               [ $lang{referring},
+                 IG::UsrInf('name',$row[3]) ],
+               [ $lang{contract_type},
+                 $row[8] ],
+               [ $lang{issue},
+                 $row[1] ],
+               [ $lang{contract_duration},
+                 $contracts_duration[$row[10]][1] ],
+	       [ $lang{start_from},
+	         $row[6] ],
+               [ $lang{document_reference},
+                 $row[9] ],
+               [ $lang{due_date},
+                 $row[5] ],
+               [ $lang{document_integrity},
+                 IG::CkSign( id    => $row[0],
+			     owner => $row[3])],
+               [ $lang{days_to_expire},
+                 $day_to_expire ],
+               [ $lang{archive_position},
+                 $row[21] ],
+               [ $lang{amount},
+                 $row[22] ],
+               [ $lang{phase_name},
+                 $row[16].
+                 ( $row[17] eq $auth_user || $row[20] eq $auth_user
+                   ? " <a href=\"contracts?".
+	                        "action=nextphase&amp;".
+	                        "id=$row[0]\">".
+                     "[$lang{close_phase}]</a>"
+                   : '' ) ],
+               [ $lang{phase_manager},
+                 ( IG::UsrInf('name',$row[17])
+		   ? IG::UsrInf('name',$row[17])
+		   : $lang{none} ).
+		 ( IG::UsrInf('name',$row[20])
+                   ? '<br>' . IG::UsrInf('name',$row[20])
+                   : '') ],
+               [ $lang{notes},
+                 $row[4] ],
+              )] );
+
+  ## Related Documents
+  IG::RelatedTo( $on{id}, $row[14] );
+
+  TaskFoot(	comments       => 'yes',
+		commentid      => $on{id},
+		commentbackurl => "action=docview&amp;id=$on{id}" );
+  HtmlFoot();
+  LogD($row[2], 'view', 'contracts', $on{id});
+ }
+
+##############################################################################
+##############################################################################
+sub sign
+ {
+  my $sign;
+  ## find owner
+  DbQuery("select owner from contracts where id='".DbQuote($on{id})."'");
+  my $owner = FetchRow();
+
+  $sign = IG::Sign(	id     => $on{id},
+			action => 'update') if $owner eq $auth_user;
+
+  LogD('sign', 'update', 'contracts', $on{id}) if $sign;
+  docview();
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+  
+         TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
+
+         IG::LastDocuments().
+
+         TaskFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub delshow
+ {
+  Header();
+  TaskMsg($lang{warn_before_delete}.Br(2).
+	  FormHead( cgiaction => 'delexec',
+		    float     => 'left',	
+		    onsubmit  => IG::JsConfirm( $lang{are_you_sure} ) ).
+
+	  Input(    type      => 'select',
+		    name      => 'id',
+		    zerovalue => 'true',
+		    style     => 'width: 350',
+		    data =>( CheckPrivilege('sys_user_admin')
+		         ? "SELECT id, id, contactname ".
+			   "FROM contracts ".
+			   "where issue>='$tv{start_year}'".
+			   " and issue<='$tv{end_year}' ".
+			   "ORDER BY id desc"
+
+                         : "SELECT id, id, contactname ".
+                           "FROM contracts ".
+                           "where owner='$auth_user'".
+                           " and issue>='$tv{start_year}'".
+                           " and issue<='$tv{end_year}' ".
+                           "ORDER BY id desc"
+			),
+		    show      => $lang{protocol_number}).
+
+	  Input(    type      => 'submit',
+		    show      => $lang{delete} ).
+
+	  FormFoot(),
+	  2 );
+
+  Footer();
+ }
+
+##############################################################################
+##############################################################################
+sub delexec
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  IG::TrashDoc($on{id});
+  DbQuery("delete from contracts where id='".DbQuote($on{id})."'");
+
+  LogD('', 'delete' ,'contracts', $on{id});
+  IG::Redirect("contracts");
+ }
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  ## Check document accessibility
+  my $doc_status = IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' );
+  return if ! $doc_status;
+
+  HtmlHead();
+  TaskHead( title    => $lang{contracts_protocol},
+	    minwidth => 550);
+
+  FormHead( name      => 'navi',
+	    labelstyle=> 'width:150px',
+	    autofocus => 'false',
+            onsubmit  => "document.navi.save_contract.disabled = 'true';",
+	    cgiaction => 'protoagg');
+
+  Input(    type     => 'hidden',
+            method   => 'html',
+            name     => 'ck_submit',
+            value    => '',
+            override => 1 );
+
+  Input(    name     => 'id',
+            readonly => $doc_status == -1 ? 0 : 1,
+	    show     => $lang{protocol_number},
+	    validate => { pattern  => '^(1\d\d\d\d\d\.\d\d)*$',
+	                  onerror  => $lang{Err_protocol} },
+	    type     => 'text');
+
+  Input(    type     => 'label',
+            show     => 'File',
+            data     => IG::InputDocBox
+                         ( dir => $IG::htdocs_dir . $IG::S .
+                                  $IG::default_lang{contracts} . $IG::S .
+                                  $IG::default_lang{templates} . $IG::S )
+       ) if !$on{print};
+
+  Input(    show     => $lang{contract_type},
+	    type     => 'basictable',
+	    zerovalue=> 'true',
+	    name     => 'type',
+            validate => { mandatory => 'true',
+                          onmissing => $lang{Err_type_phase}  },
+            style    => 'width: 350px',
+            table    => 'contracts_type',
+	    onchange => 'document.navi.ck_submit.value = 1; '.
+	                'document.navi.submit();');
+
+  Input(    type     => 'select',
+	    name     => 'phase',
+            validate => { mandatory => 'true',
+                          onmissing => $lang{Err_type_phase} },
+	    show     => $lang{phase_name},
+	    data     => $on{type}
+	             ?  "select id, name from contracts_phases ".
+	                "where contracttype=$on{type} order by priority"
+	             :  '' );
+
+  Input(    show     => $lang{document_reference},
+	    name     => 'docref',
+	    type     => 'text',
+	    size     => 20,
+	    maxlen   => 20);
+
+  Input(    show     => $lang{contract_duration},
+	    name     => 'duration',
+	    type     => 'select',
+	    data     => \@contracts_duration);
+
+  Input (   show     => $lang{amount},
+            name     => 'amount',
+            size     => 20,
+            maxlen   => 30,
+            type     => 'currency');
+
+  Input(    name     => 'owner',
+            readonly => $doc_status == -1 ? 0 : 1,
+	    show     => $lang{referring},
+	    type     => 'logins');
+
+  Input(    type     => 'contactfinder',
+            validate => { mandatory => 'true' },
+	    show     => $lang{contact_name});
+
+  Input(    show     => $lang{issue},
+	    name     => 'issue',
+            validate => { onerror   => $lang{Err_issue},
+                          mandatory => 'true' },
+	    value    => $tv{today},
+            type     => 'date');
+
+  Input(    show     => $lang{start_from},
+            validate => { onerror   => $lang{Err_start_date},
+                          mandatory => 'true' },
+	    name     => 'startdate',
+	    value    => $tv{today},
+	    type     => 'date');
+
+  Input(    show     => $lang{due_date},
+            validate => { onerror   => $lang{Err_due_date},
+                          mandatory => 'true' },
+	    name     => 'expire',
+            value    => $tv{end_year},
+            type     => 'date');
+
+  Input(    name     => 'npa',
+            type     => 'text',
+            style    => 'width:350;',
+            maxlen   => 50,
+            show     => $lang{archive_position});
+
+  Input(    show     => $lang{notes},
+            name     => 'note',
+            style    => 'width:350px; height:60px;',
+	    type     => 'textarea');
+
+  Input(    show     => $lang{save_contract},
+	    value    => $lang{save_contract},
+	    name     => 'save_contract',
+	    style    => 'margin-top:15px;',
+	    type     => 'submit');
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  proto() && return if $on{ck_submit};
+
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  ## Validate form values
+  push @IG::errmsg, IG::FormValidate();
+  proto() && return if @IG::errmsg;
+
+  ## Build an unique protocol id
+  $on{id}       ||= IG::MkLastNum('contracts');
+
+  $on{amount} .= '00' if $on{amount} !~ /$IG::decimal_separator/;
+  $on{amount} =~ s/[^\d]//g;
+
+  QuoteParams();
+  DbQuery(query =>[( "DELETE FROM contracts where id = '$in{id}'",
+
+		     "INSERT INTO contracts VALUES ('$in{id}', '$in{issue}',".
+		     " '$in{contactname}', '$in{owner}', '$in{note}',".
+		     " '$in{expire}', '$in{startdate}', '$in{phase}',".
+		     " $in{type}, '$in{docref}',$in{duration},'','',".
+		     " '', '$in{contactid}', 0, '$in{npa}', '$in{amount}')"
+		   )] );
+
+  LogD('', 'insert', 'contracts', $on{id});
+
+  ## store document
+  IG::BuildDoc();
+ }
+
+##############################################################################
+##############################################################################
+sub protomodi
+ {
+  DbQuery("SELECT * FROM contracts where id = '$on{id}'");
+  (	$on{id},
+	$on{issue},
+	$on{contactname},
+	$on{owner},
+	$on{note},
+	$on{expire},
+	$on{startdate},
+	$on{phase},
+	$on{type},
+	$on{docref},
+	$on{duration},
+	$on{flag1},
+	$on{flag2},
+	$on{flag3},
+	$on{contactid},
+	$on{free},
+	$on{npa},
+	$on{amount}	) = FetchRow();
+
+  proto();
+ }
+
+############################################################################
+############################################################################
+sub phase
+ {
+  HtmlHead();
+  TaskHead( title    => "$lang{contracts_protocol} - $lang{contracts_phases}",
+            minwidth => 550 );
+            
+  FormHead( cgiaction  => 'phaseagg',
+            labelstyle => 'width:150px' );
+
+  Input(    type     => 'hidden',
+            name     => 'id' );
+
+  Input(    show     => $lang{contract_type},
+	    type     => 'basictable',
+	    name     => 'contracttype',
+	    validate => { onmissing => $lang{Err_contract_type},
+	                  mandatory => 'true' },
+            readonly => $on{id} ? 'true' : '',
+            table    => 'contracts_type');
+
+  Input(    name     => 'name',
+            validate => { onmissing => $lang{Err_phase_name},
+                          mandatory => 'true' },
+            show     => $lang{phase_name},
+            type     => 'text',
+            size     => 50 );
+
+  Input(    name     => 'owner',
+            show     => $lang{phase_manager},
+            value    => 'none',
+            zerovalue=> 'true',
+            type     => 'logins');
+
+  Input(    name     => 'owner1',
+            float    => 'left',
+            value    => 'none',
+            zerovalue=> 'true',
+            type     => 'logins');
+   
+  Input(    name     => 'priority',
+            show     => $lang{priority},
+            validate => { onmissing => $lang{Err_priority},
+                          pattern   => '^(\d+)*$',
+                          mandatory => 'true' },
+            type     => 'text',
+            size     => 4 );
+
+  Input(    name     => 'bgcolor',
+            type     => 'colour',
+            zerovalue=> 'true',
+            show     => $lang{phase_bgcolor} );
+	 
+  Input(    name     => 'contractstatus',
+            type     => 'select',
+            show     => $lang{contract_status},
+            data     => [([0, $lang{inactive_contract}],
+                          [1, $lang{active_contract}],
+                          [2, $lang{in_revision_contract}] )] );
+
+  Input(    type     => 'label',
+	    labelstyle=>'margin-top:10px; border:0px; width:auto; '.
+	                'background-color:transparent;',
+            show     => $lang{event});
+
+  Input(    name     => 'days',
+            show     => $lang{process},
+            type     => 'text',
+	    value    => '0',
+	    size     => 2,
+	    validate => { pattern => '^(\d+)*$' } );
+
+  Input(    name     => 'whenapply',
+            type     => 'select',
+            labelstyle=>'width:auto',
+            show     => $lang{days},
+            float    => 'left',
+            data     => [(['0',$lang{before}],
+		          ['1',$lang{after}])]);
+	
+  Input(    name     => 'contractfield',
+            type     => 'select',
+	    float    => 'left',
+            value    => 'expire',
+            data     => [(['issue',	$lang{issue}],
+                        ['expire',	$lang{due_date}],
+                        ['startdate',	$lang{start_from}])]);
+
+  Input(    type     => 'label',
+            labelstyle=>'margin-top:10px; border:0px; '.
+                        'width:auto; background-color:transparent;',
+            show     => $lang{actions});
+
+  Input(    type     => 'checkbox',
+            show     => $lang{move_to_phase},
+            name     => 'action1');
+
+  Input(    name     => 'action1val',
+            float    => 'left',
+            zerovalue=> 'true',
+            type     => 'select',
+            data     => "select id, name from contracts_phases ".
+		        "where contracttype=$on{contracttype} ".
+	                "order by priority" );
+	
+  Input(    show     => $lang{change_duedate},
+            type     => 'checkbox',
+            name     => 'action2');
+
+  Input(    show     => $lang{notes},
+            name     => 'note',
+            style    => 'width:300px; height:60px;',
+            type     => 'textarea');
+
+  Input(    show     => $lang{save},
+            type     => 'submit',
+            name     => 'submit');
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub phaseagg
+ {
+  ## Validate Form values
+  push @IG::errmsg, IG::FormValidate();
+  phase() && return if @IG::errmsg;
+
+  $on{id}             ||= MkId();
+  $on{days}           ||= '0';
+  $on{contractstatus} ||= '0';
+
+  QuoteParams();
+  DbQuery(query=>[( "DELETE FROM contracts_phases where id = '$in{id}'",
+
+		    "INSERT INTO contracts_phases VALUES ('$in{id}',".
+		    " $in{contracttype}, '$in{name}', '$in{owner}',".
+		    " '$in{note}', $in{priority}, '$in{bgcolor}',".
+		    " $in{days}, '$in{whenapply}', '$in{contractfield}',".
+		    " '$in{action1}', '$in{action1val}', '$in{action2}',".
+		    " $in{contractstatus}, '$in{owner1}' )"
+		 )] );
+
+  LogD('', 'insert', 'contracts_phases', $on{id});
+
+  IG::Redirect( "contracts?".
+		"action=phaseslist&amp;".
+		"contracttype=$on{contracttype}" );
+ }
+
+##############################################################################
+##############################################################################
+sub phasemodi
+ {
+  DbQuery("SELECT * FROM contracts_phases where id = '".DbQuote($on{id})."'");
+
+  (	$on{id},
+	$on{contracttype},
+	$on{name},
+	$on{owner},
+	$on{note},
+	$on{priority},
+	$on{bgcolor},
+	$on{days},
+	$on{whenapply},
+	$on{contractfield},
+	$on{action1},
+	$on{action1val},
+	$on{action2},
+	$on{contractstatus},
+	$on{owner1}	) = FetchRow();
+
+  phase();
+ }
+
+############################################################################
+############################################################################
+sub chflagstatus
+ {
+  if ( ( $on{flag}==1 && CheckPrivilege('contracts_revue_c') )
+       ||
+       ( $on{flag}==2 && CheckPrivilege('contracts_revue_t') )
+       ||
+       ( $on{flag}==3 && CheckPrivilege('contracts_revue_s') ) )
+   {
+    if    ($on{stato} eq 'N') { $on{stato}='S' }
+    elsif ($on{stato} eq 'S') { $on{stato}='N' }
+    elsif ($on{stato} eq 'V') { $on{stato}='R' }
+    elsif ($on{stato} eq 'R') { $on{stato}=''  }
+    else		      { $on{stato}='V' }
+
+    QuoteParams();
+    DbQuery("update contracts set flag$in{flag} = '$in{stato}' ".
+            "where id='$in{id}'");
+
+    LogD( "change flag$on{flag} status to $on{stato}",
+          'update',
+          'contracts',
+          $on{id});
+   }
+
+  IG::Redirect("contracts?action=reviewlist&amp;pos=$on{pos}");
+ }
+
+#############################################################################
+#############################################################################
+sub findshow
+ {
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer( bottom_space => 0,
+            right_layers =>
+             [(
+               FormHead( name     => 'findnavi',
+                         method   => 'get',
+                         target   => 'findf',
+                         autofocus => 'false',
+                         labelstyle=> 'border:0px; width:auto',
+                         cgiaction => 'findshow',
+                         float     => 'left' ).
+
+               Input(    type     => 'findable' ).
+               
+               Input(    type     => 'basictable',
+                         name     => 'typetoselect',
+                         style    => 'font-size:10px; width:230px;',
+                         allvalue => 'true',
+                         table    => 'contracts_type',
+                         onchange => 'document.findnavi.submit();'),
+                         
+               FormFoot(),
+               
+               FormHead( method   => 'get',
+                         name     => 'find',
+                         target   => 'mainf',
+                         cgiaction=> 'findexec',
+                         float    => 'left' ),
+                         
+                Input(   type     => 'hidden',
+                         value    => $on{typetoselect} ||= 'all',
+                         name     => 'type'),
+                         
+                Input(   type     => 'select',
+                         allvalue => 'true',
+                         style    => 'font-size:10px; width:170px',
+                         name     => 'phase',
+                         data     => $on{typetoselect} eq 'all'
+				  ?  ''
+				  :  "select id, name from contracts_phases ".
+				     "where contracttype=$on{typetoselect} ".
+				     "order by priority"),
+
+                Input(   type     => 'text',
+                         focus    => 'true',
+                         name     => 'keytofind',
+                         value    => $IG::cookie{lastsearch},
+                         style    => 'width:90px; margin-right: -5px;',
+                         onblur   => "document.cookie='lastsearch=' + escape(this.value)"),
+
+                Input(   type     => 'image',
+                         name     => 'ok',
+                         src      => "$IG::img_url/${IG::tema}search.gif\" target=\"mainf",
+                         alt      => $lang{find}),
+
+                FormFoot()
+              )]);
+   }
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub findexec
+ {
+  my $query;
+  my $counter;
+
+  if ($on{ajax_request})
+   {
+    HttpHead( expires => '+30s' );
+
+    TaskMsg( Input( type      => 'button',
+                    float     => 'right',
+                    onclick   => "document.location = '".
+                                 "contracts?".
+                                        "action=proto&amp;".
+                                        "contactid=$on{contactid}&amp;".
+                                        "backtoreferer=1';",
+                    show      => $lang{new_contract},
+                    fieldstyle=> 'margin:0px',
+                    style     => 'margin:0px;font-size:10px; height:15px' ).
+
+	     Img( src   => "$IG::img_url/mime_mini_contract.png",
+	          style => 'margin-right:2px',
+                  align => 'absmiddle').
+
+             "<a href=\"contracts\">$lang{contracts}</a>"
+            ,7);
+   }
+  else
+   {
+    $IG::set_cookie{lastsearch} = $on{keytofind};
+    Header();
+   }
+
+  ## Build Query
+  if ( length($on{keytofind}) < 2 && !$on{ajax_request} )
+   {
+    push @IG::errmsg, $lang{Err_find};
+    DbQuery("select * from contracts where 1=0");
+   }
+  elsif (!$on{contactid})
+   {
+    TaskMsg("$lang{contracts_protocol} - $lang{find}: ".
+	    "<strong>$on{keytofind}</strong>",4);
+
+    QuoteParams();
+    if ($on{type} eq 'all')
+     { $query = ''; }
+    elsif ($on{phase} eq 'all')
+     { $query = " and contracts.type='$in{type}'"; }
+    else
+     { $query = " and contracts.type='$in{type}'".
+                " and contracts.phase='$in{phase}'"; }
+
+    DbQuery("SELECT contracts.id, contracts.contactname, contracts.issue,".
+	    " contracts.expire, contracts.docref, contracts.type,".
+	    " contracts.owner, contracts.note, contracts.contactid,".
+	    " contracts.expire-current_date, contracts_phases.name,".
+	    " contracts_phases.bgcolor, users.initial ".
+	    "FROM contracts ".
+	    "LEFT JOIN contracts_phases ".
+	    "ON contracts.phase = contracts_phases.id ".
+            "LEFT JOIN users ".
+            "ON contracts.owner = users.login ".
+	    "WHERE (contracts_phases.name~*'$in{keytofind}'".
+	    " or contracts.id~*'$in{keytofind}'".
+	    " or contracts.contactname~*'$in{keytofind}'".
+	    " or contracts.note~*'$in{keytofind}'".
+	    " or contracts.npa~*'$in{keytofind}'".
+	    " or contracts.docref~*'$in{keytofind}')$query ".
+	    "ORDER BY contracts_phases.priority, contracts.issue desc");
+   }
+  else
+   {
+    TaskMsg("$lang{contracts} - $lang{find}: ".
+	    "<strong>$on{contactname}</strong>",4) if $on{contactname};
+
+    DbQuery("SELECT contracts.id, contracts.contactname, contracts.issue,".
+	    " contracts.expire, contracts.docref, contracts.type,".
+	    " contracts.owner, contracts.note, contracts.contactid,".
+	    " contracts.expire-current_date, contracts_phases.name,".
+	    " contracts_phases.bgcolor, users.initial ".
+	    "FROM contracts LEFT JOIN contracts_phases ".
+	    "ON contracts.phase = contracts_phases.id ".
+            "LEFT JOIN users ".
+            "ON contracts.owner = users.login ".
+	    "WHERE contracts.contactid='".DbQuote($on{contactid})."' ".
+	    "ORDER BY contracts_phases.priority, contracts.issue desc");
+   }
+
+  TaskListMenu
+     (
+      [$lang{number}],
+      [$on{ajax_request} ? '' : $lang{contact_name}],
+      [$lang{issue}],
+      [$lang{due_date}],
+      [$lang{rif}],
+      [$lang{contract_type}],
+      [Img(src=>"$IG::img_url/user.gif")],
+      [$lang{notes}],
+      [$lang{phase_name}],
+     );
+
+  while (my @row = FetchRow())
+   {
+    $counter++;
+
+    $row[3]  = Blush($row[3]) if $row[9]<1;
+    $row[11] = $row[11] ? "style=\"background-color:$row[11];\"" : '';
+
+    TaskListItem(
+	[ParseLink($row[0])],
+	[$on{ajax_request} ? '' : $row[1]],
+	[$row[2]],
+	[$row[3]],
+	[ParseLink($row[4])],
+	[GetTableVal('contracts_type',$row[5])],
+	[$row[12]],
+	[MkLink($row[7])],
+	[$row[10], '', $row[11] ],
+		);
+   }
+
+  if ($on{ajax_request})
+   {
+    TaskListFoot(7);
+   }
+  else
+   {
+    TaskListFoot();
+    push @IG::errmsg, $lang{no_items} if !$counter && length($on{keytofind}) > 1;
+    TaskFoot();
+    HtmlFoot();
+    LogD( $IG::query_string, 'search', 'search_contracts', undef);
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub Header
+ {
+  my ( $page_selector,
+       $alphabet_selector,
+       $buttons,
+       $title               ) = @_;
+
+  HtmlHead( shortcuts => _short_cuts(),
+            title     => $title || $lang{contracts_protocol} );
+
+  TaskHead( title     => $title || $lang{contracts_protocol},
+	    width     => '100%' );
+  HLayer(
+	  MkButton( text      => $lang{back_to_list},
+	            privilege =>    $on{action} eq 'docview'
+	                         || $on{action} eq 'mynextdoc',
+                    link      => "contracts" ),
+
+	  MkButton( text      => $lang{new_contract},
+	            link      => "contracts?action=proto" ),
+
+          MkButton( text      => $lang{review},
+                    link      => "contracts?action=reviewlist",
+                    privilege => CheckPrivilege("contracts_revue") ),
+                    
+          MkButton( text      => $lang{contracts_phases},
+                    link      => "contracts?action=phaseslist" ),
+
+          MkButton( text      => $lang{model_mng},
+                    link      => "docmaker?category=contracts",
+                    privilege => CheckPrivilege("contracts_template") ),
+                    
+          MkButton( text      => $lang{reports},
+                    link      => "reports?table=contracts",
+                    privilege => CheckPrivilege('contracts_report') ),
+
+          $buttons,
+
+	  $page_selector,
+	 ) if !$on{print};
+
+  PrOut $alphabet_selector;
+ }
+
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }
+
+####################################################
+## $lang{days_before_alert}

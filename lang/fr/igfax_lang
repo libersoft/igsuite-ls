@@ -1,0 +1,44 @@
+## IGSuite 4.0.0
+## Language: igfax_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+arrived_byfax		=>'Arrivée via fax',
+attempt_time		=>'Numéro tentatives',
+ca			=>'À l\'attention de',
+cc			=>'Pour information',
+cover_page		=>'Couvertures Page',
+delete_attach		=>'Effaces annexe',
+direction               =>'Direction',
+document_exist		=>'Document présent',
+document_tosend		=>'Document de envoyer',
+edit_fax_notes          =>'Edit notes',
+Err_no_document_cover   =>'No document or cover page to send',
+Err_no_fax_number       =>'Tu dois insérer un numéro de fax dans la fiche contact avant de envoyer le fax',
+events_report		=>'Rapport',
+inner_fax		=>'Fax en arrivé',
+insert_tospool		=>'Insères dans les fax en sortie',
+max_5rows               =>'Tu peux insérer un maximum de 5 lignes',
+multi_receivers         =>'Destinataires multiples',
+no_preview		=>'Avant-première pas disponible! Contrôle le parcours dans le ficher de configuration IGSuite',
+normal_view             =>'Normal',
+notify1			=>'A expédition faite',
+notify2			=>'Aucune notification',
+notify3			=>'Notification si recommencé',
+notify_byemail		=>'Notification courriel',
+outer_fax		=>'Fax en sortie',
+pages_without_cover	=>'Pages à l\'exclusion de la couverture',
+placed_call		=>'Numéro communications',
+probable_receiver	=>'Destinataire hypothétique',
+rotate_view             =>'Renversé',
+sendfax			=>'Envoies Fax',
+sendfax_ok		=>'Fax correctement inséré dans la queue fax en sortie',
+send_it_this_night      =>'Send it this night',
+single_receiver         =>'Destinataire unique',
+to_be_seen		=>'Et pour connaissance envoyé à',
+view_fax                =>'Vois Fax',
+without_paper_fax	=>"Ce fax a été envoyé sans l\'utilisation du support papier",
+   ));
+
+1;

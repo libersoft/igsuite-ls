@@ -1,0 +1,12 @@
+## IGSuite 4.0.0
+## Language: letters_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+letters_protocol	=>'Protocolo cartas',
+save_letter		=>'Salvar em Protocolo Cartas',
+  ));
+
+1;

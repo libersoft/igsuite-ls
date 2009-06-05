@@ -1,0 +1,23 @@
+## IGSuite 4.0.0
+## Language: services_stats_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+total_services_num	=>'Total services maden',
+total_services_month	=>'Total services maden in',
+time_average		=>'Planning time average',
+week_charge		=>'Work load days of the week',
+services_requested	=>'Progress of mounthly services requested/done',
+max_services		=>'Max services total made in a day',
+min_services		=>'Minimum services total made in a day',
+day_average		=>'Services made daily average',
+week_end_services	=>'Total services made during non working days',
+byequipment_services	=>'Total services made and grouped by equipment',
+total_services_months	=>'Last 13 months total services made',
+average_services_months =>'Last 13 months daily average',
+today_stats		=>'Today stats',
+months_stats		=>'Stats of',
+   ));
+
+1;

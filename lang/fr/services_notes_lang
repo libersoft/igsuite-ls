@@ -1,0 +1,14 @@
+## IGSuite 4.0.0
+## Language: services_notes_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+services_report		=>'Analyse services',
+con1			=>'Bloc services',
+con2			=>'Notes avant-services',
+con3			=>'Notes post-services',
+new_contact		=>'Nouvelle note',
+   ));
+
+1;

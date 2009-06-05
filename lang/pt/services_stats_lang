@@ -1,0 +1,24 @@
+## IGSuite 4.0.0
+## Language: services_stats_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+total_services_num	=>'Totais serviços criados',
+total_services_month	=>'Totais serviços criados em',
+time_average		=>'Média do tempo planejando',
+week_charge		=>'Dias de trabalho na semana',
+services_requested	=>'Andamento mensal de serviços abertos/concluídos',
+max_services		=>'Total max serviços criados por dia',
+min_services		=>'Total min serviços criados por dia',
+day_average		=>'Média dos serviços criados por dia',
+week_end_services	=>'Totais de serviços criados fora do horário de trabalho',
+byequipment_services	=>'Totais de serviços criados e agrupados por equipamentos',
+total_services_months	=>'Totais serviços criados nos últimos 13 meses',
+average_services_months =>'Média diária dos últimos 13 meses',
+today_stats		=>'Estatística hoje',
+months_stats		=>'Estatística de',
+   ));
+
+1;

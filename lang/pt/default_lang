@@ -1,0 +1,26 @@
+## IGSuite 4.0.0
+## Language: default_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%default_lang = (
+email_msgs	=>'email',
+home		=>'home',
+letters		=>'cartas',
+offers		=>'ofertas',
+orders		=>'pedidos',
+archive		=>'arquivo',
+fax_received	=>'fax_recebido',
+fax_sent	=>'fax_enviado',
+basket		=>'lixeira',
+contracts	=>'contratos',
+nc_ext		=>'nc_ext',
+nc_int		=>'nc_int',
+templates	=>'modelos',
+managementdocs	=>'gerenciador_docs',
+help_files	=>'ig_arquivo_ajudas',
+equipments	=>'equipamentos',
+users_photo     =>'foto_usuarios',
+   );
+
+1;

@@ -1,0 +1,23 @@
+## IGSuite 4.0.0
+## Language: services_stats_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+total_services_num	=>'Totale servizi effettuati',
+total_services_month	=>'nel mese di',
+time_average		=>'Tempo medio di pianificazione',
+week_charge		=>'Carico di lavoro giorni della settimana',
+services_requested	=>'Andamento mensile servizi richiesti/effettuati',
+max_services		=>'Numero massimo di servizi effettuati',
+min_services		=>'Numero minimo di servizi effettuati',
+day_average		=>'Media servizi richiesti ed effettuati quotidianamente',
+week_end_services	=>'Nei giorni festivi e prefestivi sono stati effettuati in totale',
+byequipment_services	=>'Servizi divisi per Attrezzatura impiegata',
+total_services_months	=>'Servizi totali degli ultimi 13 mesi',
+average_services_months =>'Media giornaliera dei servizi degli ultimi 13 mesi',
+today_stats		=>'Statistiche a oggi',
+months_stats		=>'Statistiche del mese di',
+   ));
+
+1;

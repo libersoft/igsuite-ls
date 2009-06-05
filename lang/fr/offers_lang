@@ -1,0 +1,20 @@
+## IGSuite 4.0.0
+## Language: offers_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+offer_not_accepted      =>'Offer not accepted',
+new_revision		=>'Nouvelle révision',
+accepted		=>'Acceptées',
+not_accepted		=>'Pas Acceptées',
+offers_protocol		=>'Protocole Offres',
+save_offer		=>'Sauvegarde dans le protocole Offres',
+offers_stats		=>'Statistiques Offres',
+stat_0			=>'Total typologies offres et résultat',
+stat_1			=>'Offres effectuées dans les derniers 12 mois',
+stat_2			=>'Derniers 12 mois -',
+find_offers		=>'Recherche offres'
+   ));
+
+1;

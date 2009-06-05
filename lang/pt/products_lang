@@ -1,0 +1,38 @@
+## IGSuite 4.0.0
+## Language: products_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+prices                  =>'Preços',
+additional_information  =>'Informações adicionais',
+delivery_time           =>'Tempo entrega',
+delivery_modality       =>'Modalidade entrega',
+packaging               =>'Embalagem',
+min_quantity            =>'Quantidade Min',
+max_quantity            =>'Quantidade Max',
+qualified_customers	=>'Clientes qualificados',
+partners		=>'Parceiros',
+competitors		=>'Concorrentes',
+disable_prices_list	=>'Lista preços desabilitada',
+last_prices_update	=>'Última atualização de preços',
+history_view		=>'Visualizar histórico',
+unit_measure		=>'Unidade de medida',
+back_to_prices		=>'Voltar para lista preços',
+new_product		=>'Novo produto',
+Err_price		=>'Atenção: insira um preço válido',
+update_prices		=>'Atualizar preços',
+update_reference	=>'Atualizar referência',
+article			=>'Produto',
+make_offer		=>'Faça uma proposta',
+make_order		=>'Faça um pedido',
+make_letter		=>'Faça uma carta',
+make_summary		=>'Resumo',
+prices_history		=>'Histórico de preços',
+unit			=>'Unit.',
+with_code		=>'Com código contendo',
+find_products		=>'Procurar produtos',
+  ));
+
+1;

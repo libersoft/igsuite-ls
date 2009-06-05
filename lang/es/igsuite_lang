@@ -1,0 +1,46 @@
+## IGSuite 4.0.0
+## Language: igsuite_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+first_connection        =>'My Compliment! This is your first access to IGSuite. Please update your %1$s',
+file_zip_ok             =>'The File was successfully compressed',
+file_unzip_ok           =>'The File was successfully uncompressed',
+Err_module_zip          =>'Sorry, you have to install Perl module \'Archive::Zip\' if you want to compress documents.',
+Err_host_deny           =>'Sorry you can\'t login from this client host! Administrator has set some IP address restrictions',
+Err_disabled_user	=>'Attention! disabled user please contact your system administrator',
+maximize                =>'Maximize',
+active_sessions         =>'Active Sessions',
+my_pipeline             =>'My Pipeline',
+top_open_opportunities  =>'Top Open Opportunities',
+password_expired        =>'Your password is expired or this is your first access. Please change it by your %1$s',
+new_comments            =>'New comments from ',
+change_user             =>'Cambia utente',
+weather                 =>'El tiempo',
+personal_calendar	=>'Agenda Personal',
+personal_links		=>'Enlaces Personales',
+igsuite_login		=>'Login a IGSuite',
+personal_info		=>'Personal Info',
+news			=>'Noticias',
+internal_news		=>'Noticias Internas',
+personal_documents	=>'Documentos personales',
+poll			=>'Encuesta',
+wellcome_message	=>'Gracias por haber elegido IGSuite, a esta altura de la instalación es necesario registrar a los otros usuarios del sistema y a sus respectivos permisos. El usuario Administrador ha sido registrado automáticamente; El mismo es quien tendrá privilegios para registrar a todos los otros usuarios. Haz clic <a href="users">AQUI</a> para registrar a otro usuario, o carga de nuevo la página para actualizar el menú.',
+no_event		=>'Ningún evento en la Agenda',
+no_tasks		=>'Ningún task registrado',
+connected_users		=>'Usuarios conectados',
+connected_guest		=>'Connected guest',
+unread_msgs		=>'Mensajes no leídos',
+registered_users	=>'Usuarios Registrados',
+vote			=>'Vota',
+my_letters		=>'Mis Cartas',
+my_offers		=>'Mis Presupuestos',
+my_orders		=>'Mis Pedidos',
+my_archive		=>'Mi archivo',
+my_contracts		=>'Mis Contratos',
+my_fax_received		=>'Mis Faxes',
+  ));
+
+1;
+

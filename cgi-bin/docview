@@ -1,0 +1,239 @@
+#! /usr/bin/perl
+# Procedure: docview
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+use IG::DocView;
+
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (    page_view	=> sub { CheckPrivilege() },
+                photo_view	=> sub { CheckPrivilege() },
+                show_doc	=> sub { CheckPrivilege() },
+                default_action  => sub { CheckPrivilege() } );
+
+############################################################################
+############################################################################
+sub default_action { page_view() }
+sub page_view
+ {
+  $on{width}  ||= 800;
+  $on{height} ||= 1132;
+  
+  my ( $doc_file_name,
+       $doc_file_dir,
+       $doc_protocol ) = IG::ProtocolToFile($on{protocol});
+
+  $on{title} ||= "$lang{$doc_protocol} $on{protocol}";
+
+  ## check privileges
+  if ( ! CheckPrivilege("${doc_protocol}_view") )
+   {
+    IG::Warn( $lang{Err_privileges} );
+    return;
+   }
+
+  die("Protocol '$on{protocol}' doesn't exist.\n") if !$doc_file_name;
+  
+  my $sourcefile = $doc_file_dir . $IG::S . $doc_file_name;
+
+  my $imagefile  = DocView::extract( sourcefile => $sourcefile,
+                                     protocol   => $on{protocol},
+                                     title	=> $on{title},
+				     width      => $on{width},
+				     height     => $on{height},	
+				     rotate	=> $on{rotate},
+				     imagepage  => $on{page} );
+ 
+  die("No file found. Probabily we can't extract info from ".
+      "sourcefile or sourcefile '$sourcefile' has some ".
+      "strict privilege.\n") if !$imagefile;
+
+  my ( $type, $size ) = IG::FileStat( $imagefile );
+
+  IG::DocHead( type           => $type,
+               expires        => '+20m',
+               content_length => $size );
+ 
+  open (IMG, '<', $imagefile) or die("Can't open '$imagefile'.\n");
+  binmode(IMG);
+  PrOut($_) while <IMG>;
+  close (IMG);
+  1;
+ }
+
+############################################################################
+############################################################################
+sub photo_view
+ {
+  my $imagefile;
+  if ( ! CheckPrivilege("$on{photo_type}_view") )
+   {
+    IG::Warn( $lang{Err_privileges} );
+    return;
+   }
+  
+  if ($on{photo_type} eq 'filemanager')
+   {
+    my $file_path = IG::Crypt( $on{fp}, 'decrypt' );
+    $imagefile  = DocView::photo_view( file_path  => $file_path,
+                                       photo_type => $on{photo_type},
+                                       width      => $on{width},
+                                       height     => $on{height},
+                                       rotate     => $on{rotate} );
+   }
+  else
+   {
+    ## used by /(users|equipments)/
+    $imagefile  = DocView::photo_view( photo_name => $on{photo_name},
+                                       photo_type => $on{photo_type},
+                                       width      => $on{width},
+                                       height     => $on{height},
+                                       rotate     => $on{rotate} );
+   }
+ 
+  die("No file found. ".
+      "Probabily we can't extract info from sourcefile.\n") if !$imagefile;
+
+  my ( $type, $size ) = IG::FileStat( $imagefile );
+
+  IG::DocHead( type           => $type,
+               expires        => '+20m',
+               content_length => $size );
+
+  open (IMG, '<', $imagefile) or die("Can't open '$imagefile'.\n");
+  binmode(IMG);
+  PrOut($_) while <IMG>;
+  close (IMG);
+  1;
+ }
+
+#############################################################################
+#############################################################################
+sub show_doc
+ {
+  die("Any document ID specified.\n") if !$on{id};
+
+  my ( $doc_file_name,
+       $doc_file_dir,
+       $doc_protocol ) = IG::ProtocolToFile($on{id});
+
+  if ( ! CheckPrivilege("${doc_protocol}_view") )
+   {
+    IG::Warn( $lang{Err_privileges} );
+    return;
+   }
+
+  ## Find other protocol information
+  DbQuery("select contactid, issue, owner, note, contactname ".
+          "from $doc_protocol where id = '".DbQuote($on{id})."'");
+  my ( $doc_contactid,
+       $doc_issue,
+       $doc_owner,
+       $doc_note,
+       $doc_contactname ) = FetchRow();
+
+  $on{contactid} ||= $doc_contactid;
+
+  LogD($doc_contactname, 'view', $doc_protocol, $on{id});
+
+  my $icons.= Img( title => $lang{mark_by_igmsg},
+                   width => 23,
+                   src   => "$IG::img_url/comment_edit_big.gif",
+                   href  => "javascript:winPopUp(".
+                            "'isms?".
+                              "action=composemessage&amp;".
+                              "onsend=close&amp;".
+                              "text_msg=". MkUrl($on{id}).
+                              "',500,200,'composemessage')"
+                 );
+
+  if ( $doc_file_name =~ /\.html*$/i )
+   {
+    ## Get Direct Link to HTML Document
+    my $direct_link = (IG::DirectLink($on{id}))[1];
+
+    if ( $on{print} )
+     {
+      IG::Redirect( $direct_link );
+      return;
+     }
+
+    HtmlHead( shortcuts => _short_cuts());
+    TaskHead( title     => "IGDocView - $lang{$doc_protocol} - ".
+                           "$lang{protocol_number} $on{id}",
+              width     => '100%',
+              minheight => '400px',
+              padding   => 2,
+              icons     => $icons );
+ 
+    PrOut "<div id=\"container_files\">".
+          "<iframe frameborder=\"0\" style=\"width:100%; height:100%;\" src=\"$direct_link\">".
+          "</iframe></div>";
+
+    IG::JsExec( code => <<END );
+ window.onload = container_maximize;
+ window.onresize = container_maximize;
+  
+ function container_maximize()
+  {
+   getSize();
+   if ( maxHeight > 60 )
+    { \$('container_files').style.height = maxHeight - 60; }
+  }
+END
+   }
+  elsif ( $doc_file_name =~ /\.(pdf|tiff*)$/i )
+   {
+    HtmlHead( shortcuts => _short_cuts() );
+    TaskHead( title     => "IGDocView - $lang{$doc_protocol} - ".
+                           "$lang{protocol_number} $on{id}",
+              icons     => $icons );
+
+    DocView::showdoc( id           => $on{id},
+                      page	   => $on{page},
+                      width        => 650,
+                      height	   => 919,
+                      sourcefile   => $doc_file_dir . $IG::S . $doc_file_name,
+                      doc_protocol => $doc_protocol );
+   }
+  else
+   {
+    IG::Warn("You can use IGDocView Only with Pdf, Tiff or HTML files");
+    return;
+   }
+
+  TaskFoot();
+  HtmlFoot();	   
+ }
+
+#############################################################################
+#############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+         TaskHead( title=>$lang{last_documents},
+                   icon=>2,
+                   width=>180 ).
+         IG::LastDocuments().
+         TaskFoot();
+ }

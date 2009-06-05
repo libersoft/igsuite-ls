@@ -1,0 +1,215 @@
+#! /usr/bin/perl
+# Procedure: langtool
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+use vars qw(%nlang);
+
+IG::DTable( proto	   => sub { CheckPrivilege('sys_user_admin') },
+            protoagg	   => sub { CheckPrivilege('sys_user_admin') },
+	    ckitem	   => sub { $IG::request_method eq 'commandline' },
+	    default_action => sub { CheckPrivilege('sys_user_admin') }
+          );
+
+#############################################################################
+#############################################################################
+sub ckitem
+ {
+  package Ckitem;
+  my %lang;
+  my %mylang;
+
+  for my $translation_lang (qw(it fr en es nl pt))
+   {
+    package IG;
+    undef %lang;
+    do "$IG::cgi_dir${IG::S}lang${IG::S}$translation_lang${IG::S}base_lang";
+
+    package Ckitem;
+    my $no_error;
+    print STDOUT "\nCheck language: $translation_lang\n";
+    opendir (DIR,"$IG::cgi_dir") or die("Can't open '$IG::cgi_dir'.\n");
+    for my $app_name (sort grep /^([^\.]|IG)/, readdir(DIR))
+     {
+      undef %mylang;
+      undef %Ckitem::lang;
+      my $file_lang = "$IG::cgi_dir${IG::S}lang${IG::S}".
+                      "$translation_lang${IG::S}${app_name}_lang";
+      do $file_lang;
+      die("There is a compilation error in '$file_lang' file.\n") if $@;
+
+      ## find all language item
+      open (FH, '<', $app_name);
+      while(<FH>)
+       {
+        while( s/(\$|\:\:)lang\{([\'\"]*)([^\$\}\"\']+)\2\}// )
+         { $mylang{$3}++ if !$IG::lang{$3} } 
+       }
+      close(FH);
+
+      ## Check if we have all item in $IG::lang
+      foreach (sort keys %mylang)
+       {
+        if ( !$Ckitem::lang{$_} )
+         {
+          print STDOUT $app_name eq 'IG.pm'
+		       ? "Insert $_ in base_lang\n"
+		       : "Insert $_ in ${app_name}_lang or in base_lang\n";
+          $no_error++
+         }
+       }
+
+      ## Check if we have an useless item in $IG::lang
+      foreach (sort keys %Ckitem::lang)
+       {
+        if ( !$mylang{$_} )
+         {
+          print STDOUT "Delete $_ from ${app_name}_lang\n";
+          $no_error++
+         }
+       }
+     }
+    close(DIR);
+    print STDOUT "Ok!\n" if !$no_error;
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub default_action { proto() } 
+sub proto
+ {
+  ## read lang file in another namespace
+  {
+   package Lang;
+   my %lang;
+   $IG::on{langfile} ||= 'base_lang';
+   do "$IG::cgi_dir${IG::S}lang${IG::S}$IG::lang${IG::S}$IG::on{langfile}";
+  }
+
+  HtmlHead(     title=>"$lang{language}: $IG::lang" );
+  TaskHead(	title=>"$lang{language}: $IG::lang",
+		icon=>1);
+
+  FormHead(	labelstyle => 'width: 200px',
+                name       => 'proto',
+		cgiaction  => 'protoagg');
+
+  opendir (DIR, "$IG::cgi_dir${S}lang${S}$IG::lang")
+    or die("Can't open directory '$IG::cgi_dir${S}lang${S}$IG::lang'.\n");
+  my @fales = sort grep ! /default_lang/, grep /.+\_lang$/, readdir(DIR);
+  close(DIR);
+
+  TaskMsg( Input ( show=>'File',
+	           type=>'select',
+                   onchange=>'document.proto.submit();',
+	           labelstyle=>'width:80px',
+	           name=>'langfile',
+	           data=>\@fales ).
+
+           Input ( show  => $lang{save},
+                   float => 'left',
+ 	           type  => 'submit'),
+	          
+           7 );
+
+  Input ( type     => 'hidden',
+	  name     => 'lfile',
+	  override => 'true',
+	  value    => $on{langfile} );
+
+  foreach (sort keys %Lang::lang)
+   {
+    Input ( show  => $_,
+	    type  => 'text',
+	    name  => $_,
+	    value => $Lang::lang{$_},
+	    style => 'width:550px; font-family:courier;' );
+   }
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  ## In mod_perl we need to restart Apache to  change take effects.
+
+  $on{lfile}    ||= 'base_lang';
+  $on{langfile} ||= 'base_lang';
+
+  my $lang_file;
+  my $lang_file_name = $IG::cgi_dir . ${IG::S} . 'lang' . ${IG::S} .
+                       $IG::lang . ${IG::S} . $IG::on{lfile};
+
+  ## read lang file in another namespace
+  {
+   package Lang;
+   my %lang;
+   do $lang_file_name;
+  }
+
+  ## read lang file
+  open ( DAT, '<', $lang_file_name )
+    or die("Can't read '$lang_file_name'.\n");
+  $lang_file .= $_ while <DAT>;
+  close DAT; 
+
+  ## parse lang file
+  foreach (keys %Lang::lang)
+   {
+    my $item = $on{$_};
+       $item =~ s/(\'|\\)/\\$1/g;
+    if ( $item && $item ne $Lang::lang{$_} )
+     { $lang_file =~ s/^($_[\s\t]*\=>)(.+)/$1\'$item\'\,/m }
+   }
+
+  ## rewrite lang file
+  open (DAT, '>', $lang_file_name)
+    or die("Can't write on '$lang_file_name'.\n");
+  print DAT $lang_file;
+  close DAT;
+ 
+  IG::Redirect("langtool?action=proto&amp;langfile=$on{langfile}");
+ }
+
+##############################################################################
+##############################################################################
+sub help
+ {
+  PrOut <<END;
+
+IGLangTool - An IGSuite application
+Usage: langtool [options]
+ -action <ig action>
+ -auth_user <user>
+
+END
+ }
+
+############################################################################
+############################################################################

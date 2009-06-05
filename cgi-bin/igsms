@@ -1,0 +1,201 @@
+#! /usr/bin/perl
+# Procedure: igsms
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+use IG::SmsGateway;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	composemessage	=> sub { CheckPrivilege('sys_sms_send') },
+		sendmessage	=> sub { CheckPrivilege('sys_sms_send') },
+		showstatus	=> sub { CheckPrivilege('sys_sms_send') },
+		default_action	=> sub { CheckPrivilege('sys_sms_send') } );
+
+#############################################################################
+#############################################################################
+sub default_action { composemessage() }
+sub composemessage
+ {
+  my $obj = SmsGateway->new( $IG::plugin_conf{sms}{username},
+			     $IG::plugin_conf{sms}{password});
+
+  my $credit = $obj->getcredit();
+
+  HtmlHead();
+
+  TaskHead( title    => 'IGSms',
+            minwidth => 320,
+            icon     => 1 );
+
+  if ($credit > 1)
+   {
+    FormHead( cgiaction => 'sendmessage',
+	      name      => 'smsform');
+
+    Input( type => 'hidden',
+           name => 'onsend');
+
+    TaskMsg("$lang{available_msgs}: $credit",7);
+
+    Input( type       => 'combo',
+           style      => 'width: 200px',
+           labelstyle => 'width:80px',
+           show       => $lang{number},
+           data       => "select name, name from users ".
+                         "where mobilephone<>'' and status=1 order by name",
+           name       => 'to');
+
+    Input( show       => $lang{text},
+           type       => 'textarea',
+           name       => 'text2send',
+           labelstyle => 'width:80px',
+           onkeyup    => "checkSmsLength();",
+           style      => 'width:220px; height:60px;' );
+
+    Input( show       => $lang{send},
+           type       => 'submit' );
+ 
+    Input( type       => 'text',
+           value      => 160,
+           float      => 'right',
+           style      => 'width:40px',
+           show       => $lang{available_chars},
+           labelstyle => 'width:175px; font-size:10px; color:gray',
+           name       => 'chr' );
+
+    IG::JsExec( code => "
+var maxchars=160;
+
+function checkSmsLength()
+ {
+  chars = smsform.text2send.value
+  if (chars.length > maxchars)
+   {
+    smsform.text2send.value = chars.substr(0,maxchars);
+    smsform.text2send.blur();
+   }
+  smsform.chr.value = maxchars - smsform.text2send.value.length;
+ }                      ");
+
+    FormFoot();
+   }
+  else
+   {
+    ## credit not available
+    TaskMsg($lang{err_no_credit});
+   }
+
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub sendmessage
+ {
+  my $mobilephone;
+  my $sender = $IG::plugin_conf{sms}{sender} || $IG::soc_tel;
+
+  if (!$on{text2send})
+   {
+    push @IG::errmsg, $lang{err_no_text};
+    $lang{text} = Blush($lang{text});
+   }
+
+  if ($on{to})
+   {
+    DbQuery("select mobilephone from users where name='".DbQuote($on{to})."'");
+    $mobilephone = FetchRow() || $on{to};
+   }
+
+  if ($mobilephone !~ /^\+*[\d\s]+$/)
+   {
+    push @IG::errmsg, $lang{err_wrong_number};
+    $lang{number} = Blush($lang{number});
+   }
+
+  ## any error?
+  composemessage() && return if @IG::errmsg;
+
+  my $obj = SmsGateway->new( $IG::plugin_conf{sms}{username},
+			     $IG::plugin_conf{sms}{password});
+
+  $on{id} = $obj->sendmsg( sender	=> $sender, 
+		 	   receiver	=> $mobilephone,
+			   text		=> $on{text2send} );
+
+  LogD($mobilephone, 'send', 'sms', $on{id}) if $on{id};
+  showstatus();
+ }
+
+#############################################################################
+#############################################################################
+sub showstatus
+ {
+  my (@status, $status);
+  my $sender = $IG::plugin_conf{sms}{sender} || $IG::soc_tel;
+
+  if ($on{id})
+   {
+    my $obj = SmsGateway->new( $IG::plugin_conf{sms}{username},
+			       $IG::plugin_conf{sms}{password});
+
+    push @status, [ 'ID',          $on{id} ];
+    push @status, [ $lang{sender}, $sender ];
+
+    $status = $obj->getstatus(id => $on{id} );
+    for (split /\;/,  $status  )
+     {
+         ( /^dest\:(.+)/  && push @status, [$lang{receiver},    substr($1,0,length($1)-3). "xxx<br>"] )
+      || ( /^stato\:(.+)/ && push @status, [$lang{status},      $1] )
+      || ( /^desc\:(.+)/  && push @status, [$lang{description}, $1] );
+     }
+   }
+  else
+   {
+    $status = $lang{err_send_failed};
+   }
+
+  HtmlHead( expire => "5;URL=igsms?action=showstatus&amp;id=$on{id}" );
+
+  TaskHead( title  => "IGSms id:$on{id}",
+	    icon   => 1 );
+
+  TaskMsg( $lang{wait_for_status_update}, 7);
+  TaskMsg( IG::ShowData( fields => \@status ), 2);
+
+  Input(    type   => 'button',
+            show   => $lang{update},
+            onclick=> "window.location='igsms?action=showstatus&amp;id=$on{id}';" );
+
+  Input(    type   => 'button',
+            show   => $lang{close},
+            float  => 'left',
+            onclick=> 'self.close();' );
+
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################

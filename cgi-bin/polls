@@ -1,0 +1,301 @@
+#! /usr/bin/perl
+# Procedure: polls
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	proto		=> sub { CheckPrivilege('sys_user_admin') },
+		protoagg	=> sub { CheckPrivilege('sys_user_admin') },
+		protomodi	=> sub { CheckPrivilege('sys_user_admin') },
+		delexec		=> sub { CheckPrivilege('sys_user_admin') },
+		replypoll	=> sub { CheckPrivilege() },
+		default_action	=> sub { CheckPrivilege('sys_user_admin') },
+	   );
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  my @voters;
+  HtmlHead();
+  TaskHead( title      => $lang{polls},
+            minwidth   => '600px');
+  FormHead( cgiaction  => 'protoagg',
+            labelstyle => 'width:130px');
+
+  Input (type=>'hiddens',
+	 data=>{ owner	=>'',
+		 voters =>'',
+		 id	=>''} );
+
+  Input (type=>'date',
+	 show=>$lang{issue},
+	 value=>$tv{today},
+	 name=>'issue');
+
+  Input (type=>'date',
+	 show=>$lang{due_date},
+	 float=>'left',
+	 value=>IG::SumDate(0,0,0,7),
+	 name=>'expire');
+
+  Input (type=>'textarea',
+	 name=>'question',
+	 rows=>3,
+         style=>'width:350px',
+	 show=>$lang{question});
+
+  Input (type=>'select',
+         name=>'groupid',
+         zerovalue=>'true',
+         style=>'width:350px; margin-bottom:20px;',
+         data=>"select groupid, name from users_groups ".
+               "order by name",
+         show=>$lang{poll_group_limit} );
+
+  TaskListMenu( [""], [$lang{answer}], [$lang{voters}] );
+  $voters[$2] .= IG::UsrInf('name',$1).', '
+                 while $on{voters} =~ s/(\w+)\:(\d+)\://;
+
+  for (1..20)
+   {
+    TaskListItem (	[$_],
+			[ Input (type=>'text',
+				 name=>"a$_",
+				 size=>50,
+				 maxlen=>250)],
+			[$voters[$_]]
+		 );
+
+    Input (type=>'hidden',
+	   name=>"n$_");
+   }
+  TaskListFoot(20);
+
+  Input (type=>'submit',
+	 show=>$lang{save},
+	 name=>'submit');
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  if (!($on{issue} = CkDate($on{issue})))
+   {
+    push @IG::errmsg, $lang{Err_issue};
+    $lang{issue} = Blush($lang{issue});
+   }
+  if (!($on{expire} = CkDate($on{expire})))
+   {
+    push @IG::errmsg, $lang{Err_due_date};
+    $lang{due_date} = Blush($lang{due_date});
+   }
+
+  if (!$on{question})
+   { push @IG::errmsg, $lang{Err_description}; }
+
+  proto() && return if @IG::errmsg;
+  $on{id} ||= MkId();
+
+  for (1..20) { $on{"n$_"} ||= '0' }
+
+  QuoteParams();
+  DbQuery(query=>[( "delete from polls where id='$in{id}'",
+
+		    "INSERT INTO polls VALUES (".
+		    " '$in{id}', '$auth_user', '$in{issue}','$in{expire}','$in{question}','$in{voters}',".
+		    " '$in{a1}', '$in{a2}', '$in{a3}', '$in{a4}', '$in{a5}',".
+		    " '$in{a6}', '$in{a7}', '$in{a8}', '$in{a9}', '$in{a10}',".
+		    " '$in{a11}', '$in{a12}', '$in{a13}', '$in{a14}', '$in{a15}',".
+		    " '$in{a16}', '$in{a17}', '$in{a18}', '$in{a19}', '$in{a20}',".
+		    " $in{n1}, $in{n2}, $in{n3}, $in{n4}, $in{n5},".
+		    " $in{n6}, $in{n7}, $in{n8}, $in{n9}, $in{n10},".
+		    " $in{n11}, $in{n12}, $in{n13}, $in{n14}, $in{n15},".
+		    " $in{n16}, $in{n17}, $in{n18}, $in{n19}, $in{n20},".
+		    " '$in{groupid}')"
+		)] );
+
+  LogD('', 'insert', 'polls', $on{id}); 
+
+  IG::Redirect("polls");
+ }
+
+##############################################################################
+##############################################################################
+sub protomodi
+ {
+  DbQuery("SELECT * from polls where id='".DbQuote($on{id})."'");
+   (	$on{id},
+	$on{owner},
+	$on{issue},
+	$on{expire},
+	$on{question},
+	$on{voters},
+	$on{a1},
+	$on{a2},
+	$on{a3},
+	$on{a4},
+	$on{a5},
+	$on{a6},
+	$on{a7},
+	$on{a8},
+	$on{a9},
+	$on{a10},
+	$on{a11},
+	$on{a12},
+	$on{a13},
+	$on{a14},
+	$on{a15},
+	$on{a16},
+	$on{a17},
+	$on{a18},
+	$on{a19},
+	$on{a20},
+	$on{n1},
+	$on{n2},
+	$on{n3},
+	$on{n4},
+	$on{n5},
+	$on{n6},
+	$on{n7},
+	$on{n8},
+	$on{n9},
+	$on{n10},
+	$on{n11},
+	$on{n12},
+	$on{n13},
+	$on{n14},
+	$on{n15},
+	$on{n16},
+	$on{a17},
+	$on{n18},
+	$on{n19},
+	$on{n20},
+	$on{groupid}	) = FetchRow();
+
+  proto();
+ }
+
+##############################################################################
+##############################################################################
+sub delexec
+ {
+  DbQuery("delete from polls where id='".DbQuote($on{id})."'");
+  LogD('', 'delete', 'polls', $on{id});
+  IG::Redirect("polls");
+ }
+
+#############################################################################
+#############################################################################
+sub replypoll
+ {
+  DbQuery("select voters from polls where id='".DbQuote($on{id})."'");
+  my $voters = FetchRow();
+
+  if ($voters !~ /$auth_user\:/)
+   {
+    $voters .= $auth_user. ":". DbQuote($on{answer}) . ":";
+    DbQuery("update polls set voters = '$voters' where id='".DbQuote($on{id})."'");
+   }
+  LogD('add as voters','update','polls',$on{id});
+  IG::Redirect("igsuite?action=summary");
+ }
+
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  Header();
+  TaskListMenu( [$lang{owner}],
+		[$lang{question}],
+		[$lang{issue}],
+		[$lang{due_date}],
+		[$lang{participant}],
+		[""]);
+
+  DbQuery("select count(*) from users where login<>''");
+  my $how_many_users = FetchRow();
+
+  DbQuery("SELECT * FROM polls order by id desc");
+  while (my @row = FetchRow())
+   {
+    my $how_many_voters = $row[5] =~ s/\:/\-/g;
+    $how_many_voters  /= 2 if $how_many_voters;
+    $how_many_voters ||= '0';
+
+    ## find better answer
+    my %answers;
+    my $answers = $row[5];
+    my $max = 1;
+    my $key = 1;
+    $answers{$1}++ while $answers =~ s/\-(\d+)\-//;
+    for (keys %answers) { $max=$answers{$key=$_} if $answers{$_}>$max; }
+
+    TaskListItem (
+	[IG::UsrInf('name',$row[1]),
+	 "polls?action=protomodi&amp;id=$row[0]"],
+	["<strong>$row[4]</strong><br>\n".$row[5+$key]],
+	[$row[2]],
+	[$row[3]],
+	["$how_many_voters/$how_many_users"],
+	[Img(	src=>"$IG::img_url/edit.gif",
+		title=>$lang{edit},
+		href=>"polls?action=protomodi&amp;id=$row[0]").
+	 Img(	src=>"$IG::img_url/delete.gif",
+		title=>$lang{delete},
+		href=>"polls?action=delexec&amp;id=$row[0]"),
+	 '','nowrap']
+		 );
+   }
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub Header 
+ {
+  HtmlHead();
+  TaskHead( title    => $lang{polls},
+            minwidth => '550px' );
+
+  HLayer(
+	 MkButton( text => $lang{new_item},
+	           link => "polls?action=proto"),
+
+         MkButton( text => $lang{update_list},
+                   link => "polls" ),
+	);
+ }
+
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }

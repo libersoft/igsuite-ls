@@ -1,0 +1,19 @@
+## IGSuite 4.0.0
+## Language: tiffedit_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+source_doc		=>'Origenele Document',
+target_doc		=>'Te gebruiken Document',
+edit_doc		=>'Bewerk Document',
+Err_target_doc		=>'Attentie: Voeg een te gebruiken document referentie',
+Err_source_doc		=>'Attentie: Voeg een  origenele document referentie',
+Err_nodoc		=>'Error: Document niet gevonden',
+Err_pages_description	=>'Error: pagina verwijzing verkeerd toegevoegd',
+ok_doc			=>'Document succesvol aangemaakt! Bekijk nieuw document... ',
+  ));
+
+1;
+
+

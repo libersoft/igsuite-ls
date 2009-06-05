@@ -1,0 +1,74 @@
+#! /usr/bin/perl
+# Procedure: dprof
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use CGI qw/:standard -no_debug/;
+
+my $command = 'dprofpp';
+my $options = param('options');
+
+## find cginame & cgidir
+$ENV{SCRIPT_FILENAME} ||= $0;
+my @sfn = split(/\\|\//,$ENV{SCRIPT_FILENAME});
+my $cgi_name = pop @sfn;
+my $cgi_dir  = substr( $ENV{SCRIPT_FILENAME},
+                       0,
+                       length($ENV{SCRIPT_FILENAME}) - length($cgi_name)-1);
+$cgi_dir ||= '.';
+                     
+## file to pass to dprofpp
+my $tmon_file = "$cgi_dir${CGI::SL}data${CGI::SL}temp${CGI::SL}".
+                param('igdebugid').
+                '.dprof';
+
+die("Any .dprof file at '$tmon_file'.\n") if ! -e $tmon_file;
+
+## check dprofpp path
+if (! -x $command)
+ {
+  my @command = split /\/|\\/, $command;
+  $command = pop(@command);
+
+  foreach (split(/:/ , $ENV{PATH}))
+   {
+    if (-x "$_$CGI::SL$command")
+     {
+      no strict 'refs';
+      $command = "$_$CGI::SL$command";
+      last;
+     }
+   }
+ }
+
+die("Any '$command' to execute.\n") if ! -x $command;
+
+## return results
+print header( -type	=> 'text/html',
+	      -target	=> '_self',
+	      -status	=> '200 OK',
+	      -expires	=> 'now'   );
+
+print "<pre style=\"font-size:11px; max-width:680px;\">";
+open (DAT, "$command $options -O 100 $tmon_file|");
+print while <DAT>;
+close (DAT);
+print "</pre>";

@@ -1,0 +1,696 @@
+#! /usr/bin/perl
+# Procedure: opportunities
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+use IG::Utils;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	proto		=> sub { CheckPrivilege('opportunities_edit') },
+		protoagg	=> sub { CheckPrivilege('opportunities_edit') },
+		protomodi	=> sub { CheckPrivilege('opportunities_edit') },
+		protoview	=> sub { CheckPrivilege('opportunities_view') },
+		close           => sub { CheckPrivilege('opportunities_edit') },
+		chart1		=> sub { CheckPrivilege('opportunities_view') },
+		findshow	=> sub { CheckPrivilege('opportunities_view') },
+		findexec	=> sub { CheckPrivilege('opportunities_view') },
+		delshow		=> sub { CheckPrivilege('opportunities_edit') },
+		delexec		=> sub { CheckPrivilege('opportunities_edit') },
+		default_action	=> sub { CheckPrivilege('opportunities_view') } );
+
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  $on{order} ||= 'issue';
+
+  my (	$query,
+	$alphabet_selector,
+	$page_selector ) = IG::MkProtocolList(); 
+
+  Header( $page_selector, $alphabet_selector );
+
+  my $base_link = "alphabet=$on{alphabet}&amp;".
+		  "view=$on{view}";
+
+  TaskListMenu
+   (
+    [$lang{opportunity_name},	"order=name&amp;$base_link"],
+    [$lang{issue},		"order=issue&amp;$base_link"],
+    [$lang{sales_stage},	"order=stage&amp;$base_link"],
+    [$lang{amount},		"order=amount&amp;$base_link"],
+    [$lang{rif},		"order=owner&amp;$base_link"],
+   );
+
+  DbQuery( "SELECT opportunities.id, opportunities.name,".
+           " opportunities.contactid, opportunities.type,".
+           " opportunities.source, opportunities.description,".
+           " opportunities.amount, opportunities.issue,".
+           " opportunities.enddate, opportunities.stage,".
+           " opportunities.probability, opportunities.owner,".
+           " opportunities.contactname, opportunities.status,".
+           " users.name ".
+           "FROM opportunities ".
+           "LEFT JOIN users ON opportunities.owner=users.login ".
+           "WHERE $query" );
+
+  while ( my @row = FetchRow() )
+   {
+    my $style = $row[13] == 2 ? 'style="color:gray;"' : '';
+
+    TaskListItem (
+		["$row[1]<br>".
+		 "<span style=\"color:$IG::clr{font_low_evidence};\">".
+		 "$row[12]</span>",
+		 "opportunities?action=protoview&amp;".
+                               "view=$on{view}&amp;".
+                               "alphabet=$on{alphabet}&amp;".
+                               "id=$row[0]", $style],
+		[$row[7],'',$style],
+		[GetTableVal('opportunities_sales_stage',$row[9]),'',$style],
+		[IG::Currency($row[6]),'',"align=\"right\" $style"],
+		[$row[14],'',$style],
+		   );
+   }
+
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub protoview
+ {
+  ## retriew document info
+  DbQuery("SELECT * FROM opportunities WHERE id='".DbQuote($on{id})."'");
+  my @row = FetchRow();
+
+  ## adjust some values
+  $row[6] = IG::Currency($row[6]);
+  $row[5] = MkLink($row[5]);
+
+  ## renders the page
+  HtmlHead( shortcuts=>_short_cuts() );
+  TaskHead( title=>$lang{opportunities},
+	    width=>'100%');
+
+  my $base_link = "&amp;id=$on{id}".
+                  "&amp;view=$on{view}".
+                  "&amp;order=$on{order}".
+                  "&amp;alphabet=$on{alphabet}";
+
+  HLayer( left_layers =>
+           [(
+	     MkButton( text => $lang{update_opportunity},
+	               link => "opportunities?action=protomodi".$base_link ),
+
+             MkButton( text => $lang{delete},
+                       link => "opportunities?action=delshow".$base_link ),
+
+             ( $row[13] == 1
+               ? MkButton( text => $lang{close_the_opportunity},
+                           link => "opportunities?action=close".$base_link )
+               : '' ),
+
+             MkButton( text => $lang{back_to_list},
+                       link => "opportunities?action=default_action".$base_link ),
+            )]
+        );
+
+  ## repository
+  IG::MkRepository( id=>$on{id} );
+
+  IG::ShowData( fields => [( [ $lang{opportunity_name},
+			       $row[1] ],
+                             [ $lang{owner},
+			       IG::UsrInf('name',$row[11]) ],
+			     [ $lang{contact_name},
+			       "<a href=\"contacts?".
+					 "action=showrecord&amp;".
+			                 "contactid=$row[2]\">".
+			       "$row[2] $row[12]</a>" ],
+			     [ $lang{status},
+			       ($lang{opportunity_open},
+			        $lang{opportunity_open},
+			        Blush($lang{opportunity_closed}))[$row[13]] ],
+			     [ $lang{type},
+			       (undef,
+			        $lang{new_business},
+			        $lang{existing_business})[$row[3]] ],
+			     [ $lang{issue},
+			       $row[7] ],
+			     [ $lang{opportunity_source},
+			       GetTableVal('opportunities_source',$row[4]) ],
+			     [ $lang{expected_close_date},
+			       $row[8] ],
+			     [ $lang{sales_stage},
+			       GetTableVal( 'opportunities_sales_stage',
+			                    $row[9]) ],
+			     [ $lang{probability},
+			       $row[10] ],
+		             [ $lang{amount},
+			       $row[6] ],
+                             [ '&nbsp;','&nbsp;' ],
+			     [ $lang{description},
+			       $row[5] ],
+			   )]
+	     );
+ 
+  TaskFoot(	comments	=> 'yes',
+		commentid	=> $on{id},
+		commentbackurl	=> "action=protoview&amp;id=$on{id}");
+  HtmlFoot();
+  LogD($row[1], 'view', 'opportunities', $on{id});
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+         TaskHead( title=>$lang{last_documents},
+                   icon=>2,
+                   width=>180 ).
+         IG::LastDocuments().
+         TaskFoot();
+ }
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  HtmlHead( shortcuts => _short_cuts() );
+  TaskHead( title     => $lang{opportunities},
+            width     => '100%',
+            minwidth  => 550,
+            icon      => 0 );
+
+  FormHead( cgiaction => 'protoagg',
+            labelstyle=> 'width:150px' );
+
+  Input( type     => 'hidden',
+         name     => 'id');
+
+  Input( show     => $lang{opportunity_name},
+         validate => { onerror   => $lang{Err_opportunity_name},
+                       mandatory => 'true' },
+         name     => 'name',
+         size     => 50,
+         maxlen   => 200,
+         type     => 'text');
+
+  Input( show     => $lang{status},
+         type     => 'select',
+         name     => 'status',
+         data     => [([1,     $lang{opportunity_open}],
+                       [2,     $lang{opportunity_closed}],)]);
+
+  Input( show     => $lang{owner},
+         name     => 'owner',
+         type     => 'logins');
+
+  Input( show     => $lang{type},
+         name     => 'type',
+         type     => 'select',
+         data     => [([1,	$lang{new_business}],
+                       [2,	$lang{existing_business}])]);
+
+  Input( show     => $lang{opportunity_source},
+         type     => 'basictable',
+         zerovalue=> 'true',
+         name     => 'source',
+         table    => 'opportunities_source');
+
+  Input( show     => $lang{amount},
+         validate => { onerror   => $lang{Err_amount},
+                       mandatory => 'true' },
+         name     => 'amount',
+         size     => 20,
+         maxlen   => 30,
+         type     => 'currency');
+
+  Input( show     => $lang{contact_name},
+         name     => 'contact_name',
+         type     => 'contactfinder');
+
+  Input( show     => $lang{issue},
+         type     => 'date',
+         validate => { onerror   => $lang{Err_issue},
+                       mandatory => 'true' },
+         value    => $tv{today},
+         name     => 'issue');
+
+  Input( show     => $lang{expected_close_date},
+         type     => 'date',
+         validate => { onerror   => $lang{Err_enddate},
+                       mandatory => 'true' },
+         value    => $tv{end_year},
+         name     => 'enddate');
+
+  my @probability;
+  push @probability, $_.'0%' for 1..10;
+
+  Input( show     => $lang{probability},
+         name     => 'probability',
+         zerovalue=> 'true',
+         type     => 'select',
+         data     => \@probability );
+
+  Input( show     => $lang{sales_stage},
+         name     => 'stage',
+         zerovalue=> 'true',
+         type     => 'basictable',
+         order    => 'byvalue',
+         table    => 'opportunities_sales_stage');
+
+  Input( show     => $lang{description},
+         type     => 'textarea',
+         name     => 'description',
+         labelstyle=> 'width:150px; height:118px',
+         style    => 'width:350px; height:100px;' );
+
+  Input( show     => $lang{save},
+         style    => 'margin-top:15px',
+         type     => 'submit');
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  ## Validate form values
+  push @IG::errmsg, IG::FormValidate();
+  proto() && return if @IG::errmsg;
+
+  $on{amount} .= '00' if $on{amount} !~ /$IG::decimal_separator/;
+  $on{amount} =~ s/[^\d]//g;
+
+  ## find contact to create the document or return warning message
+  IG::ContactFinder('contact_name');
+
+  ## any error?
+  proto() && return if @IG::errmsg;
+
+  ## make a new protocol and insert data in db
+  $on{id} ||= MkId();
+
+  QuoteParams();
+  DbQuery(query=>[("DELETE FROM opportunities where id='$in{id}'",
+
+		   "INSERT INTO opportunities VALUES ('$in{id}', '$in{name}',".
+		   " '$in{contactid}', '$in{type}', '$in{source}',".
+		   " '$in{description}', '$in{amount}', '$in{issue}',".
+		   " '$in{enddate}', '$in{stage}', '$in{probability}',".
+		   " '$in{owner}', '$in{contactname}', '$in{status}')"
+		 )] );
+
+  LogD('', 'insert', 'opportunity', $on{id});
+
+  $on{backtoreferer}
+  ? IG::BackToReferer()
+  : protoview();
+ }
+
+#############################################################################
+#############################################################################
+sub protomodi
+ {
+  QuoteParams();
+  DbQuery("SELECT * FROM opportunities where id='$in{id}'");
+    (
+	$on{id},
+	$on{name},
+	$on{contactid},
+	$on{type},
+	$on{source},
+	$on{description},
+	$on{amount},
+	$on{issue},
+	$on{enddate},
+	$on{stage},
+	$on{probability},
+	$on{owner},
+	$on{contactname},
+	$on{status}	) = FetchRow();
+
+  proto();
+ }
+
+############################################################################
+############################################################################
+sub findshow
+ {
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer( bottom_space => 0,
+            right_layers=>
+		  [(FormHead(	name=>'findnavi',
+				method=>'get',
+				target=>'mainf',
+				autofocus=>'false',
+				cgiaction=>'findexec',
+                                labelstyle=>'border:0px; width:auto;',
+				float=>'left' ),
+
+		    Input (	type=>'findable' ),
+		
+		    Input (	type=>'select',
+				name=>'fieldtofind',
+				data=>[(['title',$lang{with_title}],
+					['header',$lang{with_header}],
+					['description', $lang{with_description}])]),
+	
+		    Input (	type=>'text',
+				name=>'keytofind',
+                                focus => 'true',
+      				value=>$IG::cookie{lastsearch},
+                                style=>'width:100px; margin-right: -5px;',
+				onblur=>"document.cookie='lastsearch=' + escape(this.value)"),
+	
+		    Input (	type=>'image',
+				name=>$lang{find},
+				src=>"$IG::img_url/${IG::tema}search.gif",
+				alt=>$lang{find}),
+				
+		    FormFoot())]
+	 );
+   }
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub findexec
+ {
+  my ($query, $sounter);
+
+  if ( $on{ajax_request} )
+   {
+    HttpHead( expires => '+30s' );
+
+    TaskMsg( Input( type       => 'button',
+		    float      =>'right',
+		    onclick    => "document.location = '".
+				  "opportunities?".
+					"action=proto&amp;".
+					"contactid=$on{contactid}&amp;".
+					"backtoreferer=1';",
+		    show       => $lang{new_opportunity},
+		    fieldstyle => 'margin:0px',
+		    style      => 'margin:0px;font-size:10px; height:15px' ).
+
+	     Img(   src   => "$IG::img_url/opportunity.gif",
+		    href  => 'opportunities',
+		    align => 'absmiddle').
+
+	     $lang{opportunities}
+	    ,7);
+   }
+  else
+   {
+    $IG::set_cookie{lastsearch} = $on{keytofind};
+    Header();
+
+    TaskMsg("$lang{opportunities} - $lang{find}: ".
+	    "<strong>$on{keytofind}</strong>" ,4);
+   }
+
+  QuoteParams();
+  if ( $on{contactid} )
+   { $query = "opportunities.contactid = '$on{contactid}'"; }
+  elsif (length($on{keytofind}) <2)
+   { push @IG::errmsg, $lang{Err_find}; $query = '1=0'; }
+  elsif ($on{fieldtofind} eq 'title')
+   { $query = "opportunities.name ~* '$in{keytofind}'"; }
+  elsif ($on{fieldtofind} eq 'header')
+   { $query = "opportunities.contactname ~* '$in{keytofind}'"; }
+  elsif ($on{fieldtofind} eq 'description')
+   { $query = "opportunities.description ~* '$in{keytofind}'"; }
+  else
+   { $query = '1=0'; }
+
+  TaskListMenu
+   ( 
+    [$lang{opportunity_name}],
+    [$lang{status}],
+    [$lang{sales_stage}],
+    [$lang{amount}],
+    [Img(src=>"$IG::img_url/user.gif")],
+   );
+
+  DbQuery( "SELECT opportunities.id, opportunities.name,".
+           " opportunities.contactid, opportunities.type,".
+           " opportunities.source, opportunities.description,".
+           " opportunities.amount, opportunities.issue,".
+           " opportunities.enddate, opportunities.stage,".
+           " opportunities.probability, opportunities.owner,".
+           " opportunities.contactname, opportunities.status,".
+           " users.initial ".
+           "FROM opportunities ".
+           "LEFT JOIN users ON opportunities.owner=users.login ".
+           "WHERE $query ".
+           "ORDER BY opportunities.issue desc" );
+
+  my @opp_status = ( $lang{opportunity_open},
+		     $lang{opportunity_open},
+		     Blush($lang{opportunity_closed}) );
+
+  while (my @row = FetchRow())
+   {
+    ++$sounter;
+    my $style = $row[13] == 2 ? 'style="color:gray;"' : '';
+
+    TaskListItem (
+		[$row[1],
+		 "opportunities?action=protoview&amp;id=$row[0]",
+		 $style],
+		[@opp_status[$row[13]]],
+		[GetTableVal('opportunities_sales_stage',$row[9]),
+		 '',
+		 $style],
+		[IG::Currency($row[6]),
+		 '',
+		 "align=\"right\" $style"],
+		[$row[14],
+		 '',
+		 $style],
+		   );
+   }
+
+  if ($on{ajax_request})
+   {
+    TaskListFoot(7);
+   }
+  else
+   {
+    TaskListFoot();
+    push @IG::errmsg, $lang{no_items} if !$sounter && length($on{keytofind}) >1;
+    Footer();
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub delshow
+ {
+  Header();
+  TaskMsg(FormHead(cgiaction=>'delexec',
+		   float=>'left',	
+		   onsubmitask=>$lang{are_you_sure} ).
+
+	  Input (type=>'select',
+		 name=>'id',
+		 zerovalue=>'true',
+		 style=>'width: 350',
+		 data=> ( CheckPrivilege('sys_user_admin') ?
+			  "SELECT id, name FROM opportunities ORDER BY issue desc"
+				:
+			  "SELECT id, name FROM opportunities where owner='$auth_user' ORDER BY issue desc"
+			),
+		 show=>$lang{opportunity_name}).
+
+	  Input (type=>'submit',
+		 show=>$lang{delete}).
+
+	  FormFoot(),2);
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub delexec
+ {
+  QuoteParams();
+  if (CheckPrivilege('sys_user_admin') )
+   { DbQuery("delete from opportunities where id='$in{id}'") }
+  else
+   { DbQuery("delete from opportunities where id='$in{id}' and owner='$auth_user'") }
+
+  LogD("", "delete" ,"opportunities", $on{id});
+  IG::Redirect( "opportunities" );
+ }
+
+############################################################################
+############################################################################
+sub close
+ {
+  QuoteParams();
+  if ( CheckPrivilege('sys_user_admin') )
+   {
+    DbQuery("update opportunities set status='2' where id='$in{id}'");
+   }
+  else
+   {
+    DbQuery("update opportunities set status='2' ".
+            "where id='$in{id}' and owner='$auth_user'");
+   }
+
+  LogD("", "close" ,"opportunities", $on{id});
+  IG::Redirect( "opportunities?action=protoview&amp;id=$on{id}" );
+ }
+
+############################################################################
+############################################################################
+sub chart1
+ {
+  my %data;
+  my @stages = ('prospecting',
+		'qualification',
+		'needs_analysis',
+		'value_proposition',
+		'perception_analysis',
+		'proposal_price_quote',
+		'negotiation_review',
+		'closed_won',
+		'closed_lost');
+
+  IG::DocHead( type    => 'text/plain',
+               expires => 'now' );
+
+  DbQuery("select count(*) from basic_tables ".
+          "where tablename='opportunities_sales_stage'");
+  my $opp_num = FetchRow();
+  my $opp_height = $opp_num * 30;
+
+  DbQuery("select stage, sum(amount) from opportunities ".
+	  "where owner='$auth_user' group by stage");
+  while ( my @row = FetchRow() )
+   { $data{$row[0]} = $row[1]; }
+
+  PrOut "<chart>\n<chart_type>bar</chart_type>\n";
+  PrOut "<series_switch>true</series_switch>\n";
+  PrOut "<axis_value_text>\n";
+  PrOut "<string></string>\n" for 1..$opp_num;
+  PrOut "</axis_value_text>\n";
+
+  PrOut "<chart_data>\n<row>\n<null/>\n";
+  PrOut "<string>".
+	GetTableVal('opportunities_sales_stage', $_).
+	"\\r".
+	IG::Currency($data{$_}).
+	"</string>\n" for 1..$opp_num;
+
+  PrOut "</row>\n<row>\n<string>Region A</string>\n";
+  PrOut "<string>". ($data{$_} || '0') ."</string>\n" for 1..$opp_num;
+
+PrOut <<FINE;
+  </row>
+</chart_data>
+
+<chart_rect    x='140'
+               y='3' 
+               width='160'
+               height='$opp_height'
+               positive_color='FFFFFF'
+               negative_color='FFFFFF'
+               positive_alpha='75'
+               negative_alpha='25'
+               />
+
+<legend_rect	x='500'
+                y='500'
+		/>
+
+<draw>
+<text  transition='none'
+             layer='background'
+             x='50'
+             y='5' 
+             width='250'  
+             height='$opp_height' 
+             rotation='90' 
+             font='arial' 
+             bold='true' 
+             size='35' 
+             color='DDDDDD' 
+             alpha='80'
+             >Opportunities</text>
+</draw>
+</chart>
+FINE
+ }
+ 
+############################################################################
+############################################################################
+sub Header
+ {
+  my ( $page_selector, $alphabet_selector ) = @_;
+
+  HtmlHead( shortcuts => _short_cuts() );
+  TaskHead( title     => $lang{opportunities},
+	    width     => '100%' );
+
+  HLayer( left_layers =>
+           [(
+	     MkButton( text => $lang{new_opportunity},
+	               link => 'opportunities?action=proto' ),
+
+             MkButton( text => $lang{delete},
+                       link => 'opportunities?action=delshow' ),
+
+             MkButton( text => $lang{update_list},
+                       link => 'opportunities' ),
+
+             MkButton( text => $lang{reports},
+                       link => 'reports?table=opportunities',
+                       privilege => CheckPrivilege('opportunities_report') ),
+
+             $page_selector
+            )]
+        );
+
+  PrOut $alphabet_selector;
+ }
+
+############################################################################
+############################################################################
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }

@@ -1,0 +1,193 @@
+#!/usr/bin/perl
+# Procedure: demo3
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+ 
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+## Only an IG user can access to this demo
+IG::DTable( mkfield        => sub { $IG::demo_version || CheckPrivilege() },
+	    default_action => sub { $IG::demo_version || CheckPrivilege() } );
+
+sub default_action
+ {
+  HtmlHead( ajax_req => { mkfield => "demo3?action=mkfield" } );
+
+  my $ajax_req = "mkfield(['label__' + getVal('label'),".
+			  "'type__' + getVal('type'),".
+			  "'value__' + getVal('value'),".
+			  "'ro_mode__' + getVal('ro_mode'),".
+			  "'labelstyle__' + getVal('labelstyle'),".
+			  "'style__' + getVal('style'),".
+			  "'fieldstyle__' + getVal('fieldstyle'),".
+			  "'size__' + getVal('size'),".
+			  "'name__' + getVal('name')],".
+			  " ['resultdiv'] ); return true;";
+
+  TaskHead( title    => "IGFramework - Form Maker - Ajax Demo",
+	    minwidth => 700);
+
+  HTitle( title=> "Try to change field attributes below",
+          level=> 4 ); 
+
+  FormHead( mode       => 'html',
+            labelstyle => 'width:200px',
+            name       => 'demo3_form' );
+
+  Input ( type=>'select',
+	  show=>'Field Type',
+	  name=>'type',
+	  id=>'type',
+	  zerovalue=>'true',
+	  data=>{ text		=> 'Text',
+	          currency      => 'Currency',
+	          password      => 'Password',
+		  date		=> 'Date',
+		  colour        => 'Colour Picker',
+		  findable      => 'Findable',
+		  label         => 'Label',
+		  quickcreator  => 'Quick Creator',
+		  multiselect   => 'Multi Select',
+		  logins	=> 'Users',
+		  groupselector => 'Group Selector',
+		  mobilephone   => 'Mobile Phone',
+		  phonenumber   => 'Phone Number',
+		  radio         => 'Radio',
+		  faxnumber     => 'Fax Number',
+		  file          => 'File Selector',
+		  combo		=> 'Combo',
+		  checkbox	=> 'Checkbox',
+		  contactfinder => 'Contact Finder',
+		  textarea	=> 'Text Area',
+		  select	=> 'Select' },
+	  onchange=>$ajax_req);
+
+  Input ( type=>'select',
+	  show=>'Readonly',
+	  value=>'no',
+	  name=>'ro_mode',
+	  id=>'ro_mode',
+	  zerovalue=>'true',
+	  data=>{ yes		=>'Yes',
+		  no		=>'No' },
+	  onchange=>$ajax_req);
+
+  Input ( type=>'text',
+	  show=>'Size',
+	  name=>'size',
+	  id=>'size',
+	  size=>3,
+	  maxlen=>2,
+	  onkeyup=>$ajax_req);
+
+  Input ( type=>'text',
+	  show=>'Field Div Css Style',
+	  name=>'fieldstyle',
+	  id=>'fieldstyle',
+	  size=>30,
+	  maxlen=>50,
+	  onkeyup=>$ajax_req);
+
+  Input ( type=>'text',
+	  show=>'Label Div Css Style',
+	  name=>'labelstyle',
+	  id=>'labelstyle',
+	  size=>30,
+	  value=>'color: red',
+	  maxlen=>50,
+	  onkeyup=>$ajax_req);
+
+  Input ( type=>'text',
+	  show=>'Field Css Style',
+	  name=>'style',
+	  id=>'style',
+	  size=>30,
+	  value=>'color: green',
+	  maxlen=>50,
+	  onkeyup=>$ajax_req);
+
+  Input ( type=>'text',
+	  show=>'Label',
+	  name=>'label',
+	  value=>'My Label',	
+	  id=>'label',
+	  size=>20,
+	  maxvalue=>20,
+	  onkeyup=>$ajax_req);
+
+  Input ( type=>'text',
+	  show=>'Value',
+	  name=>'value',
+	  value=>'My value',	
+	  id=>'value',
+	  size=>20,
+	  maxvalue=>20,
+	  onkeyup=>$ajax_req);
+
+  Input ( type=>'text',
+	  show=>'Name',
+	  name=>'name',
+	  value=>'field1',	
+	  id=>'name',
+	  size=>20,
+	  maxvalue=>20,
+	  onkeyup=>$ajax_req);
+
+  Br(2);
+  TaskMsg("<div id=\"resultdiv\"><br><br><br><br></div>",6);
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+###########################################################################
+###########################################################################
+sub mkfield
+ {
+  HttpHead( expires => 'now' );
+
+  my $fake_var = FormHead( mode    => 'html',
+                           enctype => 'multipart/form-data',
+                           name    => 'demo3_form' );
+
+  my $html = Input( type       => $on{type},
+                    value      => $on{value},
+                    data       => [$on{value}],
+                    name       => $on{name},
+                    override   => 1,
+                    fieldstyle => $on{fieldstyle},
+                    style      => $on{style},
+                    labelstyle => $on{labelstyle},
+                    readonly   => $on{ro_mode} eq 'yes' ? 1 : 0,
+                    label      => $on{label},
+                    size       => $on{size} );
+
+  PrOut "<h4>Your field</h4>$html<br>".
+	"<p style=\"clear:both;\"><br><h4>Field Html code</h4>".
+	"<pre style=\"width: 600;height:80;overflow:scroll\">".
+	MkEntities($html).
+	"</pre></p>";  
+
+  $fake_var = FormFoot();
+ }
+ 

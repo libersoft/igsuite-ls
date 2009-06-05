@@ -1,0 +1,28 @@
+## IGSuite 4.0.0
+## Language: services_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+back_to_services	=>'Back to services list',
+close_service		=>'Close Services',
+do_services		=>'Do Services',
+done_services		=>'Done services',
+del_service		=>'Delete Service',
+Err_service_date	=>'Service Date',
+ext_equipment		=>'External equipment',
+material		=>'Material',
+new_service		=>'New Service',
+request_date		=>'Request Date',
+service_date		=>'Completion Date',
+service_type		=>'Service type',
+service_todo		=>'Services to do',
+service_note		=>'Service Notes',
+service_check		=>'Services checks',
+today_services		=>'Today\'s Services',
+planned_services	=>'Planned Services',
+plan_service		=>'Services Planning',
+Warn_service_notes	=>'ATTENTION ! the service that is being registered must be noted for the following reasons...',
+  ));
+
+1;

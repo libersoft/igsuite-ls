@@ -1,0 +1,13 @@
+## IGSuite 4.0.0
+## Language: quality_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+drafts			=>'Rascunhos',
+publish_mng		=>'Gerenciador de publicações',
+new_document		=>'Novo documento',
+  ));
+
+1;

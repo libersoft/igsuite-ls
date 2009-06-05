@@ -1,0 +1,735 @@
+#! /usr/bin/perl
+# Procedure: spellpack
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+# To include files to javascripts you have to:
+# 1) Quote all '\' '$' '@'
+# 2) Substitute /url_to/package/ with $script=
+my $script = "$IG::cgi_url/spellpack?action";
+
+IG::DTable( blank_html        => CheckPrivilege(),
+            controls_html     => CheckPrivilege(),
+            spellchecker_html => CheckPrivilege(),
+            spellerStyle_css  => CheckPrivilege(),
+            wordWindow_js     => CheckPrivilege(),
+            controlWindow_js  => CheckPrivilege() );
+
+###########################################################################
+###########################################################################
+sub blank_html
+ {
+  IG::DocHead( type    => 'text/html',
+               expires => '+24h' );
+  PrOut <<END;
+END
+ }
+
+###########################################################################
+###########################################################################
+sub controls_html
+ {
+  IG::DocHead( type    => 'text/html',
+               expires => '+24h' );
+
+  PrOut <<END;
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="$script=spellerStyle_css"/>
+
+<script src="$script=controlWindow_js"></script>
+
+<script>
+var spellerObject;
+var controlWindowObj;
+
+if( parent.opener ) {
+	spellerObject = parent.opener.speller;
+}
+
+function ignore_word() {
+	if( spellerObject ) {
+		spellerObject.ignoreWord();
+	}
+}
+
+function ignore_all() {
+	if( spellerObject ) {
+		spellerObject.ignoreAll();
+	}
+}
+
+function replace_word() {
+	if( spellerObject ) {
+		spellerObject.replaceWord();
+	}
+}
+
+function replace_all() {
+	if( spellerObject ) {
+		spellerObject.replaceAll();
+	}
+}
+
+function end_spell() {
+	if( spellerObject ) {
+		spellerObject.terminateSpell();
+	}
+}
+
+function undo() {
+	if( spellerObject ) {
+		spellerObject.undo();
+	}
+}
+
+function suggText() {
+	if( controlWindowObj ) {
+		controlWindowObj.setSuggestedText();
+	}
+}
+
+function init_spell() {
+	var controlForm = document.spellcheck;
+
+	// create a new controlWindow object
+ 	controlWindowObj = new controlWindow( controlForm );
+
+	// call the init_spell() function in the parent frameset
+	if( parent.frames.length ) {
+		parent.init_spell( controlWindowObj );
+	} else {
+		alert( 'This page was loaded outside of a frameset. It might not display properly' );
+	}
+}
+
+</script>
+
+</head>
+
+<body class="controlWindowBody" onLoad="init_spell();">
+
+<form name="spellcheck">
+
+<table border="0" cellpadding="0" cellspacing="0" border="0">
+<tr>
+	<td colspan="3" class="normalLabel">Not in dictionary:</td>
+</tr>
+<tr>
+	<td colspan="3"><input class="readonlyInput" type="text" name="misword" readonly /></td>
+</tr>
+<tr>
+	<td colspan="3" height="5"></td>
+</tr>
+<tr>
+	<td class="normalLabel">Change to:</td>
+</tr>
+<tr valign="top">
+	<td>
+		<table border="0" cellpadding="0" cellspacing="0" border="0">
+		<tr>
+			<td class="normalLabel">
+			<input class="textDefault" type="text" name="txtsugg" />
+			</td>
+		</tr>
+		<tr>
+			<td>
+			<select class="suggSlct" name="sugg" size="7" onChange="suggText();" onDblClick="replace_word();">
+				<option></option>
+			</select>
+			</td>
+		</tr>
+		</table>
+	</td>
+	<td>&nbsp;&nbsp;</td>
+	<td>
+		<table border="0" cellpadding="0" cellspacing="0" border="0">
+		<tr>
+			<td>
+			<input class="buttonDefault" type="button" value="Ignore" onClick="ignore_word();">
+			</td>
+			<td>&nbsp;&nbsp;</td>
+			<td>
+			<input class="buttonDefault" type="button" value="Ignore All" onClick="ignore_all();">
+			</td>
+		</tr>
+		<tr>
+			<td colspan="3" height="5"></td>
+		</tr>
+		<tr>
+
+			<td>
+			<input class="buttonDefault" type="button" value="Replace" onClick="replace_word();">
+			</td>
+			<td>&nbsp;&nbsp;</td>
+			<td>
+			<input class="buttonDefault" type="button" value="Replace All" onClick="replace_all();">
+			</td>
+		</tr>
+		<tr>
+			<td colspan="3" height="5"></td>
+		</tr>
+		<tr>
+			<td>
+			<input class="buttonDefault" type="button" name="btnUndo" value="Undo" onClick="undo();" disabled>
+			</td>
+			<td>&nbsp;&nbsp;</td>
+			<td>
+			<input class="buttonDefault" type="button" value="Close" onClick="end_spell();">
+			</td>
+		</tr>
+		</table>
+	</td>
+</tr>
+</table>
+
+</form>
+</body>
+</html>
+
+END
+ }
+
+###########################################################################
+###########################################################################
+sub spellchecker_html
+ {
+  IG::DocHead( type    => 'text/html',
+               expires => '+24h' );
+
+  PrOut <<END;
+<script>
+
+var wordWindow = null;
+var controlWindow = null;
+
+function init_spell( spellerWindow ) {
+
+	if( spellerWindow ) {
+		if( spellerWindow.windowType == "wordWindow" ) {
+			wordWindow = spellerWindow;
+		} else if ( spellerWindow.windowType == "controlWindow" ) {
+			controlWindow = spellerWindow;
+		}
+	}
+
+	if( controlWindow && wordWindow ) {
+		// populate the speller object and start it off!
+		var speller = opener.speller;
+		wordWindow.speller = speller;
+		speller.startCheck( wordWindow, controlWindow );
+	}
+}
+
+// encodeForPost
+function encodeForPost( str ) {
+	var s = new String( str );
+	s = encodeURIComponent( s );
+	// additionally encode single quotes to evade any PHP 
+	// magic_quotes_gpc setting (it inserts escape characters and 
+	// therefore skews the btye positions of misspelled words)
+	return s.replace( /\\'/g, '%27' );
+}
+
+// post the text area data to the script that populates the speller
+function postWords() {
+	var bodyDoc = window.frames[0].document;
+	bodyDoc.open();
+	bodyDoc.write('<html>');
+	bodyDoc.write('<meta http-equiv="Content-Type" content="text/html; charset=utf-8">');
+	bodyDoc.write('<link rel="stylesheet" type="text/css" href="$script=spellerStyle_css"/>');
+	if (opener) {
+		var speller = opener.speller;
+		bodyDoc.write('<body class="normalText" onLoad="document.forms[0].submit();">');
+		bodyDoc.write('<p>Spell check in progress...</p>');
+		bodyDoc.write('<form action="'+speller.spellCheckScript+'" method="post">');
+		for( var i = 0; i < speller.textInputs.length; i++ ) {
+			bodyDoc.write('<input type="hidden" name="textinputs[]" value="'+encodeForPost(speller.textInputs[i].value)+'">');
+		}
+		bodyDoc.write('</form>');
+		bodyDoc.write('</body>');
+	} else {
+		bodyDoc.write('<body class="normalText">');
+		bodyDoc.write('<p><b>This page cannot be displayed</b></p><p>The window was not opened from another window.</p>');
+		bodyDoc.write('</body>');
+	}
+	bodyDoc.write('</html>');
+	bodyDoc.close();
+}
+</script>
+
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<head>
+<title>Speller Pages</title>
+</head>
+<frameset rows="*,220" onLoad="postWords();">
+<frame src="$script=blank_html">
+<frame src="$script=controls_html">
+</frameset>
+</html>
+
+END
+ }
+
+###########################################################################
+###########################################################################
+sub spellerStyle_css
+ {
+  IG::DocHead( type    => 'text/plain',
+               expires => '+24h' );
+
+  PrOut <<END;
+.blend {
+	font-family: courier new;
+	font-size: 10pt;
+	border: 0;
+	margin-bottom:-1;
+}
+.normalLabel {
+	font-size:8pt;
+}
+.normalText {
+	font-family:arial, helvetica, sans-serif;
+	font-size:10pt;
+	color:000000;
+	background-color:FFFFFF;
+}
+.plainText {
+	font-family: courier new, courier, monospace;
+	font-size: 10pt;
+	color:000000;
+	background-color:FFFFFF;
+}
+.controlWindowBody {
+	font-family:arial, helvetica, sans-serif;
+	font-size:8pt;
+	color:000000;
+	background-color:DADADA;
+}
+.readonlyInput {
+	background-color:DADADA;
+	color:000000;
+	font-size:8pt;
+	width:392px;
+}
+.textDefault {
+	font-size:8pt;
+	width: 200px;
+}
+.buttonDefault {
+	width:90px;
+	height:22px;
+	font-size:8pt;
+}
+.suggSlct {
+	width:200px;
+	margin-top:2;
+	font-size:8pt;
+}
+END
+ }
+
+###########################################################################
+###########################################################################
+sub wordWindow_js
+ {
+  IG::DocHead( type       => 'text/javascript',
+               expires    => '+24h',
+               attachment => 'wordWindow.js' );
+
+  PrOut <<END;
+////////////////////////////////////////////////////
+// wordWindow object
+////////////////////////////////////////////////////
+function wordWindow() {
+	// private properties
+	this._forms = [];
+
+	// private methods
+	this._getWordObject = _getWordObject;
+	//this._getSpellerObject = _getSpellerObject;
+	this._wordInputStr = _wordInputStr;
+	this._adjustIndexes = _adjustIndexes;
+	this._isWordChar = _isWordChar;
+	this._lastPos = _lastPos;
+	
+	// public properties
+	this.wordChar = /[a-zA-Z]/;
+	this.windowType = "wordWindow";
+	this.originalSpellings = new Array();
+	this.suggestions = new Array();
+	this.checkWordBgColor = "pink";
+	this.normWordBgColor = "white";
+	this.text = "";
+	this.textInputs = new Array();
+	this.indexes = new Array();
+	//this.speller = this._getSpellerObject();
+
+	// public methods
+	this.resetForm = resetForm;
+	this.totalMisspellings = totalMisspellings;
+	this.totalWords = totalWords;
+	this.totalPreviousWords = totalPreviousWords;
+	//this.getTextObjectArray = getTextObjectArray;
+	this.getTextVal = getTextVal;
+	this.setFocus = setFocus;
+	this.removeFocus = removeFocus;
+	this.setText = setText;
+	//this.getTotalWords = getTotalWords;
+	this.writeBody = writeBody;
+	this.printForHtml = printForHtml;
+}
+
+function resetForm() {
+	if( this._forms ) {
+		for( var i = 0; i < this._forms.length; i++ ) {
+			this._forms[i].reset();
+		}
+	}
+	return true;
+}
+
+function totalMisspellings() {
+	var total_words = 0;
+	for( var i = 0; i < this.textInputs.length; i++ ) {
+		total_words += this.totalWords( i );
+	}
+	return total_words;
+}
+
+function totalWords( textIndex ) {
+	return this.originalSpellings[textIndex].length;
+}
+
+function totalPreviousWords( textIndex, wordIndex ) {
+	var total_words = 0;
+	for( var i = 0; i <= textIndex; i++ ) {
+		for( var j = 0; j < this.totalWords( i ); j++ ) {
+			if( i == textIndex && j == wordIndex ) {
+				break;
+			} else {
+				total_words++;
+			}	
+		}
+	}
+	return total_words;
+}
+
+//function getTextObjectArray() {
+//	return this._form.elements;
+//}
+
+function getTextVal( textIndex, wordIndex ) {
+	var word = this._getWordObject( textIndex, wordIndex );
+	if( word ) {
+		return word.value;
+	}
+}
+
+function setFocus( textIndex, wordIndex ) {
+	var word = this._getWordObject( textIndex, wordIndex );
+	if( word ) {
+		if( word.type == "text" ) {
+			word.focus();
+			word.style.backgroundColor = this.checkWordBgColor;
+		}
+	}
+}
+
+function removeFocus( textIndex, wordIndex ) {
+	var word = this._getWordObject( textIndex, wordIndex );
+	if( word ) {
+		if( word.type == "text" ) {
+			word.blur();
+			word.style.backgroundColor = this.normWordBgColor;
+		}
+	}
+}
+
+function setText( textIndex, wordIndex, newText ) {
+	var word = this._getWordObject( textIndex, wordIndex );
+	var beginStr;
+	var endStr;
+	if( word ) {
+		var pos = this.indexes[textIndex][wordIndex];
+		var oldText = word.value;
+		// update the text given the index of the string
+		beginStr = this.textInputs[textIndex].substring( 0, pos );
+		endStr = this.textInputs[textIndex].substring( 
+			pos + oldText.length, 
+			this.textInputs[textIndex].length 
+		);
+		this.textInputs[textIndex] = beginStr + newText + endStr;
+		
+		// adjust the indexes on the stack given the differences in 
+		// length between the new word and old word. 
+		var lengthDiff = newText.length - oldText.length;
+		this._adjustIndexes( textIndex, wordIndex, lengthDiff );
+		
+		word.size = newText.length;
+		word.value = newText;
+		this.removeFocus( textIndex, wordIndex );
+	}
+}
+
+
+function writeBody() {
+	var d = window.document;
+	var is_html = false;
+
+	d.open();
+
+	// iterate through each text input.
+	for( var txtid = 0; txtid < this.textInputs.length; txtid++ ) {	
+		var end_idx = 0;
+		var begin_idx = 0;	
+		d.writeln( '<form name="textInput'+txtid+'">' );
+		var wordtxt = this.textInputs[txtid];
+		this.indexes[txtid] = [];
+
+		if( wordtxt ) {			
+			var orig = this.originalSpellings[txtid];
+			if( !orig ) break;
+
+			//!!! plain text, or HTML mode?
+			d.writeln( '<div class="plainText">' );
+			// iterate through each occurrence of a misspelled word. 
+			for( var i = 0; i < orig.length; i++ ) {
+				// find the position of the current misspelled word,
+				// starting at the last misspelled word. 
+				// and keep looking if it's a substring of another word
+				do {
+					begin_idx = wordtxt.indexOf( orig[i], end_idx );
+					end_idx = begin_idx + orig[i].length;
+					// word not found? messed up!
+					if( begin_idx == -1 ) break; 
+					// look at the characters immediately before and after 
+					// the word. If they are word characters we'll keep looking.
+					var before_char = wordtxt.charAt( begin_idx - 1 );
+					var after_char = wordtxt.charAt( end_idx );
+				} while ( 
+					this._isWordChar( before_char ) 
+					|| this._isWordChar( after_char )
+				);
+
+				// keep track of its position in the original text. 
+				this.indexes[txtid][i] = begin_idx;
+
+				// write out the characters before the current misspelled word
+				for( var j = this._lastPos( txtid, i ); j < begin_idx; j++ ) {
+					// !!! html mode? make it html compatible
+					d.write( this.printForHtml( wordtxt.charAt( j )));
+				}
+
+				// write out the misspelled word. 
+				d.write( this._wordInputStr( orig[i] ));
+
+				// if it's the last word, write out the rest of the text
+				if( i == orig.length-1 ){
+					d.write( printForHtml( wordtxt.substr( end_idx )));
+				}			
+			}
+
+			d.writeln( '</div>' );
+			
+		}
+		d.writeln( '</form>' );
+	}
+	//for ( var j = 0; j < d.forms.length; j++ ) {
+	//	alert( d.forms[j].name );
+	//	for( var k = 0; k < d.forms[j].elements.length; k++ ) {
+	//		alert( d.forms[j].elements[k].name + ": " + d.forms[j].elements[k].value );
+	//	}
+	//}	
+	
+	// set the _forms property
+	this._forms = d.forms;
+	d.close();
+}
+
+// return the character index in the full text after the last word we evaluated
+function _lastPos( txtid, idx ) {
+	if( idx > 0 )
+		return this.indexes[txtid][idx-1] + this.originalSpellings[txtid][idx-1].length;
+	else
+		return 0;
+}
+
+function printForHtml( n ) {
+	var htmlstr = n;
+	if( htmlstr.length == 1 ) {
+		// do simple case statement if it's just one character
+		switch ( n ) {
+			case "\\n":
+				htmlstr = '<br/>';
+				break;
+			case "<":
+				htmlstr = '&lt;';
+				break;
+			case ">":
+				htmlstr = '&gt;';
+				break;
+		}
+		return htmlstr;
+	} else {
+		htmlstr = htmlstr.replace( /</g, '&lt' );
+		htmlstr = htmlstr.replace( />/g, '&gt' );
+		htmlstr = htmlstr.replace( /\\n/g, '<br/>' );
+		return htmlstr;
+	}
+}
+
+function _isWordChar( letter ) {
+	if( letter.search( this.wordChar ) == -1 ) {
+		return false;
+	} else {
+		return true;
+	}
+}
+
+function _getWordObject( textIndex, wordIndex ) {
+	if( this._forms[textIndex] ) {
+		if( this._forms[textIndex].elements[wordIndex] ) {
+			return this._forms[textIndex].elements[wordIndex];
+		}
+	}
+	return null;
+}
+
+function _wordInputStr( word ) {
+	var str = '<input readonly ';
+	str += 'class="blend" type="text" value="' + word + '" size="' + word.length + '">';
+	return str;
+}
+
+function _adjustIndexes( textIndex, wordIndex, lengthDiff ) {
+	for( var i = wordIndex + 1; i < this.originalSpellings[textIndex].length; i++ ) {
+		this.indexes[textIndex][i] = this.indexes[textIndex][i] + lengthDiff;
+	}
+}
+
+END
+ }
+
+###########################################################################
+###########################################################################
+sub controlWindow_js
+ {
+  IG::DocHead( type       => 'text/javascript',
+               expires    => '+24h',
+               attachment => 'controlWindow.js' );
+
+  PrOut <<END;
+////////////////////////////////////////////////////
+// controlWindow object
+////////////////////////////////////////////////////
+function controlWindow( controlForm ) {
+	// private properties
+	this._form = controlForm;
+
+	// public properties
+	this.windowType = "controlWindow";
+	this.noSuggestionSelection = "- No suggestions -";
+	// set up the properties for elements of the given control form
+	this.suggestionList  = this._form.sugg;
+	this.evaluatedText   = this._form.misword;
+	this.replacementText = this._form.txtsugg;
+	this.undoButton      = this._form.btnUndo;
+
+	// public methods
+	this.addSuggestion = addSuggestion;
+	this.clearSuggestions = clearSuggestions;
+	this.selectDefaultSuggestion = selectDefaultSuggestion;
+	this.resetForm = resetForm;
+	this.setSuggestedText = setSuggestedText;
+	this.enableUndo = enableUndo;
+	this.disableUndo = disableUndo;
+}
+
+function resetForm() {
+	if( this._form ) {
+		this._form.reset();
+	}
+}
+
+function setSuggestedText() {
+	var slct = this.suggestionList;
+	var txt = this.replacementText;
+	var str = "";
+	if( (slct.options[0].text) && slct.options[0].text != this.noSuggestionSelection ) {
+		str = slct.options[slct.selectedIndex].text;
+	}
+	txt.value = str;
+}
+
+function selectDefaultSuggestion() {
+	var slct = this.suggestionList;
+	var txt = this.replacementText;
+	if( slct.options.length == 0 ) {
+		this.addSuggestion( this.noSuggestionSelection );
+	} else {
+		slct.options[0].selected = true;
+	}
+	this.setSuggestedText();
+}
+
+function addSuggestion( sugg_text ) {
+	var slct = this.suggestionList;
+	if( sugg_text ) {
+		var i = slct.options.length;
+		var newOption = new Option( sugg_text, 'sugg_text'+i );
+		slct.options[i] = newOption;
+	 }
+}
+
+function clearSuggestions() {
+	var slct = this.suggestionList;
+	for( var j = slct.length - 1; j > -1; j-- ) {
+		if( slct.options[j] ) {
+			slct.options[j] = null;
+		}
+	}
+}
+
+function enableUndo() {
+	if( this.undoButton ) {
+		if( this.undoButton.disabled == true ) {
+			this.undoButton.disabled = false;
+		}
+	}
+}
+
+function disableUndo() {
+	if( this.undoButton ) {
+		if( this.undoButton.disabled == false ) {
+			this.undoButton.disabled = true;
+		}
+	}
+}
+
+END
+ }
+
+###########################################################################
+###########################################################################

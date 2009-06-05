@@ -1,0 +1,94 @@
+#! /usr/bin/perl
+# Procedure: google
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	findshow	=> sub { CheckPrivilege() },
+		findexec	=> sub { CheckPrivilege() },
+		default_action	=> sub { CheckPrivilege() } );
+
+############################################################################
+############################################################################
+sub default_action
+ {
+  findshow();
+ }
+
+############################################################################
+############################################################################
+sub findshow
+ {
+  HtmlHead();
+  HLayer( bottom_space => 0,
+          right_layers =>
+	  [( FormHead( name      => 'findnavi',
+	               target    => 'mainf',
+	               autofocus => 'false',
+	               cgiaction => 'findexec',
+	               labelstyle=> 'border:0px; width:auto;',
+	               float     => 'left' ),
+
+	     Input(    type      => 'findable' ),
+
+             Input(    type      => 'select',
+                       style     => 'width:100px',
+                       name      => 'google_feature',
+                       data      => [('Web','Maps')] ),
+		
+	     Input(    type      => 'text',
+	               name      => 'keytofind',
+	               value     => $IG::cookie{lastsearch},
+                       focus     => 'true',
+                       style     => 'margin-right:-5px; width:250px',
+	               onblur    => "document.cookie='lastsearch=' + escape(this.value)"),
+	
+	     Input(    type      => 'image',
+	               src       => "$IG::img_url/${IG::tema}search.gif",
+	               alt       => $lang{find} ),
+
+	     FormFoot()
+	   )]
+	);
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################ 
+sub findexec
+ {
+  if ( $on{google_feature } eq 'Web')
+   {
+    IG::Redirect("http://www.google.com/search?".
+                 "hl=".$IG::lang."&amp;".
+                 "q=" . MkUrl($on{keytofind}) );
+   }
+  else
+   {
+    IG::Redirect("http://maps.google.com/?".
+                 "ie=UTF8&amp;".
+                 "hl=".$IG::lang."&amp;".
+                 "q=" . MkUrl($on{keytofind}) ."&amp;".
+                 "f=q&sampleq=1");
+   }
+ }

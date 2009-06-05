@@ -1,0 +1,25 @@
+## IGSuite 4.0.0
+## Language: opportunity_lang
+## Last update: 25/05/2009
+## Tradução: Marco Túlio de Oliveira Alves
+
+%lang = (%lang,
+   (
+close_the_opportunity   => 'Close the opportunity',
+opportunity_closed	=> 'Opportunity Closed',
+opportunity_open	=> 'Opportunity Open',
+Err_enddate		=> 'Erro na data prevista terminar',
+Err_opportunity_name	=> 'Atenção! Você tem que inserir um nome na oportunidade',
+Err_amount		=> 'Erro no valor',
+update_opportunity	=> 'Editar Oportunidade',
+new_opportunity		=> 'Nova Oportunidade',
+opportunity_name	=> 'Nome oportunidade',
+existing_business	=> 'Negócio existente',
+new_business		=> 'Novo negócio',
+probability		=> 'Probabilidade',
+opportunity_source	=> 'Origem oportunidade',
+sales_stage		=> 'Estágio das vendas',
+expected_close_date	=> 'Data prevista terminar',
+   ));
+
+1;

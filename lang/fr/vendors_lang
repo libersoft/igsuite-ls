@@ -1,0 +1,18 @@
+## IGSuite 4.0.0
+## Language: vendors_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+valuation		=>'Évaluation',
+supervision		=>'Surveillance',
+first_valuation		=>'Date première évaluation',
+remark			=>'Observations',
+unqualified_vendors	=>'Fournisseurs de qualifier',
+Err_start_qualify	=>'Erreur: insertion date début qualification',
+Err_end_qualify		=>'Erreur: insertion date fin qualification',
+check_rules		=>'Critère de vérification',
+vendors_report		=>'Rapport',
+   ));
+
+1;

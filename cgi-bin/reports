@@ -1,0 +1,612 @@
+#! /usr/bin/perl
+# Procedure: reports
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+use IG::DBStructure;
+IG::MkEnv(__PACKAGE__);
+
+## load application language
+$on{table} ||= 'archive';
+do "$IG::cgi_dir${S}lang${S}$IG::lang${S}$on{table}_lang";
+
+my %fields;
+my %fields_info;
+my %operators;
+_find_report_cols();
+
+IG::DTable( mkreport       => sub { CheckPrivilege("$on{table}_report") },
+	    loadreport	   => sub { CheckPrivilege("$on{table}_report") },
+	    deletereport   => sub { CheckPrivilege("$on{table}_report") },
+	    default_action => sub { CheckPrivilege("$on{table}_report") },
+	  );
+
+###########################################################################
+###########################################################################
+sub _find_report_cols
+ {
+  for my $cnt (0 .. $IG::DBStructure::db_tables_index{$on{table}}[0])
+   {
+    my $langkey  = $IG::DBStructure::db_tables{$on{table}}[$cnt]{label};
+    my $fieldkey = $IG::DBStructure::db_tables{$on{table}}[$cnt]{name};
+    next if !$langkey;
+    $fields{$fieldkey} = $lang{$langkey} || ucfirst($langkey);
+
+    $fields_info{$fieldkey}
+      = {
+	 type => $IG::DBStructure::db_tables{$on{table}}[$cnt]{itype},
+	 table=> $IG::DBStructure::db_tables{$on{table}}[$cnt]{table},
+	} ;
+
+    $on{"r$cnt"} ||= $fieldkey;
+   }
+
+  ## set operators
+  %operators = ( text         => { "="  => $lang{equal_to},
+                                   "<>" => $lang{different_from},
+                                   "~*" => $lang{contain},
+                                   ">"  => $lang{greater},
+                                   "<"  => $lang{inferior} },
+                 date         => { "="  => $lang{equal_to},
+                                   "<>" => $lang{different_from},
+                                   ">"  => $lang{greater},
+                                   "<"  => $lang{inferior} },
+                 logins       => { "="  => $lang{equal_to},
+                                   "<>" => $lang{different_from} },
+                 basictable   => { "="  => $lang{equal_to},
+                                   "<>" => $lang{different_from} },
+                 documenttype => { "="  => $lang{equal_to},
+                                   "<>" => $lang{different_from} },
+               );
+ }
+
+###############################################################################
+###############################################################################
+sub default_action
+ {
+  my $orderby  = DbQuote( $on{order} )         || 'name';
+  my $orderdir = DbQuote( $on{sortdirection} ) || 'asc';
+
+  HtmlHead( shortcuts => _short_cuts(),);
+  TaskHead( title     => "$lang{reports}: $lang{$on{table}}",
+	    width     => '100%',
+	    minwidth  => 650 );
+
+  HLayer( left_layers =>
+           [( MkButton
+               ( text      => $lang{new_report},
+	         link      => 'reports?action=mkreport&amp;'.
+	                              "table=$on{table}" ),
+            )]
+        );
+
+  my $base_link = "table=$on{table}";
+
+  TaskListMenu
+   (
+    [$lang{last_change},	"order=lastchange&amp;$base_link",'width=80'],
+    [$lang{name},		"order=name&amp;$base_link"],
+    ['','','width=60']
+   );
+
+  DbQuery( "SELECT * from reports ".
+           "where owner='$auth_user' and type='".DbQuote( $on{table} )."' ".
+           "order by $orderby $orderdir" );
+
+  while ( my @row = FetchRow() )
+   {
+    TaskListItem
+     (
+	[ $row[9] || $IG::tv{today},
+	  "reports?action=loadreport&amp;subact=execute&amp;id=$row[0]"],
+	[ $row[2] ],
+	[ Img( src   => "$IG::img_url/report_edit.png",
+	       width => 16,
+               title => $lang{edit},
+               href  => "reports?action=loadreport&amp;id=$row[0]" ).
+          Img( src   => "$IG::img_url/report_delete.png",
+	       width => 16,
+               title => $lang{delete},
+               href  => "reports?action=deletereport&amp;".
+                                "id=$row[0]&amp;".
+                                "backtoreferer=1" ).
+          Img( src   => "$IG::img_url/report_go.png",
+	       width => 16,
+               title => $lang{make_report},
+               href  => "reports?action=loadreport&amp;".
+                                "subact=execute&amp;id=$row[0]" )
+        ]
+     );
+   }
+
+  TaskListFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+
+################################################################################
+################################################################################ 
+sub mkreport
+ {
+  ## check report name
+  if ($on{columns2query} && !$on{reportname})
+   {
+    push @IG::errmsg, $lang{Err_report_name};
+    $lang{report_name} = Blush($lang{report_name});
+   }
+
+  ## check wrong actions
+  if (!$on{columns2query} && ($on{make_report} || $on{savereport}) )
+   {
+    push @IG::errmsg, $lang{add_fields_to_filter};
+    $lang{criteria} = Blush($lang{criteria});
+   }    
+
+  ## Show report results
+  viewreport() && return if $on{make_report} && !@IG::errmsg;
+
+  my ( $query, $columns);
+
+  if    ($on{undo} && $on{columns2query})
+   { $on{columns2query}--   }
+  elsif ($on{addfield})
+   { $on{columns2query}++   }
+  elsif ($on{addresults})
+   { $on{columns2extract}++ }
+  elsif ($on{delresults})
+   { $on{columns2extract}-- }
+
+  $on{columns2query}   ||= 0;
+  $on{columns2extract} ||= 3;
+  $on{id}	       ||= MkId(15);
+
+  ## build the query
+  if ( $on{columns2query} )
+   {
+    $on{logic} ||= 'and';
+
+    for ( 1 .. $on{columns2query} )
+     {
+      my $operator    = $on{"m$_"} || '=';
+      my $field_name  = $on{"f$_"};
+      my $field_value = $on{"$field_name$_"};
+
+      ## adjust date values
+      if ( $fields_info{$field_name}{type} eq 'date' )
+       {
+        $field_value =~ s/($lang{today}|today)/current\_date/i;
+        $field_value =  "'". CkDate( $field_value, 1 ) . "'"
+                          if $field_value !~ /current\_date/;
+       }
+      else
+       {
+        ## ok we can add field to query
+        $field_value = "'$field_value'";
+       }
+
+      $query .= "$on{table}.$field_name $operator $field_value $on{logic} ";
+     }
+    $query =~ s/(.+)(and|or) $/\($1\)/;
+   }
+
+  ## build columns list
+  if ( $on{columns2extract} )
+   { $columns .= $on{"r$_"}.':' for 1 .. $on{columns2extract}; }
+
+  ## Check number of records filtered by the report
+  $query ||= '1=0';
+  DbQuery( "select count(*) from ".DbQuote($on{table})." where $query" );
+  my $records_nmb = FetchRow() || '0';
+
+  ## Save report if requested
+  if ( $on{savereport} && $query ne '1=0' && $on{reportname} )
+   {
+    my $fake_qs = $IG::query_string;
+       $fake_qs =~ s/savereport/dontsavereport/g;
+
+    DbWrite( table            => 'reports',
+             action           => 'insert',
+             overwrite_clause => "id='".DbQuote($on{id})."'",
+             values           => [ $on{id},
+                                   $auth_user,
+                                   $on{reportname},
+                                   $query,
+                                   $columns,
+                                   $fake_qs,
+                                   $on{table},
+                                   $on{orderby},
+                                   $on{orderdirection},
+                                   $IG::tv{today} ],
+           );
+
+    LogD($on{reportname}, 'view', 'reports', $on{id});
+    viewreport();
+    return;
+   }
+
+  ## Query Edit Form
+  HtmlHead( shortcuts => _short_cuts(),);
+  TaskHead( title     => "$lang{reports}: $lang{$on{table}}",
+	    minwidth  => 650 );
+
+  FormHead(	method=>'get',
+		labelstyle=>'width: 300px',
+		cgiaction=>'mkreport',
+		name=>'mkreport');
+
+  Input (	type=>'hidden',
+		name=>'id'); 
+
+  Input (	type=>'hidden',
+		name=>'table'); 
+
+  Input (	type=>'hidden',
+		override=>1,
+		name=>'query',
+		value=>$query);
+
+  Input (	type=>'hidden',
+		name=>'columns2query',
+		override=>1,
+		value=>$on{columns2query} );
+
+  Input (	name=>'columns2extract',
+		override=>1,
+		value=>$on{columns2extract},
+		type=>'hidden');
+
+  ## set default field
+  my $html =	Input (	name=>'reportname',
+			labelstyle=>'width:150px',
+			type=>'text',
+			style=>'width:350px',
+			maxlen=>90,
+			show=>$lang{report_name} ).
+
+		Input (	name=>'f'.($on{columns2query}+1),
+			value=>'owner',
+			show=>$lang{wanted_field},
+			labelstyle=>'width: 150px',
+			data=>\%fields,
+			style => 'width:180px',
+			type=>'select').
+
+		Input (	show=>$lang{add},
+			type=>'submit',
+			float=>'left',
+			name=>'addfield').
+
+		Input (	show=>$lang{delete_last},
+			type=>'submit',
+			float=>'left',
+			name=>'undo');
+  TaskMsg($html,7);
+
+  Input (	type=>'label',
+		labelstyle => 	'margin-top:10px;'.
+				'width:auto;'.
+				'border:0px;'.
+				'background-color:transparent;'.
+				'font-weight:bold',
+		show=>$lang{search_logic});
+
+  Input (	name=>'logic',
+		show=>$lang{search_logic_action},
+		type=>'select',
+		data=>{'and' => $lang{criteria_and},
+		       'or'  => $lang{criteria_or} });
+
+  Input (	type=>'label',
+                quickhelp => "Query: $query",
+		labelstyle => 	'margin-top:10px;'.
+				'width:auto;'.
+				'border:0px;'.
+				'background-color:transparent;'.
+				'font-weight:bold',
+		show=>$lang{search_criteria} );
+
+
+  ## show search fields selected
+  if ( !$on{columns2query} )
+   {
+    Input( type   => 'label',
+           show   => $lang{criteria},
+           data   => Blush($lang{add_fields_to_filter}),
+           float  => 'none' );
+   }
+  else
+   {
+    for ( 1 .. $on{columns2query} )
+     {
+      my $field_name = $on{"f$_"};
+
+      Input( name   => "f$_",
+             type   => 'hidden' );
+
+      Input( name   => "m$_",
+             show   => $fields{$field_name},
+             value  => '=',
+             style  => 'width:100px',
+             type   => 'select',
+             data   => \%{$operators{$fields_info{$field_name}{type}}} );
+
+      if ( $fields_info{$field_name}{type} eq 'documenttype')
+       {
+        Input( name      => $field_name . $_,
+               zerovalue => 'true',
+               type      => 'select',
+               float     => 'left',
+               data      => \%IG::docs_type,
+               style     => 'width:230px' );
+       }
+      else
+       {
+        Input( name      => $field_name . $_,
+               zerovalue => 'true',
+               type      => $fields_info{$field_name}{type} eq 'date'
+                         ?  'text'
+                         :  $fields_info{$field_name}{type},
+               float     => 'left',
+               table     => $fields_info{$field_name}{table},
+               style     => 'width:230px' );
+       }
+     }
+   }
+
+
+  ## Preview results
+  Input (	type=>'label',
+		labelstyle => 	'margin-top:10px;'.
+				'width:auto;'.
+				'border:0px;'.
+				'background-color:transparent;'.
+				'font-weight:bold',
+		show=>$lang{preview});
+
+  Input (	type=>'label',
+		show=>$lang{results_preview},
+		data=>$records_nmb);
+
+  Input (	show=>$lang{recalculate},
+		float=>'left',
+		type=>'submit',
+		name=>'make_preview');
+
+  Input (	type=>'label',
+		labelstyle => 	'margin-top:10px;'.
+				'width:auto;'.
+				'border:0px;'.
+				'background-color:transparent;'.
+				'font-weight:bold',
+		show=>$lang{columns_to_export} );
+
+  Input (	name=>'orderby',
+		zerovalue=>'true',
+	        show=>$lang{order},
+		style=>'margin: 5 1 15 2;height:15px;font-size:10px',
+		labelstyle=>'height:15px;margin: 5 0 15 5;font-size:10px;width:auto',
+		type=>'select',
+		data=>\%fields );
+
+  Input (	name=>'orderdirection',
+		value=>'asc',
+		float =>'left',
+		style=>'margin: 5 10 15 1; height:15px; font-size:10px',
+		type=>'select',
+		data=> { asc => 'Asc', desc => 'Desc' } );
+
+  Input (	name=>'addresults',
+		float=>'left',
+		type=>'submit',
+		style=>'margin: 5 5 15 0;height:15px;font-size:10px',
+		show=>$lang{add_column} );
+
+  Input (	name=>'delresults',
+		float=>'left',
+		type=>'submit',
+		style=>'margin: 5 5 15 0;height:15px;font-size:10px',
+		show=>$lang{delete_column} );
+
+  for ( 1 .. $on{columns2extract} )
+   {
+    Input (	name=>"r$_",
+	        show=>$_,
+		type=>'select',
+		data=>\%fields );
+   }
+
+  Br(3);
+  TaskMsg( Input( show   => $lang{make_report},
+                  name   => 'make_report',
+                  type   => 'submit' ).
+
+           Input( type   => 'submit',
+                  name   => 'savereport',
+                  float  => 'left',
+                  show   => $lang{save_report} ).
+
+           Input( type   => 'button',
+                  name   => 'newreport',
+                  float  => 'right',
+                  onclick=> "document.location = 'reports?action=mkreport&amp;".
+                                                         "table=$on{table}'",
+                  show   => $lang{new_report}).
+			
+           Input( type   => 'button',
+                  name   => 'cancel',
+                  float  => 'right',
+                  onclick=> "document.location = 'reports?table=$on{table}'",
+                  show   => $lang{cancel})
+	   ,7);
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+ }
+ 
+################################################################################
+################################################################################
+sub viewreport
+ {
+  ## Show results filtered by query
+  my ( @list_menu, @list_item );
+  $on{orderby}        ||= 'id';
+  $on{orderdirection} ||= 'asc';
+
+  HtmlHead();
+  TaskHead( title => "$lang{reports}: $lang{$on{table}} - $on{reportname}",
+            width => '100%' );
+
+  ## define per page view
+  my $base_url = "reports?action=loadreport&amp;".
+                         "subact=execute&amp;".
+                         "id=$on{id}";
+
+  my ( $limit,
+       $offset,
+       $page_selector ) = IG::MkTaskPaging( "select count(*) ".
+                                            "from " . DbQuote($on{table}). " ".
+                                            "where $on{query}",
+                                            $base_url );
+  HLayer( left_layers =>
+           [( MkButton
+               ( text      => $lang{new_report},
+	         link      => 'reports?action=mkreport&amp;'.
+	                              "table=$on{table}" ),
+
+              MkButton
+               ( text      => $lang{edit},
+                 privilege => $on{savereport},
+	         link      => "reports?action=loadreport&amp;id=$on{id}" ),
+
+              MkButton
+               ( text      => $lang{back_to_list},
+	         link      => "reports?table=$on{table}" ),
+            )],
+          right_layers =>
+           [( $page_selector )]
+        );
+
+  ## show results
+  my $fields = "$on{table}.id";
+
+  ## make table header and query fields
+  $list_menu[0][0] = $lang{number};
+  for (1 .. $on{columns2extract})
+   {
+    $fields .= ", $on{table}." . $on{"r$_"};
+    $list_menu[$_][0] = $fields{$on{"r$_"}};
+   }
+  TaskListMenu (@list_menu);
+
+  QuoteParams();
+  DbQuery( "select $fields from $in{table} ".
+	   "where $on{query} ". ## We cannot quote it but it's an hidden value!
+	   "order by $in{table}.$in{orderby} $in{orderdirection} ".
+	   "limit $limit offset $offset" );
+
+  while ( my @row = FetchRow() )
+   {
+    $list_item[0][0] = MkLink($row[0]);
+
+    for ( 1 .. $on{columns2extract} )
+     {
+      ## popolate fields
+      if ($fields_info{$on{"r$_"}}{type} eq 'logins')
+       { $row[$_] = IG::UsrInf('name',$row[$_]); }
+      elsif ($fields_info{$on{"r$_"}}{type} eq 'basictable' )
+       { $row[$_] = GetTableVal($fields_info{$on{"r$_"}}{table}, $row[$_]); }
+      elsif ($fields_info{$on{"r$_"}}{type} eq 'date')
+       { $row[$_] = CkDate($row[$_]); }
+      else
+       { $row[$_] = MkLink($row[$_]); }
+
+      $list_item[$_][0] = $row[$_];
+     }
+    TaskListItem ( @list_item );
+   }
+  TaskListFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+################################################################################
+################################################################################
+sub _short_cuts
+ {
+  return TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
+         IG::LastDocuments().
+         TaskFoot();
+ }
+
+################################################################################
+################################################################################
+sub loadreport
+ {
+  DbQuery("select cgiquery, name, id, type from reports ".
+          "where id='".DbQuote($on{id})."'");
+  my @row = FetchRow();
+
+  if ( ! CheckPrivilege("$row[3]_report") )
+   {
+    IG::Warn( $lang{Err_privileges} );
+    return;
+   }
+
+  ## make me sure to remove all unwanted requests
+  $row[0] =~ s/(make_report|savereport)\=/dont$1\=/g;
+
+  if ( $on{subact} eq 'execute' )
+   {
+    ## we don't want edit report but show results
+    $row[0] .= "&amp;make_report=1&amp;pos=$on{pos}";
+   } 
+
+  IG::Redirect( $row[3] eq 'contacts'
+		? "contacts?$row[0]"
+		: "reports?$row[0]" );
+
+  LogD($row[1], 'view', 'reports', $row[2]) if $row[2];
+ }
+
+################################################################################
+################################################################################
+sub deletereport
+ {
+  DbQuery("select owner, type, name from reports ".
+          "where id='".DbQuote($on{id})."'");
+  my @row = FetchRow();
+
+  if ( $row[0] ne $auth_user && ! CheckPrivilege("$row[1]_report") )
+   {
+    IG::Warn( $lang{Err_privileges} );
+    return;
+   }
+
+  DbQuery("delete from reports where id='".DbQuote($on{id})."'");
+
+  LogD($row[2], 'delete', 'reports', $on{id}) if $row[2];
+  IG::BackToReferer();
+ }

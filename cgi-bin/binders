@@ -1,0 +1,793 @@
+#!/usr/bin/perl
+# Procedure: binders
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+ 
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	proto		=> sub { CheckPrivilege('binders_new') },
+		protoagg	=> sub { CheckPrivilege('binders_edit') },
+		protomodi	=> sub { CheckPrivilege('binders_edit') },
+		addspool        => sub { CheckPrivilege('binders_edit') },
+		adddocumentagg  => sub { CheckPrivilege('binders_edit') },
+		findshow	=> sub { CheckPrivilege('binders_view') },
+		findexec	=> sub { CheckPrivilege('binders_view') },
+		delshow		=> sub { CheckPrivilege('binders_edit') },
+		delexec		=> sub { CheckPrivilege('binders_edit') },
+		unlinkdoc	=> sub { CheckPrivilege('binders_edit') },
+		docview		=> sub { CheckPrivilege('binders_view') },
+		default_action	=> sub { CheckPrivilege('binders_view') } );
+
+#############################################################################
+#############################################################################
+sub default_action
+ {
+  my ( $query,
+       $alphabet_selector,
+       $page_selector ) = IG::MkProtocolList( search_field => 'name' ); 
+
+  Header( $alphabet_selector, $page_selector );
+
+  my $base_link = "alphabet=$on{alphabet}&amp;".
+		  "view=$on{view}";
+
+  TaskListMenu
+   (
+    [$lang{number},			"order=id&amp;$base_link"],
+    [$lang{binder_name},		"order=name&amp;$base_link"],
+    [Img(src=>"$IG::img_url/user.gif"),	"order=owner&amp;$base_link"],
+    [$lang{category},			"order=category&amp;$base_link"],
+    [$lang{issue},			"order=issue&amp;$base_link"],
+    [$lang{notes},                      "order=note&amp;$base_link"],
+   );
+ 
+  QuoteParams();
+  DbQuery("SELECT binders.id, binders.owner, binders.issue, binders.name,".
+          " binders.note, binders.category, binders.contactname,".
+          " binders.contactid, users.initial ".
+          "FROM binders ".
+          "LEFT JOIN users ON binders.owner=users.login ".
+          "WHERE $query");
+
+  while (my @row = FetchRow())
+   {
+    TaskListItem
+     (
+      [ ParseLink($row[0]) ],
+      [ $row[3].
+        "<div style=\"color:$IG::clr{font_low_evidence}\">$row[6]</div>" ],
+      [ $row[8] ],
+      [ $row[5] ],
+      [ $row[2] ],
+      [ MkLink($row[4]) ]
+     );
+   }
+   
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub proto
+ {
+  ## Check document accessibility
+  my $doc_status = IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' );
+  return if ! $doc_status;
+
+  HtmlHead();
+  TaskHead( title     => $lang{binder},
+	    minwidth  => 500,
+	    icon      => 0);
+
+  FormHead( cgiaction => 'protoagg',
+            labelstyle => 'width:120px',
+            autofocus => 'false' );
+
+  Input(    type      => 'hidden',
+            name      => 'subaction');
+
+  Input(    show      => $lang{protocol_number},
+	    name      => 'id',
+            readonly  => $doc_status == -1 ? 0 : 1,
+            style     => 'width:80px;',
+	    validate  => { pattern   => '^(F\d\d\d\d\d.\d\d)*$',
+                           onerror   => $lang{Err_protocol} },
+            type      => 'text');
+
+  Input(    show      => $lang{binder_name},
+	    validate  => { mandatory => 'true',
+	                   pattern   => '^.{1,200}$' },
+	    name      => 'name',
+	    maxlen    => 200,
+	    style     => 'width:350px',
+	    type      => 'text');
+
+  Input(    show      => $lang{contact_name},
+            validate  => { mandatory => 'false' },
+	    style     => 'width:330px',
+	    type      => 'contactfinder');
+
+  Input(    name      => 'owner',
+	    validate  => { mandatory => 'true' },
+            readonly  => $doc_status == -1 ? 0 : 1,
+            show      => $lang{referring},
+            type      => 'logins');
+
+  Input(    show      => $lang{issue},
+            type      => 'date',
+	    validate  => { onerror   => $lang{Err_issue},
+	                   mandatory => 'true' },
+	    value     => $tv{today},
+            name      => 'issue');
+
+  Input(    show      => $lang{category},
+            type      => 'combo',
+            style     => 'width:330px',
+            view_mode => 1,
+            value     => '',
+            data      => "select category,category from binders ".
+                         "group by category",
+            name      => 'category',
+            maxlen    => 200 );
+
+  Input(    show      => $lang{notes},
+            type      => 'textarea',
+	    name      => 'note',
+            style     => 'width:350px; height:160px;' );
+
+  Input(    show      => $on{id} ? $lang{save} : $lang{make_a_binder},
+            style     => 'margin-top:15px',
+	    type      => 'submit');
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+ 
+#############################################################################
+#############################################################################
+sub protoagg
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  ## Validate Form values
+  push @IG::errmsg, IG::FormValidate();
+  proto() && return if @IG::errmsg;
+
+  ## make a new protocol and insert data in db
+  $on{id}  ||= IG::MkLastNum('binders');
+  $on{name}  = ucfirst( $on{name} );
+
+  QuoteParams();
+  DbQuery(query =>[( "DELETE FROM binders where id = '$in{id}'",
+
+		     "INSERT INTO binders VALUES ('$in{id}', '$in{owner}',".
+		     " '$in{issue}', '$in{name}', '$in{note}',".
+		     " '$in{category}', '$in{contactname}', '$in{contactid}')"
+		 )] );
+
+  LogD('', 'insert', 'binders', $on{id});
+
+  if ( $on{subaction} eq 'addspool' )
+   { addspool(); }
+  else
+   { IG::Redirect("binders?action=docview&amp;id=$on{id}"); }
+ }
+ 
+#############################################################################
+#############################################################################
+sub protomodi
+ {
+  QuoteParams();
+  DbQuery("SELECT * FROM binders where id='$in{id}'");
+   ( $on{id},
+     $on{owner},
+     $on{issue},
+     $on{name},
+     $on{note},
+     $on{category},
+     $on{contactname},
+     $on{contactid}	) = FetchRow();
+
+  proto();
+ }
+ 
+#############################################################################
+#############################################################################
+sub docview
+ {
+  ## Change id if user request next or previous ID
+  $on{id} = IG::SearchProtocolId( direction => $on{change_id_to},
+                                  id        => $on{id} ) if $on{change_id_to};
+
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'r' ) || return;
+ 
+  ## retriew document info
+  DbQuery("SELECT * FROM binders WHERE id='".DbQuote($on{id})."' limit 1");
+  my @row = FetchRow();
+
+  ## check if document exists
+  IG::Warn( $lang{Err_nodocument} ) && return if !$row[0];
+  
+  ## renders the page
+  Header();
+
+  my %docs_type
+    =( archive      => ['mime_archive.gif',  $lang{archive}],
+       email        => ['mime_document.gif', $lang{email}],
+       contracts    => ['mime_contract.gif', $lang{contract}],
+       fax_received => ['mime_fax.gif',      'Fax'],
+       fax_sent     => ['mime_fax.gif',      'Fax'],
+       letters      => ['mime_letter.gif',   $lang{letter}],
+       nc_ext       => ['mime_document.gif', $lang{ncext}],
+       nc_int       => ['mime_document.gif', $lang{ncint}],
+       offers       => ['mime_offer.gif',    $lang{offer}],
+       orders       => ['mime_order.gif',    $lang{order}],
+      );
+ 
+  my @doc_rows;
+  my $docs_cnt;
+  my $conn = DbQuery( "select * from bindeddocs ".
+                      "where binderid='".DbQuote($on{id})."' ".
+                      "order by docissue desc");
+  while ( my @row2 = FetchRow($conn) )
+   {
+    $docs_cnt++;
+    my ($doc_type, $doc_cgi, $doc_table) = IG::ProtocolToDocType( $row2[2] );
+    my $icon = Img( src   => "$IG::img_url/$docs_type{$doc_type}[0]",
+                    width => 32 ).
+               "<br>$docs_type{$doc_type}[1]<br>".
+               MkLink($row2[2]);
+
+    DbQuery( query => $doc_type eq 'email'
+                   ?  "select contacts.contactname, email_msgs.issue,".
+                      " email_msgs.owner, email_msgs.subject ".
+                      "from email_msgs left join contacts ".
+                      "on contacts.contactid = email_msgs.contactid ".
+                      "where email_msgs.pid='$row2[2]'"
+                   :  "select contactname, issue, owner, note ".
+                      "from $doc_table where id='$row2[2]'" );
+
+    my ( $doc_contactname,
+         $doc_issue,
+         $doc_owner,
+         $doc_note ) = FetchRow();
+
+    my $info
+       = IG::MkTable
+          ( style       => 'width:100%;',
+            cellspacing => 1,
+            cellpadding => 0,
+            style_c1_r  => "font-size:10px; vertical-align:top; color:$IG::clr{font_low_evidence}; width:15%;",
+            style_c2_r  => 'font-size:10px',
+            values      => [( [ $lang{contact_name}, $doc_contactname ],
+                              [ $lang{issue},        $doc_issue ],
+                              [ $lang{owner},        IG::UsrInf('name',$doc_owner) ],
+                              [ $lang{notes},        MkLink($doc_note) ]
+                            )] );
+    my $action_icon
+       = Img( title => $lang{unlink_from_binder},
+              src   => "$IG::img_url/delete.gif",
+              width => 16,
+              class => 'noprint',
+              href  => "binders?".
+                       "action=unlinkdoc&amp;".
+                       "docid=$row2[2]&amp;".
+                       "id=$on{id}" ).
+
+         Img( title => $lang{view_document},
+              width => 16,
+              class => 'noprint',
+              src   => "$IG::img_url/igdocview.png",
+              href  => "docview?action=show_doc&amp;".
+                       "id=$row2[2]" ).
+
+         Img( title => $lang{mark_by_igmsg},
+              width => 16,
+              class => 'noprint',
+              src   => "$IG::img_url/comment_edit.gif",
+              href  => "javascript:winPopUp(".
+                       "'isms?".
+                       "action=composemessage&amp;".
+                       "onsend=close&amp;".
+                       "text_msg=$row2[2]".
+                       "',500,200,'composemessage')" );
+
+    push @doc_rows, [ $icon, $info, $action_icon ];
+   }     
+
+  my $docs_list
+     = IG::MkTable( style       => 'width:100%;',
+                    cellpadding => 1,
+                    cellspacing => 2,
+                    style_c1_r  => "font-size:10px; padding:2px; border-bottom:1px solid $IG::clr{border_low}; width:60px; text-align:center; vertical-align:top;",
+                    style_c2_r  => "border-bottom:1px solid $IG::clr{border_low}; vertical-align:top;",
+                    style_c3_r  => 'width:50px; vertical-align:bottom',
+                    values      => \@doc_rows);
+
+
+  IG::ShowProtocolInfo
+   ( id        => $row[0],
+     title     => $lang{binders_protocol},
+     can_email => 'true',
+     can_zip   => 'false',
+     fields    => [( [ $lang{binder_name},
+                       $row[3] ],
+                     [ $lang{binder},
+                       $row[0] ],
+                     [ $lang{contact_name},
+                       "<a href=\"contacts?action=showrecord&amp;".
+                                          "contactid=$row[7]\">".
+                       $row[6].
+                       "</a>" ],
+                     [ $lang{owner},
+                       "<span style=\"white-space:nowrap\">".
+                       IG::UsrInf('name',$row[1]).
+                       "</span>" ],
+                     [ $lang{category},
+                       $row[5] ],
+	             [ $lang{issue},
+	               $row[2] ],
+	             [ $lang{notes},
+	               MkLink($row[4]) ],
+                     [ $lang{binded_docs},
+                       $docs_cnt ],
+	           )] );
+
+   PrOut _adddocument();
+
+   TaskMsg( "<div id=\"container_docs\" style=\"width:100%; height:180px; overflow:auto\">".
+            $docs_list.
+            "</div>",
+            4 );
+
+  ## Related Documents
+  IG::RelatedTo( $on{id}, $row[7] );
+
+  TaskFoot( comments       => 'yes',
+            commentid      => $on{id},
+            commentbackurl => "action=docview&amp;id=$on{id}");
+
+  HtmlFoot();
+  LogD($row[3], 'view', 'binders', $on{id});
+ }
+
+#############################################################################
+#############################################################################
+sub delshow
+ {
+  Header();
+  TaskMsg( FormHead( cgiaction=> 'delexec',
+		     float    => 'left',	
+		     onsubmit => IG::JsConfirm( $lang{are_you_sure} ) ).
+
+	  Input(     type     => 'select',
+		     name     => 'id',
+		     zerovalue=> 'true',
+		     style    => 'width:350px',
+		     data     => CheckPrivilege('sys_user_admin')
+		               ? 'SELECT id, id, name '.
+		                 'FROM binders '.
+		                 "where issue>='$tv{start_year}'".
+		                 " and issue<='$tv{end_year}' ".
+		                 'ORDER BY id desc'
+			       : 'SELECT id, id, name '.
+			         'FROM binders '.
+			         "where owner='$auth_user'".
+			         " and issue>='$tv{start_year}'".
+			         " and issue<='$tv{end_year}' ".
+			         'ORDER BY id desc',
+                     show     => $lang{protocol_number} ).
+
+	  Input(     type     => 'submit',
+	             show     => $lang{delete} ).
+
+	  FormFoot()
+	  ,2);
+  Footer();
+ }
+
+############################################################################
+############################################################################
+sub delexec
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  QuoteParams();
+  if (CheckPrivilege('sys_user_admin') )
+   {
+    DbQuery("delete from binders where id='$in{id}'");
+    DbQuery("delete from bindeddocs where binderid='$in{id}'");
+   }
+  else
+   {
+    DbQuery("select owner from binders where id='$in{id}'");
+    my $owner = FetchRow();
+    if ( $owner ne $auth_user )
+     {
+      IG::Warn( $lang{Err_privileges} );
+      return;
+     }
+
+    DbQuery("delete from binders where id='$in{id}'");
+    DbQuery("delete from bindeddocs where binderid='$in{id}'");
+   }
+
+  LogD('', 'delete' ,'binders', $on{id});
+  IG::Redirect('binders');
+ }
+
+############################################################################
+############################################################################
+sub unlinkdoc
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  QuoteParams();
+  DbQuery("delete from bindeddocs ".
+          "where binderid='$in{id}' and docid='$in{docid}'");
+
+  LogD("$on{docid} from $on{id}", 'unlink' ,'binders', $on{id});
+
+  IG::Redirect("binders?action=docview&amp;id=$on{id}");
+ }
+ 
+#############################################################################
+#############################################################################
+sub addspool
+ {
+  my $binder_spool = "$IG::user_dir${S}binder";
+
+  IG::Warn($lang{Err_any_documents}) && return if ! -e $binder_spool;
+
+  open(DAT, '<', $binder_spool)
+    or die("Can't open '$binder_spool' to read binder spool.\n");
+  while ( my $docid = <DAT> )
+   {
+    chomp($docid);
+    my $id       = MkId(15);
+    my $binderid = DbQuote($on{id});
+
+    ## check if already exist a $docid inside $binderid
+    DbQuery("select id from bindeddocs ".
+            "where binderid='$binderid' and docid='$docid'");
+    next if FetchRow();
+
+    my ($doc_type, $doc_cgi, $doc_table) = IG::ProtocolToDocType( $docid );
+    my $id_field   = $doc_type eq 'email' ? 'pid' : 'id';
+
+    DbQuery("select issue from $doc_table where $id_field='$docid' limit 1");
+    my $docissue = DbQuote( FetchRow() );
+    next if !$docissue;
+
+    DbQuery("insert into bindeddocs values".
+            " ('$id', '$binderid', '$docid', '$docissue')");
+   }
+
+  IG::FileUnlink("$IG::user_dir${S}binder")
+    or die("Can't delete '$IG::user_dir${S}binder' check file privileges.\n");
+
+  IG::Redirect("binders?action=docview&amp;id=$on{id}");
+ }
+
+#############################################################################
+#############################################################################
+sub adddocumentagg
+ {
+  ## Check text2link to bind
+  my $docid;
+     $docid = "$1.$3" if $on{text2link} =~ /([1-9E]\d\d\d\d\d)(\.|\_)(\d\d)/;
+
+  if ( !$docid )
+   {
+    push @IG::errmsg, $lang{Err_protocol_number};
+   }
+  else
+   {
+    my $id       = MkId(15);
+    my $binderid = DbQuote($on{id});
+ 
+    ## check if already exist a $docid inside $binderid
+    DbQuery("select id from bindeddocs ".
+            "where binderid='$binderid' and docid='$docid'");
+    if ( ! FetchRow() )
+     {
+      my ($doc_type, $doc_cgi, $doc_table) = IG::ProtocolToDocType( $docid );
+      my $id_field   = $doc_type eq 'email' ? 'pid' : 'id';  
+ 
+      DbQuery("select issue from $doc_table where $id_field='$docid' limit 1");
+      my $docissue = DbQuote( FetchRow() );
+
+      DbQuery( "insert into bindeddocs values".
+               " ('$id', '$binderid', '$docid', '$docissue')"
+             ) if $docissue;
+     }
+   }
+
+  docview();
+ }
+
+#############################################################################
+#############################################################################
+sub _short_cuts
+ {
+  my $html = IG::QuickCreator().
+             TaskHead( title => $lang{last_documents},
+                       style => 'margin-top:5px',
+                       icon  => 2,
+                       width => 180 ).
+             IG::LastDocuments().
+             TaskFoot();
+
+  return $html;
+ }
+
+############################################################################
+############################################################################
+sub _adddocument
+ {
+  return if $on{print};
+  my $html
+     = HLayer
+        ( bottom_space => '0',
+          top_space    => 5,
+          right_layers
+           =>[(
+  
+             FormHead( cgiaction  => 'adddocumentagg',
+                       fieldstyle => 'margin:0px 0px 0px 0px; ',
+                       name       => 'adddoc' ).
+
+             Input(    type       => 'hidden',
+                       name       => 'id'),
+
+             "<div style=\"font-size:10px; margin-right:3px;\">".             
+             $lang{protocol_number}.
+             "</div>",
+
+             Input(    type       => 'text',
+                       style      => 'width:70px; font-size:10px',
+                       labelstyle => 'font-size:10px;',
+                       value      => '',
+                       override   => 1,
+                       name       => 'text2link'),
+
+             Input(    type       => 'submit',
+                       style      => 'font-size:10px; margin:0 3px 0 2px;',
+                       show       => $lang{add},
+                       float      => 'left').
+
+             FormFoot()
+             )],
+          left_layers
+           => [( HTitle( title => $lang{binded_docs},
+                         style => "margin:0; padding:0;" ) )]
+        );
+             
+  return $html;
+ }
+
+############################################################################
+############################################################################
+sub findshow
+ {
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer
+     ( bottom_space => 0,
+       right_layers
+        =>[(FormHead( name       => 'findnavi',
+		      method     => 'get',
+		      target     => 'mainf',
+		      autofocus  => 'false',
+		      cgiaction  => 'findexec',
+                      labelstyle => 'border:0px; width:auto;',
+		      float      => 'left' ).
+
+	    Input(    type       => 'findable' ),
+		
+	    Input(    type       => 'select',
+		      name       =>'fieldtofind',
+		      data       =>[(['from',	$lang{with_header}],
+				     ['id',	$lang{with_protocol}],
+			             ['date',	$lang{with_date}],
+			             ['note',   $lang{with_notes}])]),
+	
+	    Input(    type       => 'text',
+		      name       => 'keytofind',
+		      value      => $IG::cookie{lastsearch},
+                      focus      => 'true',
+                      style      => 'width:100px; margin-right: -5px;',
+		      onblur     => "document.cookie='lastsearch=' + escape(this.value)"),
+	
+	    Input(    type       => 'image',
+		      name       => $lang{find},
+		      src        => "$IG::img_url/${IG::tema}search.gif",
+		      alt        => $lang{find}),
+		      
+	    FormFoot())]
+	 );
+   }
+
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub findexec
+ {
+  my $query;
+  my $counter = 0;
+
+  if ($on{ajax_request})
+   {
+    HttpHead( expires => 'now' );
+    TaskMsg( Input( type      => 'button',
+                    float     => 'right',
+                    onclick   => "document.location = '".
+                                 "binders?".
+                                        "action=proto&amp;".
+                                        "contactid=$on{contactid}&amp;".
+                                        "backtoreferer=1';",
+                    show      => $lang{new_item},
+                    fieldstyle=> 'margin:0px',
+                    style     => 'margin:0px;font-size:10px; height:15px' ).
+                    
+	     Img(   src       => "$IG::img_url/mime_mini_folder.png",
+                    align     => 'absmiddle').
+
+             "<a href=\"binders\">$lang{binders}</a>"
+
+            ,7);
+   }
+  else
+   {
+    $IG::set_cookie{lastsearch} = $on{keytofind};
+    Header();
+
+    TaskMsg( "$lang{binders} - ".
+             "$lang{find}: <strong>$on{keytofind}</strong>",4 );
+   }
+
+  ## Build query
+  QuoteParams();
+  if ( $on{ajax_request} )
+   { $query = "binders.contactid = '$on{contactid}'"; }
+  elsif ( length($on{keytofind}) < 2 )
+   {
+     $query = "1=0";
+     push @IG::errmsg, $lang{Err_find};
+   }
+  elsif ( $on{fieldtofind} eq 'id' || $on{keytofind} =~ /F\d\d\d\d\d\.\d\d/ )
+   { $query = "binders.id~*'$in{keytofind}'"; }
+  elsif ( $on{fieldtofind} eq 'from' )
+   { $query = "binders.contactname~*'$in{keytofind}'"; }
+  elsif ( $on{fieldtofind} eq 'date' )
+   {
+    $in{keytofind} = $on{keytofind} = CkDate($on{keytofind});
+    $query = "binders.issue='$in{keytofind}'";
+   }
+  elsif ($on{fieldtofind} eq 'note')
+   { $query = "binders.note~*'$in{keytofind}'"; }
+
+  TaskListMenu
+   (
+    [$lang{number}      ],
+    [$lang{binder_name} ],
+    [Img(src=>"$IG::img_url/user.gif") ],
+    [$lang{category}    ],
+    [$lang{issue}       ],
+    [$lang{notes}       ],
+   );
+ 
+  DbQuery("SELECT binders.id, binders.owner, binders.issue, binders.name,".
+          " binders.note, binders.category, binders.contactname,".
+          " binders.contactid, users.initial ".
+          "FROM binders ".
+          "LEFT JOIN users ON binders.owner=users.login ". 
+          "WHERE $query order by issue desc, id desc");
+
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+
+    TaskListItem (
+		[ParseLink($row[0])],
+		[$row[3].
+		 ($on{ajax_request}
+		  ? ''
+		  : "<div style=\"color:$IG::clr{font_low_evidence}\">".
+	            $row[6]."</div>" )],
+		[$row[8]],
+		[$row[5]],
+		[$row[2]],
+		[MkLink($row[4])]
+		   );
+   }
+
+  if ($on{ajax_request})
+   {
+    TaskListFoot(7);
+   }
+  else
+   {
+    push @IG::errmsg, $lang{no_items} if !$counter && length($on{keytofind}) > 1;
+    TaskListFoot();
+    Footer();
+    LogD( $IG::query_string, 'search', 'search_binders', undef);
+   }
+ }
+
+############################################################################
+############################################################################
+sub Header
+ {
+  my ( $alphabet_selector, $page_selector) = @_;
+
+  HtmlHead( shortcuts => _short_cuts());
+  TaskHead( title     => $lang{binders},
+	    width     => '100%');
+
+  HLayer( left_layers=>[(
+
+	  MkButton( text      => $lang{back_to_list},
+	            privilege => $on{action} ne 'default_action',
+	            link      => 'binders'),
+
+	  MkButton( text      => $lang{new_protocol},
+		    link      => "binders?action=proto"),
+
+          MkButton( text      => $lang{add_binders_spool},
+                    privilege => $on{action} eq 'docview',
+                    link      => "binders?action=addspool&amp;id=$on{id}" ),
+		    
+	  MkButton( text      => $lang{delete},
+	            link      => "binders?action=delshow"),
+
+	  MkButton( text      => $lang{reports},
+		    link      => "reports?table=binders",
+                    privilege => CheckPrivilege('binders_report') ),
+
+          $page_selector)]
+	    );
+
+  PrOut $alphabet_selector;
+ }
+############################################################################
+############################################################################
+
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+## $lang{edit_binder}
