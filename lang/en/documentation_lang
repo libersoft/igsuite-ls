@@ -7,7 +7,6 @@
 drafts			=>'Drafts',
 publish_mng		=>'Publish Management',
 new_document		=>'New document',
-quality_system  => 'Quality System',
   ));
 
 1;
