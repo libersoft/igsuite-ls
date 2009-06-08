@@ -7538,6 +7538,7 @@ sub DbQuery
 
       $result[$dbconn]
         = $conn{$dbase}{connection}->exec("set DateStyle='$fake_date_format'");
+			$result[$dbconn]=$conn{$dbase}{connection}->exec("SET CLIENT_ENCODING='$IG::postgres_charset'");
      }
 
     $result[$dbconn] = $conn{$dbase}{connection}->exec($qry);
