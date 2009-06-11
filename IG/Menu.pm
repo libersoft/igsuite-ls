@@ -79,7 +79,7 @@ sub MkMenu
         ? [ 'Chat',
             'igchats',
             'mainf' ]
-        : [ 'IGChats',
+        : [ 'Chat',
             "javascript:winPopUp('igchats?a=1',650,400,'igchatspanel')",
             'new' ] ),
 
