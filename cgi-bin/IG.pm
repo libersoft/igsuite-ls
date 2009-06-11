@@ -7425,6 +7425,8 @@ sub DbQuery
       ## change date format
       $result[$dbconn]
         = $conn{$dbase}{connection}->do("set DateStyle='$fake_date_format'");
+      $result[$dbconn]=$conn{$dbase}{connection}->do("SET CLIENT_ENCODING='$IG::postgres_charset'");
+
      }
 
     if ( $qry eq 'COMMIT' )
