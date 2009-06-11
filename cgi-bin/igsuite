@@ -256,17 +256,17 @@ sub _login_form
   PrOut <<END;
 <div style="font-size:24px; position:absolute; top:25px; right:30px;
             font-weight:bold; text-align:right;">
- <a style="display:block; color:#EEEEEE" href="http://www.igsuite.org">
-  IGSuite $IG::VERSION</a>
+ <a style="display:block; color:#EEEEEE" href="http://www.organizza.info">
+  Organizza.info $IG::VERSION</a>
  <img src="$IG::img_url/hpoints.gif" alt="vp" style="vertical-align:top; border:0;">
 </div>
 <div style="position:absolute; bottom:25px; left:20px;
             color:#EEEEEE; text-align:left;">
  <img src="$IG::img_url/hpoints.gif" alt="hp" border=0><br/>
- <div style="font-size:16px; font-weight:bold">Integrated Groupware Suite</div>
+ <div style="font-size:16px; font-weight:bold">Organizza.info</div>
  <div style="font-size:12px;">
-  <a style="color:#EEEEEE" href="http://www.igsuite.org">http://www.igsuite.org</a> -
-  <a style="color:#EEEEEE" href="mailto:info\@igsuite.org">info\@igsuite.org</a>
+  <a style="color:#EEEEEE" href="http://www.libersoft.it">http://www.libersoft.it</a> -
+  <a style="color:#EEEEEE" href="mailto:tech\@libersoft.it">tech\@libersoft.it</a>
  </div>
 </div>
 END
