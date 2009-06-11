@@ -271,12 +271,16 @@ sub _login_form
 END
 
   ## company name
-  my $company = "<div style=\"margin-right:30px; font-size:20px;".
-                " color:#FFFFFF; font-weight:bold\">$IG::soc_name</div>";
-                
-     $company .= "<div style=\"margin-right:30px;font-size:12px\">".
-                 "<a style=\"color:#DDDDDD\" href=\"mailto:$IG::soc_email\">".
-                 "$IG::soc_email</a></div>" if $IG::soc_email;
+  #my $company = "<div style=\"margin-right:30px; font-size:20px;".
+  #              " color:#FFFFFF; font-weight:bold\">$IG::soc_name</div>";
+  #              
+  #   $company .= "<div style=\"margin-right:30px;font-size:12px\">".
+  #               "<a style=\"color:#DDDDDD\" href=\"mailto:$IG::soc_email\">".
+  #               "$IG::soc_email</a></div>" if $IG::soc_email;
+
+	my $company = "<div style=\"margin-right:30px;\">".
+								"<img src=\"../images/logo.png\"/>".
+								"</div>";
 
   my $form = FormHead( target     => '_top',
                        mode       => 'html',
