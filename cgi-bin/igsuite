@@ -3148,7 +3148,7 @@ sub copyright
               expires => '+24h' );
   
   PrOut <<FINE;
-<h1>IGSuite $IG::VERSION - Integrated Groupware Suite</h1>
+<h1>Organizza.info $IG::VERSION</h1>
 
 <h5>Description</h5>
 <a href="http://www.igsuite.org" target="_new" onClick='self.close()'>

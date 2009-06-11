@@ -168,16 +168,11 @@ sub mk_index
   print IND <<END;
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN"
      "http://www.w3.org/TR/html4/frameset.dtd">
-<html><head><title>IGSuite - Your Office in a Box</title>
+<html><head><title>Organizza.info</title>
 <META HTTP-EQUIV="refresh" CONTENT="0; URL=/cgi-bin/igsuite">
 </head>
 <body>
-<h2>Please redirect your browser to <a
-href="/cgi-bin/igsuite">http://www.yourserver.com/cgi-bin/igsuite</a></h2>
-<br><br>
-If you can't open the suite read this document 
-<a href="http://www.igsuite.org/cgi-bin/igwiki/faq1">
-http://www.igsuite.org/cgi-bin/igwiki/faq1</a>
+Redirecting...
 </body>
 </html>
 
