@@ -256,17 +256,16 @@ sub _login_form
   PrOut <<END;
 <div style="font-size:24px; position:absolute; top:25px; right:30px;
             font-weight:bold; text-align:right;">
- <a style="display:block; color:#EEEEEE" href="http://www.igsuite.org">
-  IGSuite $IG::VERSION</a>
+ <a style="display:block; color:#EEEEEE" href="http://www.organizza.info">
+  Organizza.info</a>
  <img src="$IG::img_url/hpoints.gif" alt="vp" style="vertical-align:top; border:0;">
 </div>
 <div style="position:absolute; bottom:25px; left:20px;
             color:#EEEEEE; text-align:left;">
  <img src="$IG::img_url/hpoints.gif" alt="hp" border=0><br/>
- <div style="font-size:16px; font-weight:bold">Integrated Groupware Suite</div>
  <div style="font-size:12px;">
-  <a style="color:#EEEEEE" href="http://www.igsuite.org">http://www.igsuite.org</a> -
-  <a style="color:#EEEEEE" href="mailto:info\@igsuite.org">info\@igsuite.org</a>
+  <a style="color:#EEEEEE" href="http://www.libersoft.it">http://www.libersoft.it</a> -
+  <a style="color:#EEEEEE" href="mailto:tech\@libersoft.it">tech\@libersoft.it</a>
  </div>
 </div>
 END
@@ -1483,7 +1482,7 @@ sub summary
     PrOut "</span></td>
 	   <td width=\"100%\" class=\"littlebar\" $IG::imgbgbarra>
                 <a href=\"javascript:winPopUp('igsuite?action=copyright',600,580,'copyright')\" style=\"color: $IG::clr{font_barra}\">
-		IGSuite $IG::VERSION &copy; Licence</a>
+		Organizza.info $IG::VERSION &copy; Licence</a>
 		&nbsp;-&nbsp;$IG::soc_name - 
 		$auth_user\@$IG::remote_host</td>
 	   <td align=\"right\" class=\"littlebar\" nowrap $IG::imgbgbarra>
