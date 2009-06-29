@@ -166,8 +166,7 @@ sub proto
             containerstyle => 'padding-top:15px;' );
 
   Input(    show       => $lang{id},
-	    validate   => { mandatory => 'true',
-	                    pattern   => '^\d+$'},
+	    validate   => { mandatory => 'true'},
             readonly   => $resource_status == -1 ? 0 : 1,
             type       => 'text',
             name       => 'id',
@@ -511,7 +510,7 @@ sub protoagg
      DbQuery("SELECT id FROM equipments ORDER BY id desc");
      $on{id} = FetchRow() + 1;
     }
-  $on{id} = substr( '00000'.$on{id}, -5, 5 );
+  #$on{id} = substr( '00000'.$on{id}, -5, 5 );
   $on{services} ||= 1; ## not available to services
 
   QuoteParams();
