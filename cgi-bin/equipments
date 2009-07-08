@@ -64,8 +64,9 @@ sub default_action
   TaskListMenu(	[$lang{id}],
 		[$lang{type}],
 		[$lang{description}],
-		[$lang{plate}],
-		["$lang{notes}/$lang{location}"],
+    [$lang{certificate}],
+		#[$lang{plate}],
+		#["$lang{notes}/$lang{location}"],
 		[""] );
 
   while (my @row = FetchRow())
@@ -94,8 +95,9 @@ sub default_action
 	[GetTableVal( 'equipments_type', $row[5] ),
 	 "equipments?filter_type=$row[5]"],
 	[$row[1]],
-	[$row[3]],
-	[MkLink($row[4]) . '<br>' . MkLink($row[12])],
+  [$row[2]],
+	#[$row[3]],
+	#[MkLink($row[4]) . '<br>' . MkLink($row[12])],
 	[$icon]
 		);
    }
