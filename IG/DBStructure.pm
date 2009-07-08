@@ -1828,6 +1828,28 @@ equipments=>[
 
 	{ name=>'booking_approve_group',
 	  type=>'varchar(15)',},         # group whose users have to approve bookings
+
+	{ name=>'matriculation',
+	  type=>'varchar(255)',},
+
+	{ name=>'property',
+	  type=>'varchar(255)',},
+
+	{ name=>'denomination',
+	  type=>'varchar(255)',},
+
+	{ name=>'taration',
+	  type=>'varchar(255)',},
+
+	{ name=>'taration_field',
+	  type=>'varchar(255)',},
+
+	{ name=>'classeses',
+	  type=>'varchar(255)',},
+
+	{ name=>'accreditation',
+	  type=>'varchar(255)',},
+
 	],
 equipments_maintenance=>[
 	{ name=>'id',

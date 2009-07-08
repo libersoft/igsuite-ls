@@ -185,13 +185,13 @@ sub proto
             style      => 'width:150px',
             table      => 'equipments_type');
 
-  Input(    show       => $lang{plate},
+  Input(    show       => "Matricola",
             type       => 'text',
-            name       => 'brand',
+            name       => 'matriculation',
             maxlen     => 50,
             style      => 'width:150px' );
 
-  Input(    show       => $lang{status},
+  Input(    show       => "Disponibilit&agrave;",
             type       => 'select',
             float      => 'left',
             name       => 'status',
@@ -199,6 +199,17 @@ sub proto
             data       => [([ 0, $lang{available}      ],
 		            [ 1, $lang{alienate}       ],
 		            [ 2, $lang{out_of_service} ] )] );
+
+  Input(    show       => "Stato di propriet&agrave;",
+            type       => 'select',
+            float      => 'left',
+            name       => 'property',
+            style      => 'width:150px',
+            data       => [([ 0, "Propriet&agrave;"      ],
+		            [ 1, "Leasing"       ],
+		            [ 2, "Noleggio" ],
+                [ 3, "In prova" ],
+                 )] );
 
   my $panel = Input( show     => $lang{assigned_to},
                      type     => 'logins',
@@ -212,7 +223,7 @@ sub proto
                      style    => 'width:220px',
                      type     => 'contactfinder').
 
-              Input( show     => $lang{dislocation},
+              Input( show     => "Ubicazione",
                      type     => 'text',
                      float    => 'left',
                      style    => 'width:240px',
@@ -239,6 +250,23 @@ sub proto
                      data     => { 1 => $lang{available},
 		                   0 => $lang{unavailable}} ).
 
+              Input(    show       => "Classe",
+                        type       => 'select',
+                        float      => 'left',
+                        name       => 'classeses',
+                        style      => 'width:150px',
+                        data       => [([ 0, "A"      ],
+                                      [ 1, "B"       ],
+                                      [ 2, "C" ],
+                                      [ 3, "D" ],
+                                      )] ).
+
+              Input(    show       => $lang{plate},
+                        type       => 'text',
+                        name       => 'brand',
+                        maxlen     => 50,
+                        style      => 'width:240px' ).
+
               ( CheckPrivilege('services_show')
                 ? Input( type     => 'select',
                          style    => 'width:240px',
@@ -253,7 +281,39 @@ sub proto
                      style    => 'width:220px',
                      validate => { mandatory => 'false' },
                      type     => 'date',
-                     name     => 'date9');
+                     name     => 'date9').
+
+              Input( show       => "Denominazione/Modello/Fabbricante",
+                    #labelstyle => 'width:80px; height:195px',
+                    type       => 'textarea',
+                    style      => 'width:240px; height:80px',
+                    name       => 'denomination').
+
+              Input( show       => "Accetabilit&agrave; taratura",
+                    #labelstyle => 'width:80px; height:195px',
+                    type       => 'textarea',
+                    style      => 'width:240px; height:80px',
+                    name       => 'taration').
+
+              Input( show       => "Campo taratura",
+                    #labelstyle => 'width:80px; height:195px',
+                    type       => 'textarea',
+                    style      => 'width:240px; height:80px',
+                    name       => 'taration_field').
+
+              Input(    show       => "Accreditata",
+                        type       => 'select',
+                        float      => 'left',
+                        name       => 'accreditation',
+                        style      => 'width:150px',
+                        data       => [([ 0, "Si"      ],
+                                      [ 1, "No"       ],
+                                      )] );
+
+
+
+# Ricordati il punto e virgola di sopra
+
 
   my $photo_url = -e $IG::cgi_dir . $IG::S .
                      'data'       . $IG::S .
@@ -532,8 +592,11 @@ sub protoagg
 		     " '$in{contactid}', '$in{mntn_interventions}',".
                      " '$in{owner}',".
 		     " '$in{booking_group}', '$in{booking_admin_group}',".
-		     " '$in{booking_approve_group}' )"
-		   )] );
+		     " '$in{booking_approve_group}',  '$in{matriculation}',".
+         " '$in{property}',  '$in{denomination}',".
+         " '$in{taration}',  '$in{taration_field}',".
+         " '$in{classeses}',  '$in{accreditation}'".
+          ")" )] );
 
   LogD('','insert', 'equipments', $on{id}); 
 
@@ -575,10 +638,17 @@ sub protomodi
 	$on{status},
 	$on{contactid},
 	$on{mntn_interventions},
-        $on{owner},
+  $on{owner},
 	$on{booking_group},
 	$on{booking_admin_group},
-	$on{booking_approve_group} ) = FetchRow();
+	$on{booking_approve_group},
+  $on{matriculation},
+  $on{property},
+  $on{denomination},
+  $on{taration},
+  $on{taration_field},
+  $on{classeses},
+  $on{accreditation} ) = FetchRow();
 
   proto();
  }
