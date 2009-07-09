@@ -306,10 +306,28 @@ sub proto
                         float      => 'left',
                         name       => 'accreditation',
                         style      => 'width:150px',
-                        data       => [([ 0, "Si"      ],
-                                      [ 1, "No"       ],
-                                      )] );
+                        data       => [(
+                                      [ 0, "Si" ],
+                                      [ 1, "No" ],
+                                      )] ).
 
+              Input( show     => "Data Acquisto",
+                     style    => 'width:240px',
+                     name     => 'buydate',
+                     validate => { mandatory => 'false' },
+                     type     => 'date').
+
+              Input( show     => "Data messa in funzione/taratura",
+                     style    => 'width:240px',
+                     name     => 'tarationdate',
+                     validate => { mandatory => 'false' },
+                     type     => 'date').
+
+              Input( show       => "Personale autorizzato",
+                    #labelstyle => 'width:80px; height:195px',
+                    type       => 'textarea',
+                    style      => 'width:240px; height:80px',
+                    name       => 'authorized_reparts');
 
 
 # Ricordati il punto e virgola di sopra
@@ -595,7 +613,9 @@ sub protoagg
 		     " '$in{booking_approve_group}',  '$in{matriculation}',".
          " '$in{property}',  '$in{denomination}',".
          " '$in{taration}',  '$in{taration_field}',".
-         " '$in{classeses}',  '$in{accreditation}'".
+         " '$in{classeses}',  '$in{accreditation}',".
+         " '$in{buydate}',  '$in{tarationdate}',".
+         " '$in{authorized_reparts}'".
           ")" )] );
 
   LogD('','insert', 'equipments', $on{id}); 
@@ -638,17 +658,21 @@ sub protomodi
 	$on{status},
 	$on{contactid},
 	$on{mntn_interventions},
-  $on{owner},
+        $on{owner},
 	$on{booking_group},
 	$on{booking_admin_group},
 	$on{booking_approve_group},
-  $on{matriculation},
-  $on{property},
-  $on{denomination},
-  $on{taration},
-  $on{taration_field},
-  $on{classeses},
-  $on{accreditation} ) = FetchRow();
+          $on{matriculation},
+          $on{property},
+          $on{denomination},
+          $on{taration},
+          $on{taration_field},
+          $on{classeses},
+          $on{accreditation},
+          $on{buydate},
+          $on{tarationdate},
+          $on{authorized_reparts}
+) = FetchRow();
 
   proto();
  }
