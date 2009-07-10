@@ -723,15 +723,35 @@ sub proto
                       validate => { onerror   => $lang{Err_birthday_date},
                                     mandatory => 'false' },
                       name     => 'birthday',
-                      size     => 50);
+                      size     => 50).
+
+               Input( show     => "Luogo Nascita",
+                      type     => 'text',
+                      name     => 'luogo_nascita',
+                      size     => 50,
+                      maxlen   => 255);
 
 
   ## job info ###############################################################
   my $panel1 = Input( show     => $lang{company},
-                      type     => 'text',
+                      type     => 'select',
                       name     => 'company',
                       maxlen   => 70,
-                      style    => 'width:350px').
+                      style    => 'width:350px',
+                      data     => [(
+                            [ 0, 'pH s.r.l.'      ],
+		            [ 1, 'pH Servizi s.r.l.'       ],
+		            [ 2, 'pH Consulenze s.r.l.' ] )] ).
+
+                Input( show     => 'Sede Aziendale',
+                      type     => 'select',
+                      name     => 'sede_aziendale',
+                      maxlen   => 70,
+                      style    => 'width:350px',
+                      data     => [(
+                            [ 0, 'Via Sangallo, 29 Tavarnelle V.P.'      ],
+		            [ 1, 'Via Bramante, 10/12 Tavarnelle V.P.'       ],
+		            [ 2, 'Altro' ] )] ).
 
                Input( show     => $lang{emplacement},
                       type     => 'text',
@@ -744,6 +764,45 @@ sub proto
                       name     => 'hierarchyref',
                       style    => 'width:350px',
                       maxlen   => 10).
+
+                Input( show     => 'Operativit&agrave;',
+                      type     => 'select',
+                      name     => 'operativita',
+                      maxlen   => 70,
+                      style    => 'width:350px',
+                      data     => [(
+                            [ 0, 'Operativo'      ],
+		            [ 1, 'In Addestramento'],
+		            )] ).
+
+               Input( show     => "Mansione",
+                      type     => 'text',
+                      name     => 'mansione',
+                      style    => 'width:350px',
+                      maxlen   => 255).
+
+              Input( show     => "Scadenza Qualifica",
+                     style    => 'width:350px',
+                     name     => 'scadenza_qualifica',
+                     type     => 'date').
+
+               Input( show     => "Titolo Studio",
+                      type     => 'text',
+                      name     => 'titolo_studio',
+                      style    => 'width:350px',
+                      maxlen   => 255).
+
+               Input( show     => "Interno telefonico",
+                      type     => 'text',
+                      name     => 'interno_telefonico',
+                      style    => 'width:350px',
+                      maxlen   => 255).
+
+               Input( show     => "Email Aziendale",
+                      type     => 'text',
+                      name     => 'email_aziendale',
+                      style    => 'width:350px',
+                      maxlen   => 255).
 
                Input( show     => $lang{employment_date},
                       type     => 'date',
@@ -795,6 +854,26 @@ sub proto
 				     'Non idoneo',
 				     'Temporaneamente non idoneo',
 				     'Idoneo con prescrizione')]); #XXX2TRANSLATE
+
+               Input( show     => "Posizione INPS",
+                      type     => 'text',
+                      name     => 'posizione_inps',
+                      style    => 'width:350px',
+                      maxlen   => 255).
+
+               Input( show     => "Posizione INAIL",
+                      type     => 'text',
+                      name     => 'posizione_inail',
+                      style    => 'width:350px',
+                      maxlen   => 255).
+
+               Input( show     => "Carta Credito",
+                      type     => 'text',
+                      name     => 'carta_credito',
+                      style    => 'width:350px',
+                      maxlen   => 255);
+
+
 
   ## personal info #########################################################
   my $panel2 = Input( show     => $lang{drive_licence},
@@ -851,7 +930,49 @@ sub proto
                                     mandatory => 'false' },
                       type     => 'date',
                       name     => 'doc3expire',
-                      size     => 50);
+                      size     => 50).
+
+               Input( show     => "Ordine Professionale",
+                      type     => 'text',
+                      name     => 'ordine_professionale',
+                      size     => 50,
+                      maxlen   => 255).
+
+               Input( show     => "Riferimenti Ordine Professionale",
+                      type     => 'text',
+                      name     => 'ordine_professionale_rif',
+                      size     => 50,
+                      maxlen   => 255).
+
+               Input( show     => "Data iscrizione Ordine Professionale",
+                      type     => 'date',
+                      name     => 'ordine_professionale_iscr',
+                      size     => 50,
+                      maxlen   => 255).
+
+               Input( show     => "Qualifica Professionale",
+                      type     => 'text',
+                      name     => 'qualifica_prof',
+                      size     => 50,
+                      maxlen   => 255).
+
+               Input( show     => "Data Qualifica Professionale",
+                      type     => 'date',
+                      name     => 'qualifica_prof_iscr',
+                      size     => 50,
+                      maxlen   => 255).
+
+               Input( show     => "Scadenza Qualifica Professionale",
+                      type     => 'date',
+                      name     => 'qualifica_prof_scad',
+                      size     => 50,
+                      maxlen   => 255).
+
+               Input( show     => "Riferimento Qualifica Professionale",
+                      type     => 'text',
+                      name     => 'qualifica_prof_rif',
+                      size     => 50,
+                      maxlen   => 255);
 
 
   ## professional capacities ###############################################
@@ -1138,8 +1259,18 @@ sub protoagg
 		    " '$in{jobformation}', '$in{isosyncpwd}',".
 		    " '$in{lastsync}', '$in{lastpwdchange}',".
 		    " '$in{note}', '$in{dismissal}', '$in{emailfrom}',".
-		    " '$in{hostsallow}' )"
-		  )] );
+		    " '$in{hostsallow}',".
+                    "  '$in{luogo_nascita}','$in{sede_aziendale}',".
+                    " '$in{operativita}', '$in{reparto}',".
+                    " '$in{mansione}', '$in{scadenza_qualifica}',".
+                    " '$in{titolo_studio}', '$in{interno_telefonico}',".
+                    " '$in{email_aziendale}','$in{tipo_contratto}',".
+                    " '$in{posizione_inps}', '$in{posizione_inail}',".
+                    " '$in{frequenza_visita_medica}', '$in{carta_credito}',".
+                    " '$in{ordine_professionale}', '$in{ordine_professionale_rif}',".
+                    " '$in{ordine_professionale_iscr}', '$in{qualifica_prof}',".
+                    " '$in{qualifica_prof_rif}', '$in{qualifica_prof_iscr}',".
+                    " '$in{qualifica_prof_scad}' )"  )] );
 
   ## Create Filemanager User Home directory
   if ($on{login} && !(-e "$IG::htdocs_dir${S}$IG::default_lang{home}${S}$on{login}"))
@@ -1242,7 +1373,29 @@ sub protomodi
 	$on{note},
 	$on{dismissal},
 	$on{emailfrom},
-	$on{hostsallow} ) = FetchRow();
+	$on{hostsallow},
+        $on{luogo_nascita},
+        $on{sede_aziendale},
+        $on{operativita},
+        $on{reparto},
+        $on{mansione},
+        $on{scadenza_qualifica},
+        $on{titolo_studio},
+        $on{interno_telefonico},
+        $on{email_aziendale},
+        $on{tipo_contratto},
+        $on{posizione_inps},
+        $on{posizione_inail},
+        $on{frequenza_visita_medica},
+        $on{carta_credito},
+        $on{ordine_professionale},
+        $on{ordine_professionale_rif},
+        $on{ordine_professionale_iscr},
+        $on{qualifica_prof},
+        $on{qualifica_prof_rif},
+        $on{qualifica_prof_iscr},
+        $on{qualifica_prof_scad}
+) = FetchRow();
 
   ## exists?
   IG::Warn($lang{Err_nodocument}) && return 0 if !$on{name};
