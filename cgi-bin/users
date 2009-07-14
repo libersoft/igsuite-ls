@@ -879,13 +879,13 @@ sub proto
   my $panel2 = Input( show     => $lang{drive_licence},
                       type     => 'text',
                       name     => 'doc2id',
-                      size     => 50,
+                      style    => 'width:350px',
                       maxlen   => 20).
 
                Input( show     => $lang{type},
                       type     => 'text',
                       name     => 'doc2type',
-                      size     => 50,
+                      style    => 'width:350px',
                       maxlen   => 10).
 
                Input( show     => $lang{due_date},
@@ -894,13 +894,13 @@ sub proto
                                     mandatory => 'false' },
                       type     => 'date',
                       name     => 'doc2expire',
-                      size     => 50).
+                      style    => 'width:350px').
 
                Input( show     => $lang{personal_document},
                       type     => 'text',
                       containerstyle => 'padding-top:10px',
                       name     => 'doc1id',
-                      size     => 50,
+                      style    => 'width:350px',
                       maxlen   => 20).
 
                Input( show     => $lang{due_date},
@@ -909,19 +909,19 @@ sub proto
                                     mandatory => 'false' },
                       type     => 'date',
                       name     => 'doc1expire',
-                      size     => 50).
+                      style    => 'width:350px').
 
                Input( show     => $lang{special_drive_licence},
                       containerstyle => 'padding-top:10px',
                       type     => 'text',
                       name     => 'doc3id',
-                      size     => 50,
+                      style    => 'width:350px',
                       maxlen   => 20).
 
                Input( show     => $lang{type},
                       type     => 'text',
                       name     => 'doc3type',
-                      size     => 50,
+                      style    => 'width:350px',
                       maxlen   => 10).
 
                Input( show     => $lang{due_date},
@@ -930,48 +930,48 @@ sub proto
                                     mandatory => 'false' },
                       type     => 'date',
                       name     => 'doc3expire',
-                      size     => 50).
+                      style    => 'width:350px').
 
                Input( show     => "Ordine Professionale",
                       type     => 'text',
                       name     => 'ordine_professionale',
-                      size     => 50,
+                      style    => 'width:350px',
                       maxlen   => 255).
 
                Input( show     => "Riferimenti Ordine Professionale",
                       type     => 'text',
                       name     => 'ordine_professionale_rif',
-                      size     => 50,
+                      style    => 'width:350px',
                       maxlen   => 255).
 
                Input( show     => "Data iscrizione Ordine Professionale",
                       type     => 'date',
                       name     => 'ordine_professionale_iscr',
-                      size     => 50,
+                      style    => 'width:350px',
                       maxlen   => 255).
 
                Input( show     => "Qualifica Professionale",
                       type     => 'text',
                       name     => 'qualifica_prof',
-                      size     => 50,
+                      style    => 'width:350px',
                       maxlen   => 255).
 
                Input( show     => "Data Qualifica Professionale",
                       type     => 'date',
                       name     => 'qualifica_prof_iscr',
-                      size     => 50,
+                      style    => 'width:350px',
                       maxlen   => 255).
 
                Input( show     => "Scadenza Qualifica Professionale",
                       type     => 'date',
                       name     => 'qualifica_prof_scad',
-                      size     => 50,
+                      style    => 'width:350px',
                       maxlen   => 255).
 
                Input( show     => "Riferimento Qualifica Professionale",
                       type     => 'text',
                       name     => 'qualifica_prof_rif',
-                      size     => 50,
+                      style    => 'width:350px',
                       maxlen   => 255);
 
 
