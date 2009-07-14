@@ -60,11 +60,11 @@ require Exporter;
 	services		=> [ 18,'id;opendate,enddate'],
 	services_stats		=> [ 4,	''],
 	services_notes		=> [ 7,	''],
-	users			=> [ 50,'login'],
+	users			=> [ 71,'login'],
 	users_groups		=> [ 3, 'groupid'],
 	users_groups_link	=> [ 2, 'groupid;userid'],
 	users_privileges	=> [ 4, 'resource_id;who'],
-	equipments		=> [ 33,''],
+	equipments		=> [ 45,''],
         equipments_maintenance  => [ 2, ''],
 	calendar		=> [ 23,'eventid;parent'],
 	todo			=> [ 15,''],
@@ -1497,6 +1497,27 @@ users=>[
 	{ name=>'dismissal',	type=>'date',},#
 	{ name=>'emailfrom',    type=>'text',},#
 	{ name=>'hostsallow',   type=>'text',},#
+	{ name=>'luogo_nascita',                    type=>'varchar(255)',},  
+	{ name=>'sede_aziendale',                   type=>'varchar(1)',}, 
+	{ name=>'operativita',                      type=>'varchar(1)',},
+	{ name=>'reparto',                          type=>'varchar(255)',},
+	{ name=>'mansione',                         type=>'varchar(255)',},
+	{ name=>'scadenza_qualifica',               type=>'date',},
+	{ name=>'titolo_studio',                    type=>'varchar(255)',},
+	{ name=>'interno_telefonico',               type=>'varchar(255)',},
+	{ name=>'email_aziendale',                  type=>'varchar(255)',},
+	{ name=>'tipo_contratto',                   type=>'varchar(1)',},
+	{ name=>'posizione_inps',                   type=>'varchar(255)',},
+	{ name=>'posizione_inail',                  type=>'varchar(255)',},
+	{ name=>'frequenza_visita_medica',          type=>'varchar(1)',},
+	{ name=>'carta_credito',                    type=>'varchar(255)',},
+	{ name=>'ordine_professionale',             type=>'varchar(255)',},
+	{ name=>'ordine_professionale_rif',         type=>'varchar(255)',},
+	{ name=>'ordine_professionale_iscr',        type=>'varchar(255)',},
+	{ name=>'qualifica_prof',                   type=>'varchar(255)',},
+	{ name=>'qualifica_prof_rif',               type=>'varchar(255)',},
+	{ name=>'qualifica_prof_iscr',              type=>'varchar(255)',},
+	{ name=>'qualifica_prof_scad',              type=>'varchar(255)',},
 	],
 users_groups=>[
 	{ name=>'groupid',	type=>'varchar(15)',},
@@ -1833,21 +1854,33 @@ equipments=>[
 	  type=>'varchar(255)',},
 
 	{ name=>'property',
-	  type=>'varchar(255)',},
+	  type=>'varchar(1)',},
 
-	{ name=>'denomination',
-	  type=>'varchar(255)',},
-
-	{ name=>'taration',
-	  type=>'varchar(255)',},
-
-	{ name=>'taration_field',
+	{ name=>'location',
 	  type=>'varchar(255)',},
 
 	{ name=>'classeses',
 	  type=>'varchar(255)',},
 
+	{ name=>'denomination',
+	  type=>'text',},
+
+	{ name=>'taration',
+	  type=>'text',},
+
+	{ name=>'taration_field',
+	  type=>'text',},
+
 	{ name=>'accreditation',
+	  type=>'varchar(1)',},
+
+	{ name=>'buydate',
+	  type=>'date',},
+
+	{ name=>'tarationdate',
+	  type=>'date',},
+
+	{ name=>'taration_reparts',
 	  type=>'varchar(255)',},
 
 	],
