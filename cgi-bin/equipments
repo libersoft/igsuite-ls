@@ -611,11 +611,11 @@ sub protoagg
                      " '$in{owner}',".
 		     " '$in{booking_group}', '$in{booking_admin_group}',".
 		     " '$in{booking_approve_group}',  '$in{matriculation}',".
-         " '$in{property}',  '$in{denomination}',".
-         " '$in{taration}',  '$in{taration_field}',".
-         " '$in{classeses}',  '$in{accreditation}',".
-         " '$in{buydate}',  '$in{tarationdate}',".
-         " '$in{authorized_reparts}'".
+                     " '$in{property}',  '$in{denomination}',".
+                     " '$in{taration}',  '$in{taration_field}',".
+                     " '$in{classeses}',  '$in{accreditation}',".
+                     " '$in{buydate}',  '$in{tarationdate}',".
+                     " '$in{taration_reparts}'".
           ")" )] );
 
   LogD('','insert', 'equipments', $on{id}); 
@@ -662,16 +662,16 @@ sub protomodi
 	$on{booking_group},
 	$on{booking_admin_group},
 	$on{booking_approve_group},
-          $on{matriculation},
-          $on{property},
-          $on{denomination},
-          $on{taration},
-          $on{taration_field},
-          $on{classeses},
-          $on{accreditation},
-          $on{buydate},
-          $on{tarationdate},
-          $on{authorized_reparts}
+        $on{matriculation},
+        $on{property},
+        $on{denomination},
+        $on{taration},
+        $on{taration_field},
+        $on{classeses},
+        $on{accreditation},
+        $on{buydate},
+        $on{tarationdate},
+        $on{taration_reparts},
 ) = FetchRow();
 
   proto();
