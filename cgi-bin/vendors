@@ -41,10 +41,10 @@ sub default_action
   my ($limit, $offset);
   my $data2 = IG::SumDate(0,0,0,-340);
   my $base_query = "SELECT COUNT(*) FROM contacts ".
-	           "where data2<'$data2'".
+	           "where data2>'$data2'".
 		   " and vendorslistflag='s'".
 		   " and category<>'0'".
-		   " and contacttype<>8".
+		   " and contacttype<>'8'".
 		   " and master='0'";
 
   my $base_url = "vendors?action=default_action";
@@ -65,10 +65,10 @@ sub default_action
 
   DbQuery("SELECT contactname, city1, category, qualification, data1, data2,".
 	  " activity, contactid, master FROM contacts ".
-	  "where data2<'$data2'".
+	  "where data2>'$data2'".
 	  " and vendorslistflag='s'".
 	  " and category<>'0'".
-	  " and contacttype<>8".
+	  " and contacttype<>'8'".
 	  " and master='0' ".
 	  "ORDER BY contactname ".
 	  "limit $limit offset $offset");
@@ -104,11 +104,12 @@ sub daqualif
     ["$lang{products} - $lang{services}"]
    );
 
+  my $data2 = IG::SumDate(0,0,0,-340);
   DbQuery("SELECT contactname, contactid, category, qualification,".
 	  " data1, data2, activity, contactid, master ".
 	  "FROM contacts where vendorslistflag='s'".
-	  " and (qualification='0' or category='0')".
-	  " and contacttype<>8 and master='0' ".
+	  " and (qualification='0' or data2<'$data2')".
+	  " and contacttype<>'8' and master='0' ".
 	  "ORDER BY contactname");
 
   while (my @row = FetchRow())
@@ -136,7 +137,7 @@ sub proto
   DbQuery("SELECT contactid, category, qualification, data1, data2,".
 	  " note1, activity, qualifmethod ".
 	  "FROM contacts ".
-	  "WHERE contactid = ".DbQuote($on{contactid})." and master='0'");
+	  "WHERE contactid = '".DbQuote($on{contactid})."' and master='0'");
 
   (	$on{contactid},
 	$on{category}, 
@@ -225,7 +226,7 @@ sub protoagg
 	  " qualifmethod='$in{qualifmethod}', category='$in{category}',".
 	  " qualification='$in{qualification}', data1='$in{data1}',".
 	  " data2='$in{data2}', activity='$in{merci}' ".
-	  "where contactid=$in{contactid}");
+	  "where contactid='$in{contactid}'");
 
   LogD("Update Vendors List, contact number $on{contactid}");
   IG::Redirect("vendors?pos=$on{pos}");
@@ -304,7 +305,7 @@ sub reportagg
 	  " and vendorslistflag = 's'".
 	  " and qualification <> '0'".
 	  " and master='0'".
-	  " and contacttype<>8".
+	  " and contacttype<>'8'".
 	  " $in{category}$in{merci}$in{qualification}".
 	  "ORDER BY contactname");
 
