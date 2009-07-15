@@ -198,7 +198,7 @@ sub default_action
      "pos=$on{pos}&amp;order=todotext&amp;category=$on{category}"],
     [$lang{priority},
      "pos=$on{pos}&amp;category=$on{category}"],
-    [$lang{category}],
+    ["Assegnato a"],
     $IG::tema eq 'printable_' ? '' : []
    );
 
@@ -357,16 +357,18 @@ sub default_action
 	 $edit_link,
 	 "style=\"$mystyle\""],
 
-	[$row[5],
-	 "todo?".
-		"action=priority&amp;".
-		"priority=$row[5]&amp;".
-		"todoid=$row[0]&amp;".
-		"order=$on{order}&amp;".
-		"category=$on{category}&amp;".
-		"sortdirection=$on{sortdirection}&amp;".
-		"pos=$on{pos}",
-	 "style=\"$mystyle\; text-align: center;\""],
+	#[$row[5],
+	# "todo?".
+	#	"action=priority&amp;".
+	#	"priority=$row[5]&amp;".
+	#	"todoid=$row[0]&amp;".
+	#	"order=$on{order}&amp;".
+	#	"category=$on{category}&amp;".
+	#	"sortdirection=$on{sortdirection}&amp;".
+	#	"pos=$on{pos}",
+	# "style=\"$mystyle\; text-align: center;\""],
+
+        # TODO inserire campo centro di costo - "sicurezza, haccp, formazione, consulenza, altro, qualità"
 
 	[GetTableVal('todo_category',$row[12]),
 	 "todo?".
