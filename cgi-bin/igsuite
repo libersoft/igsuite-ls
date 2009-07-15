@@ -1422,7 +1422,7 @@ sub summary
 	    " '$IG::login_admin', '$IG::pwd_admin', '', '',".
             " '01000000111110101101110100001111111111111111111011111100011111111111011011111111011110101111101100011111111111111111111000011111011111',".
 	    " '','','','$tv{empty_date}','','','','$tv{empty_date}',0,'',".
-	    " '','$tv{today}','$tv{today}', '', '$tv{empty_date}', '', '')");
+	    " '','$tv{today}','$tv{today}', '', '$tv{empty_date}', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '')");
 
     ## Insert over the desktop a link to IG official site and wiki local site
     DbQuery("delete from postit ".
