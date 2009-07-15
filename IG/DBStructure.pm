@@ -1883,6 +1883,9 @@ equipments=>[
 	{ name=>'taration_reparts',
 	  type=>'varchar(255)',},
 
+	{ name=>'authorized_personnel',
+	  type=>'varchar(255)',},
+
 	],
 equipments_maintenance=>[
 	{ name=>'id',

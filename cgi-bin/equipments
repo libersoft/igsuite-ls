@@ -392,11 +392,18 @@ sub proto
                     data     => [1 .. 24],
                     name     => 'mntnchoures').
 
-             Input( show       => $lang{ordinary_mntn_services},
+             Input( show       => 'Interventi manutenzione',
                     labelstyle => 'width:80px; height:165px',
                     type       => 'textarea',
                     style      => 'width:500px; height:160px',
-                    name       => 'mntn_interventions');
+                    name       => 'mntn_interventions').
+
+            Input(  show    => 'Personale Autorizzato',
+                    name    => 'authorized_personnel',
+                    labelstyle => 'width:80px;',
+                    style => 'width:500px;',
+                    maxlen  => 10,
+                    type    => 'textarea');
    
   my $pan2 = Input( show     => $lang{warranty},
                     validate => { onerror => $lang{Err_expiration_dates} },
@@ -615,7 +622,7 @@ sub protoagg
                      " '$in{taration}',  '$in{taration_field}',".
                      " '$in{classeses}',  '$in{accreditation}',".
                      " '$in{buydate}',  '$in{tarationdate}',".
-                     " '$in{taration_reparts}'".
+                     " '$in{taration_reparts}, $in{authorized_personnel}'".
           ")" )] );
 
   LogD('','insert', 'equipments', $on{id}); 
@@ -672,6 +679,7 @@ sub protomodi
         $on{buydate},
         $on{tarationdate},
         $on{taration_reparts},
+        $on{authorized_personnel},
 ) = FetchRow();
 
   proto();
