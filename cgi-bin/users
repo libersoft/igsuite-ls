@@ -596,7 +596,7 @@ sub proto
                      style    => 'width:250px',
                      maxlen   => 10).
 
-              Input( show     => $lang{contact_name},
+              Input( show     => "Nome Cognome",
                      type     => 'text',
                      name     => 'name',
                      validate => { onerror   => $lang{Err_contact_name},
@@ -706,11 +706,11 @@ sub proto
                       maxlen   => 25,
                       size     => 50).
 
-               Input( show     => $lang{fuel_card},
-                      type     => 'text',
-                      name     => 'fuelcardid',
-                      size     => 50,
-                      maxlen   => 10).
+               #Input( show     => $lang{fuel_card},
+               #       type     => 'text',
+               #       name     => 'fuelcardid',
+               #       size     => 50,
+               #       maxlen   => 10).
 
                Input( show     => $lang{tax_id_number},
                       type     => 'text',
