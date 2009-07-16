@@ -211,11 +211,14 @@ sub proto
                 [ 3, "In prova" ],
                  )] );
 
+  my $groupquery = "select groupid, name from users_groups order by name";
+
   my $panel = Input( show     => $lang{assigned_to},
-                     type     => 'logins',
+                     type     => 'select',
                      zerovalue=> 'true',
-                     validate => { mandatory => 'true' },
+                     validate => { mandatory => 'false' },
                      name     => 'owner',
+                     data     => $groupquery,
                      style    => 'width:240px').
                      
               Input( show     => $lang{contact},
@@ -494,7 +497,6 @@ sub proto
                     style      => 'width:500px; height:190px',
                     name       => 'note');
 		
-  my $groupquery = "select groupid, name from users_groups order by name";
   my $pan5 = Input( type     => 'select',	
 		    style    => 'width:300px;',
 		    allvalue => 'true',
