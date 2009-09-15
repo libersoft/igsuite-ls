@@ -25,15 +25,15 @@ use IG;
 IG::MkEnv(__PACKAGE__);
 
 IG::DTable (	proto		=> sub { CheckPrivilege('documentation_new') },
-		protoagg	=> sub { CheckPrivilege('documentation_edit') },
+		protoagg	=> sub { CheckPrivilege('documentation_new') },
 		protomodi	=> sub { CheckPrivilege('documentation_edit') },
-		publish		=> sub { CheckPrivilege('documentation_editor') },
+		publish		=> sub { CheckPrivilege('documentation_edit') },
 		draftsmng	=> sub { CheckPrivilege('documentation_view') },
 		approve		=> sub { CheckPrivilege('documentation_edit') },
 		approveagg	=> sub { CheckPrivilege('documentation_edit') },
 		delshow		=> sub { CheckPrivilege('documentation_edit') },
 		delexec		=> sub { CheckPrivilege('documentation_edit') },
-		publishmng	=> sub { CheckPrivilege('documentation_editor') },
+		publishmng	=> sub { CheckPrivilege('documentation_edit') },
 		findshow	=> sub { CheckPrivilege('documentation_view') },
 		findexec	=> sub { CheckPrivilege('documentation_view') },
 		default_action	=> sub { CheckPrivilege('documentation_view') });
@@ -53,7 +53,7 @@ sub proto
 	    "where hierarchycode<>''");
     while (my ($code, $function) = FetchRow() )
      {
-      #$code =~ s/\d//g;
+      $code =~ s/\d//g;
       $functions{$code} = "$code $function"; 
      }
    }
@@ -61,7 +61,7 @@ sub proto
    {
     DbQuery("select hierarchycode from users where login='$auth_user'");
     my $code = FetchRow();
-       #$code =~ s/\d//;
+       $code =~ s/\d//;
     $functions{$code} = $code;
    }
 
@@ -175,7 +175,7 @@ sub protoagg
 		       target_file   => $docname,
 		       can_overwrite =>0 );
 
-  default_action();
+  draftsmng();
  }
  
 #############################################################################
@@ -209,53 +209,24 @@ sub approve
  {
   draftsmng() && return if !$on{id};
 
-  QuoteParams();
-  DbQuery("select function from documentation ".
-	  "where id='$in{id}'".
-	  " and issueid='$in{issueid}'".
-	  " and revisionid='$in{revisionid}'");
-  my $function = FetchRow(); 
+if (CheckPrivilege('documentation_edit'))
+{
+    QuoteParams();
+    DbQuery("update documentation set approvalstatus='A', publishstatus='N' ".
+	    "where id='$in{id}'".
+	    " and revisionid=$in{revisionid}".
+	    " and issueid=$in{issueid}");
 
-  DbQuery("select hierarchyref from users ".
-	  "where hierarchycode='${function}0'");
-  my $owner = FetchRow();
-
-  DbQuery("select login from users ".
-	  "where hierarchycode='$owner'");
-  my $editor = FetchRow();
-
-  HtmlHead();
-  TaskHead(title=>$lang{documentation});
-
-  FormHead(cgiaction=>'approveagg', float=>'left');
-
-  Input ( type=>'hiddens',
-	  data=>{ id		=>'',
-		  revisionid	=>'',
-		  editor	=>$editor,
-		  issueid	=>'' }
-        );
-
-  ##XXX2TRANSLATE
-  TaskMsg("Inserire login e password di " . IG::UsrInf('name',$editor).
-          "per approvare il documento $on{id} emissione $on{issueid} revisione
-	   $on{revisionid}<br><br>".
-
-           Input (type=>'text',
-		  show=>'Login',
-		  name=>'login').
-
-           Input (type=>'password',
-		  show=>'Password',
-		  name=>'pwd').
-
-	   Input (type=>'submit',
-		  value=>"$lang{confirm_document}"),6 );
-
-  FormFoot();
-  TaskFoot();
-  HtmlFoot();
-  1;
+    LogD("Approved documentation document $on{id}_$on{issueid}_$on{revisionid}");
+    push @IG::errmsg, 'Documento approvato!';
+    publishmng();
+    #IG::Redirect("documentation");
+}
+else
+{
+    push @IG::errmsg, 'Non puoi approvare questa bozza';
+    draftsmng();
+}
  }
 
 ###########################################################################
@@ -281,6 +252,7 @@ sub approveagg
   else
    {
     push @IG::errmsg, $lang{Err_password};
+    push @IG::errmsg, $on{editor}.'='.$on{login}.'\\'.IG::UsrInf('passwd',$on{editor}).'='.$on{pwd};
     approve();
    }
  } 
@@ -445,9 +417,12 @@ sub draftsmng
  }
 
 #############################################################################
+# Pubblica un documento approvato
 #############################################################################
 sub publish
  {
+  if (CheckPrivilege('documentation_editor'))
+  {
   $on{publishstatus} = $on{publishstatus} eq 'N' ? 'S' : 'N';
 
   QuoteParams();
@@ -457,7 +432,13 @@ sub publish
 	  " and issueid=$in{issueid}");
 
   LogD("documentation document $on{id}_$on{issueid}_$on{revisionid} updated status set to $on{approvalstatus}");
-  IG::Redirect("documentation?action=publishmng");  
+  IG::Redirect("documentation?action=publishmng");
+  }
+  else
+  {
+    push @IG::errmsg, 'Non puoi pubblicare questo documento';
+    publishmng();
+  }
  }
 
 #############################################################################
@@ -580,11 +561,11 @@ sub delshow
  {
   my %docs;
 
-  DbQuery("select * from documentation");
+  DbQuery("select * from documentation WHERE publishstatus='N'");
   while ( my @row = FetchRow())
    {
-    $docs{$row[0]."_".$row[1]."_".$row[3]} 
-    = "$row[0]_$row[1]_$row[2]_$row[3]";
+    $docs{$row[0]."_".$row[4]."_".$row[5]}
+    = "$row[0]_$row[1]_$row[2]_$row[3]_$row[4]_$row[5]_$row[6]_$row[7]_$row[8]_$row[9]";
    }
 
   Header();
@@ -617,7 +598,10 @@ sub delexec
  {
   my @row = split /\_/, DbQuote($on{id});
   chdir("$IG::htdocs_dir/$IG::default_lang{documentation}/");
-  my ($file_name) = (<$on{id}.*>);
+  my ($file_name) = <$on{id}.*>;
+
+
+  push @IG::errmsg, "$on{id} $IG::htdocs_dir/$IG::default_lang{documentation}/$file_name";
 
   IG::FileCopy(	"$IG::htdocs_dir/$IG::default_lang{documentation}/$file_name",
 		"$IG::htdocs_dir/$IG::default_lang{basket}/$file_name",
@@ -629,7 +613,7 @@ sub delexec
 	  " and revisionid=$row[2]");
 
   LogD('','delete','documentation',$on{id});
-  IG::Redirect("documentation");
+  delshow();
  }
 
 ###########################################################################
