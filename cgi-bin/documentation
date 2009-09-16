@@ -101,15 +101,15 @@ sub proto
 		type=>'text',
 		name=>'issueid',
 		value=>0,
-		size=>1,
-		maxlen=>1);
+		size=>2,
+		maxlen=>2);
 
   Input (	show=>$lang{revision},
 		type=>'text',
 		name=>'revisionid',
 		value=>0,
-		size=>1,
-		maxlen=>1);
+		size=>2,
+		maxlen=>2);
 
   Input (	show=>$lang{pages},
 		type=>'text',
