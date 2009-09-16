@@ -739,9 +739,11 @@ sub proto
                       maxlen   => 70,
                       style    => 'width:350px',
                       data     => [(
-                            [ 0, 'pH s.r.l.'      ],
-		            [ 1, 'pH Servizi s.r.l.'       ],
-		            [ 2, 'pH Consulenze s.r.l.' ] )] ).
+                                  [ 'pH s.r.l.' , 'pH s.r.l.' ],
+                                  [ 'pH Servizi s.r.l.','pH Servizi s.r.l.'      ],
+                                  [ 'pH Consulenze s.r.l.','pH Consulenze s.r.l.' ]
+                                  )]
+                    ).
 
                 Input( show     => 'Sede Aziendale',
                       type     => 'select',
@@ -749,9 +751,11 @@ sub proto
                       maxlen   => 70,
                       style    => 'width:350px',
                       data     => [(
-                            [ 0, 'Via Sangallo, 29 Tavarnelle V.P.'      ],
-		            [ 1, 'Via Bramante, 10/12 Tavarnelle V.P.'       ],
-		            [ 2, 'Altro' ] )] ).
+                                  [ 'Sangallo','Via Sangallo, 29 Tavarnelle V.P.'      ],
+                                  [ 'Bramante','Via Bramante, 10/12 Tavarnelle V.P.'       ],
+                                  [ 'Altro','Altro' ]
+                                  )]
+                      ).
 
                Input( show     => $lang{emplacement},
                       type     => 'text',
@@ -771,9 +775,10 @@ sub proto
                       maxlen   => 70,
                       style    => 'width:350px',
                       data     => [(
-                            [ 0, 'Operativo'      ],
-		            [ 1, 'In Addestramento'],
-		            )] ).
+                                  [ 0, 'Operativo'      ],
+                                  [ 1, 'In Addestramento'],
+                                  )]
+                ).
 
                Input( show     => "Mansione",
                       type     => 'text',

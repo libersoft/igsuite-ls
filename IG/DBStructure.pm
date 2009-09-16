@@ -1454,7 +1454,7 @@ users=>[
 	{ name=>'zip',		type=>'varchar(15)',},	# cap
 	{ name=>'prov',		type=>'varchar(10)',},	# prov
 	{ name=>'taxid',	type=>'varchar(20)',},	# codfisc
-	{ name=>'company',	type=>'varchar(70)',},	# societa
+	{ name=>'company',	type=>'varchar(255)',},	# societa
 	{ name=>'hierarchyref',	type=>'varchar(10)',},	# referente
 	{ name=>'level',	type=>'varchar(5)',},	# livello
 	{ name=>'assumption',	type=>'date',},		# dataass
@@ -1498,8 +1498,8 @@ users=>[
 	{ name=>'emailfrom',    type=>'text',},#
 	{ name=>'hostsallow',   type=>'text',},#
 	{ name=>'luogo_nascita',                    type=>'varchar(255)',},  
-	{ name=>'sede_aziendale',                   type=>'varchar(1)',}, 
-	{ name=>'operativita',                      type=>'varchar(1)',},
+	{ name=>'sede_aziendale',                   type=>'varchar(255)',},
+	{ name=>'operativita',                      type=>'varchar(255)',},
 	{ name=>'reparto',                          type=>'varchar(255)',},
 	{ name=>'mansione',                         type=>'varchar(255)',},
 	{ name=>'scadenza_qualifica',               type=>'date',},
