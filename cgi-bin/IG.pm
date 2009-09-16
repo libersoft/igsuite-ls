@@ -106,7 +106,7 @@ BEGIN
   ## Defines IG Version
   use vars qw ($VERSION);
   ## Current IGSuite version
-  $VERSION = '4.0.0-libersoft000';
+  $VERSION = '4.0.0-libersoft0019';
 
   $SIG{__DIE__} =
    sub {
