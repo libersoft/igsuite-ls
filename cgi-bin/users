@@ -739,6 +739,7 @@ sub proto
                       maxlen   => 70,
                       style    => 'width:350px',
                       data     => [(
+                                  [ '' , 'Nessuna' ],
                                   [ 'pH s.r.l.' , 'pH s.r.l.' ],
                                   [ 'pH Servizi s.r.l.','pH Servizi s.r.l.'      ],
                                   [ 'pH Consulenze s.r.l.','pH Consulenze s.r.l.' ]
