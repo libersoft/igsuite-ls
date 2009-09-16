@@ -53,7 +53,7 @@ sub proto
 	    "where hierarchycode<>''");
     while (my ($code, $function) = FetchRow() )
      {
-      $code =~ s/\d//g;
+      #$code =~ s/\d//g;
       $functions{$code} = "$code $function"; 
      }
    }
@@ -61,7 +61,7 @@ sub proto
    {
     DbQuery("select hierarchycode from users where login='$auth_user'");
     my $code = FetchRow();
-       $code =~ s/\d//;
+       #$code =~ s/\d//;
     $functions{$code} = $code;
    }
 
