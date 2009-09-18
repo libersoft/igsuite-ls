@@ -196,9 +196,9 @@ sub default_action
      " style=\"font-size:10px\""],
     [$lang{title},
      "pos=$on{pos}&amp;order=todotext&amp;category=$on{category}"],
-    [$lang{priority},
+    ["Assegnato a",
      "pos=$on{pos}&amp;category=$on{category}"],
-    ["Assegnato a"],
+    ["Azioni"],
     $IG::tema eq 'printable_' ? '' : []
    );
 

@@ -4,7 +4,7 @@
 
 %lang = (%lang,
    (
-alert_offer_notaccepted =>'L\'offerta %1$s del %2$s intestata a %3$s non è ancora stata accettata superando i %4$s giorni.',
+alert_offer_notaccepted =>'L\'offerta %1$s del %2$s intestata a %3$s non &egrave; ancora stata accettata superando i %4$s giorni.',
 answer_to               => 'In risposta a',
 reply_isms              => 'Rispondi al messaggio',
 isms_arrived            => 'Isms Arrivati',

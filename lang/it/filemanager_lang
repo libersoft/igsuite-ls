@@ -20,7 +20,7 @@ Err_cant_writefile	=>'Non posso scrivere il file',
 Err_cant_move_file	=>'Impossibile spostare il file',
 Err_cant_remove_dir	=>'Impossibile rimuovere la directory errore imprevisto, o sono presenti file nascosti?',
 Err_cant_rename		=>'Impossibile rinominare il file o la directory',
-Err_directory_exist	=>'Attenzione directory già esistente',
+Err_directory_exist	=>'Attenzione directory gi&agrave; esistente',
 Err_directory_unknow	=>'Directory non valida o non esistente',
 Err_dir_privileges	=>'Attenzione non hai i permessi per creare una directory qui',
 Err_file_not_found	=>'Attenzione: non esiste nessun file o directory con questo nome',
@@ -63,7 +63,7 @@ order_by_date		=>'Ordina per data',
 order_by_size		=>'Ordina per dimensione',
 reload			=>'Ricarica',
 rename			=>'Rinomina',
-remove_dir_sure		=>'Si è sicuri di voler eliminare questa directory?',
+remove_dir_sure		=>'Si &egrave; sicuri di voler eliminare questa directory?',
    ));
 
 1;
