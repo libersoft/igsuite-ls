@@ -53,7 +53,7 @@ sub proto
 	    "where hierarchycode<>''");
     while (my ($code, $function) = FetchRow() )
      {
-      #$code =~ s/\d//g;
+      $code =~ s/\d//g;
       $functions{$code} = "$code $function"; 
      }
    }
@@ -61,7 +61,7 @@ sub proto
    {
     DbQuery("select hierarchycode from users where login='$auth_user'");
     my $code = FetchRow();
-       #$code =~ s/\d//;
+       $code =~ s/\d//;
     $functions{$code} = $code;
    }
 
@@ -85,6 +85,13 @@ sub proto
 		style=>'width: 250px',
 		name=>'function',
 		data=>\%functions );
+
+  Input (	show=>"Autore",
+		type=>'text',
+		name=>'submitter',
+    value=>$auth_user,
+		size=>30,
+		maxlen=>30);
 
   Input (	show=>$lang{description},
 		type=>'text',
@@ -160,7 +167,7 @@ sub protoagg
 		     "INSERT INTO documentation ".
 		     "VALUES ('$in{id}', '$in{description}',".
 		     " '$in{function}', $in{pages}, $in{issueid},".
-		     " $in{revisionid}, '$in{issue}', 'N', 'B', '$in{quality_system}')"
+		     " $in{revisionid}, '$in{issue}', 'N', 'B', '$in{quality_system}','$in{submitter}')"
 		   )] );
 
   LogD('', 'documentation', 'insert', "$on{id}_$on{revisionid}_$on{issueid}");
@@ -198,6 +205,7 @@ sub protomodi
 	$on{publishstatus},
 	$on{approvalstatus},
 	$on{quality_system},
+  $on{submitter},
 	)	= FetchRow();
 
   proto();
@@ -220,7 +228,6 @@ if (CheckPrivilege('documentation_edit'))
     LogD("Approved documentation document $on{id}_$on{issueid}_$on{revisionid}");
     push @IG::errmsg, 'Documento approvato!';
     publishmng();
-    #IG::Redirect("documentation");
 }
 else
 {
@@ -384,6 +391,7 @@ sub draftsmng
 	[$lang{date}],
 	[$lang{status}],
 	[$lang{quality_system}],
+  ["Autore"],
 		);
 
   while (my @row = FetchRow())
@@ -409,6 +417,7 @@ sub draftsmng
 	 "&amp;issueid=$row[4]".
 	 "&amp;revisionid=$row[5]"],
  	["$linea $row[9]"],
+ 	["$linea $row[10]"],
 		 );
    }
 

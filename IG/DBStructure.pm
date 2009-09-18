@@ -56,7 +56,7 @@ require Exporter;
 	postit			=> [ 9,	''],
 	prices			=> [ 16,''],
 	articles		=> [ 1,	''],
-	documentation		=> [ 9,	''],
+	documentation		=> [ 10,	''],
 	services		=> [ 18,'id;opendate,enddate'],
 	services_stats		=> [ 4,	''],
 	services_notes		=> [ 7,	''],
@@ -1908,6 +1908,7 @@ documentation=>[
 	{ name=>'publishstatus',type=>'varchar(5)',},  #pubblica
 	{ name=>'approvalstatus',type=>'varchar(5)',}, #stato
 	{ name=>'quality_system',type=>'varchar(25)',}, #sistema qualità
+	{ name=>'submitter',type=>'varchar(30)',}, #chi ha inviato il documento
 	]
   );
 
