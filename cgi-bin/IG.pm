@@ -401,6 +401,10 @@ my $queryid = 0;
         'binders_new',                  [130,'binders'],
         'binders_edit',                 [131,'binders'],
         'binders_report',               [132,'binders'],
+        
+     'nc_ph_new',				[134, 'nc_ph'],
+     'nc_ph_confirm',			[135, 'nc_ph'],
+     'nc_ph_validate',			[136, 'nc_ph'],
 	);
 
 ## Time zones
