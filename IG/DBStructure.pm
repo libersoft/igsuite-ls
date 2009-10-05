@@ -43,6 +43,7 @@ require Exporter;
 	fax_received		=> [ 10,'id;issue'],
 	nc_ext			=> [ 9,	'id'],
 	nc_int			=> [ 9,	'id'],
+    nc_ph			=> [ 15,'id'],
 	pages			=> [ 17,'id;name'],
 	contracts		=> [ 17,'id;issue;phase'],
 	contracts_phases	=> [ 14,'id'],
@@ -823,6 +824,88 @@ nc_int=> [
 	  label=>'docref',
 	  itype=>'text',
 	  type=>'varchar(30)',},
+	],
+	
+nc_ph=> [
+	{ name=>'id',
+	  type=>'varchar(15)',},	#numero
+	  
+	{ name=>'status',
+	  label=>'status',
+	  itype=>'text',
+	  type=>'varchar(2)',},
+	  
+	 
+	{ name=>'desc_oggetto',
+	  label=>'desc_oggetto',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+
+	{ name=>'desc_nc',
+	  label=>'desc_nc',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	  
+	{ name=>'desc_trattamento',
+	  label=>'desc_trattamento',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	  
+	{ name=>'due_date',
+	  label=>'due_date',
+	  itype=>'date',
+	  type=>'date',},
+	
+	# Submitter
+	{ name=>'submitter_name',
+	  label=>'submitter_name',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	{ name=>'submitter_date',
+	  label=>'submitter_date',
+	  itype=>'date',
+	  type=>'date',},
+	  
+	# Confirmer
+	{ name=>'confirmer_name',
+	  label=>'confirmer_name',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	{ name=>'confirmer_date',
+	  label=>'confirmer_date',
+	  itype=>'date',
+	  type=>'date',},
+	  
+	# Validator1
+	{ name=>'validator1_name',
+	  label=>'validator1_name',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	{ name=>'validator1_date',
+	  label=>'validator1_date',
+	  itype=>'date',
+	  type=>'date',},
+	  
+	# Fixxer
+	{ name=>'fixxer_name',
+	  label=>'fixxer_name',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	{ name=>'fixxer_date',
+	  label=>'fixxer_date',
+	  itype=>'date',
+	  type=>'date',},
+
+	# Validator2
+	{ name=>'validator2_name',
+	  label=>'validator2_name',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	{ name=>'validator2_date',
+	  label=>'validator2_date',
+	  itype=>'date',
+	  type=>'date',},
+	  
 	],
 
 pages=>[

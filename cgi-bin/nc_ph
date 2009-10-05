@@ -1,0 +1,393 @@
+#! /usr/bin/perl
+# Procedure: nc_ph
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (	proto		=> sub { CheckPrivilege('nc_ph_new') },
+		protoagg	=> sub { CheckPrivilege('documentation_new') },
+		protomodi	=> sub { CheckPrivilege('documentation_edit') },
+		publish		=> sub { CheckPrivilege('documentation_edit') },
+		draftsmng	=> sub { CheckPrivilege('documentation_view') },
+		approve		=> sub { CheckPrivilege('documentation_edit') },
+		approveagg	=> sub { CheckPrivilege('documentation_edit') },
+		delshow		=> sub { CheckPrivilege('documentation_edit') },
+		delexec		=> sub { CheckPrivilege('documentation_edit') },
+		publishmng	=> sub { CheckPrivilege('documentation_edit') },
+		findshow	=> sub { CheckPrivilege('documentation_view') },
+		findexec	=> sub { CheckPrivilege('documentation_view') },
+		default_action	=> sub { CheckPrivilege('documentation_view') });
+		
+
+
+##############################################################################
+##############################################################################
+sub proto
+ {
+  ## Find functions
+  my %functions;
+
+  if (CheckPrivilege('documentation_editor'))
+   {
+    DbQuery("select hierarchycode, function from users ".
+	    "where hierarchycode<>''");
+    while (my ($code, $function) = FetchRow() )
+     {
+      $code =~ s/\d//g;
+      $functions{$code} = "$code $function"; 
+     }
+   }
+  else
+   {
+    DbQuery("select hierarchycode from users where login='$auth_user'");
+    my $code = FetchRow();
+       $code =~ s/\d//;
+    $functions{$code} = $code;
+   }
+
+  HtmlHead();
+  TaskHead(	title=>$lang{documentation},
+		width=>500);
+
+  FormHead(	cgiaction=>'protoagg',
+		enctype=>"multipart/form-data");
+
+  Input (	show=>$lang{protocol_number},
+		type=>'combo',
+		name=>'id',
+		data=>'select id, id from documentation '.
+		      'group by id order by id',
+		size=>10,
+		maxlen=>10);
+
+  Input (	show=>$lang{function},
+		type=>'select',
+		style=>'width: 250px',
+		name=>'function',
+		data=>\%functions );
+
+  Input (	show=>"Autore",
+		type=>'text',
+		name=>'submitter',
+    value=>$auth_user,
+		size=>30,
+		maxlen=>30);
+
+  Input (	show=>$lang{description},
+		type=>'text',
+		name=>'description',
+		size=>50,
+		maxlen=>60);
+
+  Input (	show=>$lang{date},
+		type=>'date',
+		value=>$tv{today},
+		name=>'issue');
+
+  Input (	show=>$lang{issue},
+		type=>'text',
+		name=>'issueid',
+		value=>0,
+		size=>2,
+		maxlen=>2);
+
+  Input (	show=>$lang{revision},
+		type=>'text',
+		name=>'revisionid',
+		value=>0,
+		size=>2,
+		maxlen=>2);
+
+  Input (	show=>$lang{pages},
+		type=>'text',
+		name=>'pages',
+		size=>2);
+		
+  Input (	show=>$lang{quality_system},
+		type=>'text',
+		name=>'quality_system',
+		size=>25,
+		maxlen=>25);
+
+  Input (	type=>'file',
+		name=>'documentfile',
+		show=>'File');
+
+  Input (	type=>'submit',
+		value=>$lang{save});
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub submit_nc
+ {
+ 
+ }
+ 
+ ############################################################################
+############################################################################
+sub confirm_nc
+ {
+ 
+ }
+ 
+ ############################################################################
+############################################################################
+sub validate_nc
+ {
+ 
+ }
+ 
+ ############################################################################
+############################################################################
+sub close_nc
+ {
+ 
+ }
+ 
+
+############################################################################
+############################################################################
+sub default_action
+ {
+  my ($prece, $linea, $counter);
+
+  DbQuery("SELECT * FROM nc_ph ".
+	  "where status='S5' ".
+	  "ORDER BY id");
+
+  Header();
+
+  TaskListMenu (
+	["ID"],
+	["Desc oggetto"],
+	[$lang{revision}],
+	[$lang{description}],
+	[$lang{function}],
+	[$lang{pages}],
+	[$lang{date}],
+  [$lang{quality_system}],
+		 );
+
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+    my $row = $row[0];
+       $row =~ s/\d//g;
+    $linea  = $prece ne $row && $counter ne 0 ? '<hr>' : '';
+    $prece  = $row;
+
+    TaskListItem (
+	[$linea. _idToLink("$row[0]_$row[4]_$row[5]")],
+	["$linea $row[4]","","align=center"],
+	["$linea $row[5]","","align=center"],
+	["$linea $row[1]",
+	 ($row[2] eq $auth_user_group || CheckPrivilege('documentation_editor')
+	  ? "documentation?action=protomodi&amp;id=$row[0]&amp;issueid=$row[4]&amp;revisionid=$row[5]"
+	  : '')],
+	["$linea $row[2]"],
+	["$linea $row[3]"],
+	["$linea $row[6]","","nowrap"],
+	["$linea $row[9]","","nowrap"]
+		 );
+   }
+
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub findshow
+ {
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer
+     ( bottom_space => 0,
+       right_layers
+        =>[(
+	    FormHead (	name	   => 'findnavi',
+			method	   => 'get',
+			autofocus  => 'false',
+                        labelstyle => 'border:0px; width:auto;',
+			target	   => 'mainf',
+			cgiaction  => 'findexec',
+			float	   => 'left' ),
+
+	    Input (	type       => 'findable' ),
+
+	    Input (	type       => 'select',
+			name       => 'method',
+			data       => [(
+				        			['id',    $lang{with_protocol}],
+							        ['description', $lang{with_description}],
+							        ['quality_system', $lang{with_quality_system}],
+						        )]
+						 ),
+
+	    Input (	type       => 'text',
+			name       => 'keytofind',
+                        focus      => 'true',
+			value      => $IG::cookie{lastsearch},
+                        style      => 'width:100px; margin-right: -5px;',
+	        	onblur     => "document.cookie='lastsearch=' + escape(this.value)"),
+
+	    Input (	type       => 'image',
+			name       => $lang{find},
+			src        => "$IG::img_url/${IG::tema}search.gif",
+			alt        => $lang{find}),
+			
+	    FormFoot()
+	  )]
+	 );
+   }
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub findexec
+ {
+  my $query;
+  $IG::set_cookie{lastsearch} = $on{keytofind};
+
+  Header();
+
+  TaskMsg("$lang{documentation_protocol} - ".
+          "$lang{find}: <strong>$on{keytofind}</strong>",4);
+
+  ## Build Query
+  QuoteParams();
+  if ( length($on{keytofind}) < 2 )
+   {
+    push @IG::errmsg, $lang{Err_find};
+    $query = '1=0';
+   }
+  elsif ($on{method} eq 'id' || $on{keytofind} =~ /4\d\d\d\d\d\.\d\d/)
+   { $query = "documentation.id ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'description')
+   { $query = "documentation.description ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'quality_system')
+   { $query = "documentation.quality_system ~* '$in{keytofind}'"; }
+ 
+
+  my $counter = 0;
+  TaskListMenu
+   (
+    [$lang{code}],
+    [$lang{issue}],
+    [$lang{revision}],
+    [$lang{description}],
+    [$lang{function}],
+    [$lang{pages}],
+    [$lang{date}],
+    [$lang{quality_system}],
+   );
+
+  DbQuery( "SELECT id, issueid, revisionid, description, function, pages, issue, quality_system ".
+           "FROM documentation ".
+           "WHERE publishstatus='S' and approvalstatus ='A' and $query ".
+           "ORDER BY issueid desc, id desc" );
+
+  while ( my @row = FetchRow() )
+   {
+    ++$counter;
+    TaskListItem( [ _idToLink("$row[0]_$row[1]_$row[2]") ],
+                  [ $row[1] ],
+                  [ $row[2] ],
+                  [$row[3],"documentation?action=protomodi&amp;id=$row[0]&amp;issueid=$row[1]&amp;revisionid=$row[2]"],
+                  [ $row[4] ], 
+                  [ $row[5] ],
+                  [ $row[6] ],
+                  [ $row[7] ],
+                  );
+   }
+  push @IG::errmsg, $lang{no_items} if !$counter && length($on{keytofind}) > 1;
+
+  TaskListFoot();
+  Footer();
+ }
+ 
+###########################################################################
+###########################################################################
+sub _idToLink
+ {
+  my $protocol = shift;
+  my $file_name;
+
+  chdir ("$IG::htdocs_dir/$IG::default_lang{documentation}/");
+  my ($id) = (<$protocol.*>);
+
+  $protocol =~ s/^([^_]+).+/$1/;
+
+  if ( $id && CheckPrivilege('documentation_view') )
+   {
+    my $href = IG::GetHref('documentation', $id);
+
+    return "<a href=\"$href\" target=\"".
+	   ( $href =~ /\.html*$/i
+		   ? "_blank"
+		   : "mainf" ).
+	   "\">$protocol<\/a>";
+   }
+  else
+   { return $protocol }
+ }
+
+#############################################################################
+#############################################################################
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }
+
+
+sub Header 
+ {
+  HtmlHead();
+  TaskHead( title => "Gestione Non Conformitˆ" );
+  HLayer(
+	  MkButton( text => "Segnala NC",
+	            link => "documentation?action=submit_nc",
+	            privilege => CheckPrivilege("nc_ph_submitting") ),
+	            
+	  MkButton( text => "Conferma NC",
+	            link => "documentation?action=confirm_nc",
+	            privilege => CheckPrivilege("nc_ph_confirmation") ),
+	            
+	  MkButton( text => "Valida NC",
+	            link => "documentation?action=validate_nc",
+                privilege => CheckPrivilege("nc_ph_validation") ),
+                    
+	  MkButton( text => "Risolvi NC",
+	            link => "documentation?action=delshow",
+                    privilege => CheckPrivilege("nc_ph_fixxing") ),
+	);
+ }
