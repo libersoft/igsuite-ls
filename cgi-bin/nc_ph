@@ -24,114 +24,67 @@ use strict;
 use IG;
 IG::MkEnv(__PACKAGE__);
 
-IG::DTable (	proto		=> sub { CheckPrivilege('nc_ph_new') },
-		protoagg	=> sub { CheckPrivilege('documentation_new') },
-		protomodi	=> sub { CheckPrivilege('documentation_edit') },
-		publish		=> sub { CheckPrivilege('documentation_edit') },
-		draftsmng	=> sub { CheckPrivilege('documentation_view') },
-		approve		=> sub { CheckPrivilege('documentation_edit') },
-		approveagg	=> sub { CheckPrivilege('documentation_edit') },
+IG::DTable (
+		submit_nc	=> sub { CheckPrivilege('nc_ph_new') },
+                submit_nc_execute       => sub { CheckPrivilege('nc_ph_new') },
+                confirm_nc_list      => sub { CheckPrivilege('nc_ph_confirm') },
+		confirm_nc	=> sub { CheckPrivilege('nc_ph_confirm') },
+		validate_nc	=> sub { CheckPrivilege('nc_ph_validate') },
+		validate_nc_list	=> sub { CheckPrivilege('nc_ph_validate') },
+		fix_nc		=> sub { CheckPrivilege('nc_ph_new') },
+		fix_nc_list	=> sub { CheckPrivilege('nc_ph_new') },
 		delshow		=> sub { CheckPrivilege('documentation_edit') },
 		delexec		=> sub { CheckPrivilege('documentation_edit') },
-		publishmng	=> sub { CheckPrivilege('documentation_edit') },
 		findshow	=> sub { CheckPrivilege('documentation_view') },
 		findexec	=> sub { CheckPrivilege('documentation_view') },
-		default_action	=> sub { CheckPrivilege('documentation_view') });
+		default_action	=> sub { CheckPrivilege('nc_ph_new') });
 		
 
-
-##############################################################################
-##############################################################################
-sub proto
+############################################################################
+############################################################################
+sub submit_nc
  {
-  ## Find functions
-  my %functions;
-
-  if (CheckPrivilege('documentation_editor'))
-   {
-    DbQuery("select hierarchycode, function from users ".
-	    "where hierarchycode<>''");
-    while (my ($code, $function) = FetchRow() )
-     {
-      $code =~ s/\d//g;
-      $functions{$code} = "$code $function"; 
-     }
-   }
-  else
-   {
-    DbQuery("select hierarchycode from users where login='$auth_user'");
-    my $code = FetchRow();
-       $code =~ s/\d//;
-    $functions{$code} = $code;
-   }
-
+ 
   HtmlHead();
-  TaskHead(	title=>$lang{documentation},
+  TaskHead(	title=>"Segnala NC",
 		width=>500);
 
-  FormHead(	cgiaction=>'protoagg',
+  FormHead(	cgiaction=>'submit_nc_execute',
 		enctype=>"multipart/form-data");
 
-  Input (	show=>$lang{protocol_number},
-		type=>'combo',
+  Input (	show=>'Id',
+		type=>'text',
 		name=>'id',
-		data=>'select id, id from documentation '.
-		      'group by id order by id',
+		value=>_mk_new_id(),
 		size=>10,
 		maxlen=>10);
-
-  Input (	show=>$lang{function},
-		type=>'select',
-		style=>'width: 250px',
-		name=>'function',
-		data=>\%functions );
 
   Input (	show=>"Autore",
 		type=>'text',
 		name=>'submitter',
-    value=>$auth_user,
+	    	value=>$auth_user,
 		size=>30,
 		maxlen=>30);
 
-  Input (	show=>$lang{description},
+  Input (	show=>"Oggetto NC",
 		type=>'text',
-		name=>'description',
+		name=>'desc_oggetto',
+		size=>50,
+		maxlen=>60);
+		
+  Input (	show=>"Descrizione NC",
+		type=>'text',
+		name=>'desc_nc',
+		size=>50,
+		maxlen=>60);
+		
+  Input (	show=>"Trattamento proposto",
+		type=>'text',
+		name=>'desc_trattamento',
 		size=>50,
 		maxlen=>60);
 
-  Input (	show=>$lang{date},
-		type=>'date',
-		value=>$tv{today},
-		name=>'issue');
-
-  Input (	show=>$lang{issue},
-		type=>'text',
-		name=>'issueid',
-		value=>0,
-		size=>2,
-		maxlen=>2);
-
-  Input (	show=>$lang{revision},
-		type=>'text',
-		name=>'revisionid',
-		value=>0,
-		size=>2,
-		maxlen=>2);
-
-  Input (	show=>$lang{pages},
-		type=>'text',
-		name=>'pages',
-		size=>2);
-		
-  Input (	show=>$lang{quality_system},
-		type=>'text',
-		name=>'quality_system',
-		size=>25,
-		maxlen=>25);
-
-  Input (	type=>'file',
-		name=>'documentfile',
-		show=>'File');
+  
 
   Input (	type=>'submit',
 		value=>$lang{save});
@@ -140,30 +93,22 @@ sub proto
   TaskFoot();
   HtmlFoot();
   1;
+ 
  }
 
+sub submit_nc_execute {
+  QuoteParams();
+  DbQuery(query =>[( "INSERT INTO nc_ph ( id, status, desc_oggetto, desc_nc, desc_trattamento, submitter_name)".
+                     "VALUES ('$in{id}', 'S1', '$in{desc_oggetto}',".
+                     " '$in{desc_nc}', '$in{desc_trattamento}',".
+                     "'$in{submitter}')"
+			)]
+);
+default_action();
+}
+ 
+ 
 ############################################################################
-############################################################################
-sub submit_nc
- {
- 
- }
- 
- ############################################################################
-############################################################################
-sub confirm_nc
- {
- 
- }
- 
- ############################################################################
-############################################################################
-sub validate_nc
- {
- 
- }
- 
- ############################################################################
 ############################################################################
 sub close_nc
  {
@@ -177,7 +122,7 @@ sub default_action
  {
   my ($prece, $linea, $counter);
 
-  DbQuery("SELECT * FROM nc_ph ".
+  DbQuery("SELECT id, desc_oggetto,submitter_date FROM nc_ph ".
 	  "where status='S5' ".
 	  "ORDER BY id");
 
@@ -186,12 +131,7 @@ sub default_action
   TaskListMenu (
 	["ID"],
 	["Desc oggetto"],
-	[$lang{revision}],
-	[$lang{description}],
-	[$lang{function}],
-	[$lang{pages}],
 	[$lang{date}],
-  [$lang{quality_system}],
 		 );
 
   while (my @row = FetchRow())
@@ -203,17 +143,9 @@ sub default_action
     $prece  = $row;
 
     TaskListItem (
-	[$linea. _idToLink("$row[0]_$row[4]_$row[5]")],
-	["$linea $row[4]","","align=center"],
-	["$linea $row[5]","","align=center"],
-	["$linea $row[1]",
-	 ($row[2] eq $auth_user_group || CheckPrivilege('documentation_editor')
-	  ? "documentation?action=protomodi&amp;id=$row[0]&amp;issueid=$row[4]&amp;revisionid=$row[5]"
-	  : '')],
-	["$linea $row[2]"],
-	["$linea $row[3]"],
-	["$linea $row[6]","","nowrap"],
-	["$linea $row[9]","","nowrap"]
+	["$linea  $row[0]"],
+	["$linea $row[1]","","align=center"],
+	["$linea $row[2]","","align=center"],
 		 );
    }
 
@@ -221,8 +153,168 @@ sub default_action
   Footer();
  }
 
+############################################################################
+# Capo reparto - Visualizza NC segnalate e le approva
+############################################################################
+sub confirm_nc_list
+{
+  my ($prece, $linea, $counter);
+
+  DbQuery("SELECT id, desc_oggetto, submitter_name, submitter_date FROM nc_ph ".
+	  "where status='S1' ".
+	  "ORDER BY id");
+
+  Header();
+
+  TaskListMenu (
+	["ID"],
+	["Oggetto"],
+	["Persona"],
+	["Quando"],
+	["Azioni"],
+		 );
+
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+    my $row = $row[0];
+       $row =~ s/\d//g;
+    $linea  = $prece ne $row && $counter ne 0 ? '<hr>' : '';
+    $prece  = $row;
+
+    TaskListItem (
+	["$linea $row[0]"],
+	["$linea $row[1]","","align=center"],
+	["$linea $row[2]","","align=center"],
+	["$linea $row[3]"],
+	["Approva","nc_ph?action=confirm_nc&amp;id=$row[0]"],
+		 );
+   }
+
+  TaskListFoot();
+  Footer();
+}
+
+sub confirm_nc
+{
+## TODO check privilege
+
+  QuoteParams();
+  DbQuery("update nc_ph set status = 'S2' ".
+          "where id='$in{id}' and status = 'S1'");
+confirm_nc_list();
+}
 #############################################################################
+# Supervisore - Vede NC confermate dai capireparto e le valida
 #############################################################################
+sub validate_nc_list
+{
+  my ($prece, $linea, $counter);
+
+  DbQuery("SELECT id, desc_oggetto, submitter_name, submitter_date, status FROM nc_ph ".
+	  "where status='S2' OR status='S4' ".
+	  "ORDER BY id");
+
+  Header();
+
+  TaskListMenu (
+	["ID"],
+	["Oggetto"],
+	["Persona"],
+	["Quando"],
+	["Azioni"],
+		 );
+
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+    my $row = $row[0];
+       $row =~ s/\d//g;
+    $linea  = $prece ne $row && $counter ne 0 ? '<hr>' : '';
+    $prece  = $row;
+
+    TaskListItem (
+	["$linea $row[0]"],
+	["$linea $row[1]","","align=center"],
+	["$linea $row[2]","","align=center"],
+	["$linea $row[3]"],
+	["Approva","nc_ph?action=validate_nc&amp;id=$row[0]&amp;status=$row[4]"],
+		 );
+   }
+
+  TaskListFoot();
+  Footer();
+}
+
+sub validate_nc
+{
+## TODO check privilege
+
+  QuoteParams();
+  if ($in{status} eq 'S2'){
+  DbQuery("update nc_ph set status = 'S3' ".
+          "where id='$in{id}' and status = 'S2'");
+}
+  else {
+  DbQuery("update nc_ph set status = 'S5' ".
+          "where id='$in{id}' and status = 'S4'");
+}
+validate_nc_list();
+}
+
+############################################################################
+# Tecnico - Ripara e chiude le NC
+############################################################################
+sub fix_nc_list
+{
+  my ($prece, $linea, $counter);
+
+  DbQuery("SELECT id, desc_oggetto, submitter_name, submitter_date FROM nc_ph ".
+	  "where status='S3' ".
+	  "ORDER BY id");
+
+  Header();
+
+  TaskListMenu (
+	["ID"],
+	["Oggetto"],
+	["Persona"],
+	["Quando"],
+	["Azioni"],
+		 );
+
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+    my $row = $row[0];
+       $row =~ s/\d//g;
+    $linea  = $prece ne $row && $counter ne 0 ? '<hr>' : '';
+    $prece  = $row;
+
+    TaskListItem (
+	["$linea $row[0]"],
+	["$linea $row[1]","","align=center"],
+	["$linea $row[2]","","align=center"],
+	["$linea $row[3]"],
+	["Approva","nc_ph?action=fix_nc&amp;id=$row[0]"],
+		 );
+   }
+
+  TaskListFoot();
+  Footer();
+}
+
+sub fix_nc
+{
+## TODO check privilege
+
+  QuoteParams();
+  DbQuery("update nc_ph set status = 'S4' ".
+          "where id='$in{id}' and status = 'S3'");
+fix_nc_list();
+}
+###############################################################################
+###############################################################################
 sub findshow
  {
   HtmlHead();
@@ -372,22 +464,38 @@ sub Footer
 sub Header 
  {
   HtmlHead();
-  TaskHead( title => "Gestione Non Conformitˆ" );
+  TaskHead( title => "Gestione Non Conformit&agrave;" );
   HLayer(
 	  MkButton( text => "Segnala NC",
-	            link => "documentation?action=submit_nc",
-	            privilege => CheckPrivilege("nc_ph_submitting") ),
+	            link => "nc_ph?action=submit_nc",
+	            privilege => CheckPrivilege("nc_ph_new") ),
 	            
 	  MkButton( text => "Conferma NC",
-	            link => "documentation?action=confirm_nc",
-	            privilege => CheckPrivilege("nc_ph_confirmation") ),
+	            link => "nc_ph?action=confirm_nc_list",
+	            privilege => CheckPrivilege("nc_ph_confirm") ),
 	            
 	  MkButton( text => "Valida NC",
-	            link => "documentation?action=validate_nc",
-                privilege => CheckPrivilege("nc_ph_validation") ),
+	            link => "nc_ph?action=validate_nc_list",
+                privilege => CheckPrivilege("nc_ph_validate") ),
                     
 	  MkButton( text => "Risolvi NC",
-	            link => "documentation?action=delshow",
-                    privilege => CheckPrivilege("nc_ph_fixxing") ),
+	            link => "nc_ph?action=fix_nc_list",
+                    privilege => CheckPrivilege("nc_ph_new") ),
 	);
+ }
+
+################################################################################
+################################################################################
+sub _mk_new_id
+ {
+  my $conn = DbQuery( query => $IG::db_driver eq 'sqlite'
+                            ?  "SELECT MAX(id) FROM nc_ph"
+                            :  "SELECT MAX(lpad(id,10,'0')) ".
+                               "FROM nc_ph",
+                      type  => 'UNNESTED' );
+
+  my $new_id = FetchRow( $conn );
+  $new_id = 0 if $new_id < 1;
+  $new_id +=1; ## increase id && delete 00000
+  return $new_id;
  }
