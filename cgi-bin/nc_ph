@@ -25,19 +25,21 @@ use IG;
 IG::MkEnv(__PACKAGE__);
 
 IG::DTable (
-		submit_nc	=> sub { CheckPrivilege('nc_ph_new') },
-                submit_nc_execute       => sub { CheckPrivilege('nc_ph_new') },
-                confirm_nc_list      => sub { CheckPrivilege('nc_ph_confirm') },
-		confirm_nc	=> sub { CheckPrivilege('nc_ph_confirm') },
-		validate_nc	=> sub { CheckPrivilege('nc_ph_validate') },
-		validate_nc_list	=> sub { CheckPrivilege('nc_ph_validate') },
-		fix_nc		=> sub { CheckPrivilege('nc_ph_new') },
-		fix_nc_list	=> sub { CheckPrivilege('nc_ph_new') },
-		delshow		=> sub { CheckPrivilege('documentation_edit') },
-		delexec		=> sub { CheckPrivilege('documentation_edit') },
-		findshow	=> sub { CheckPrivilege('documentation_view') },
-		findexec	=> sub { CheckPrivilege('documentation_view') },
-		default_action	=> sub { CheckPrivilege('nc_ph_new') });
+		submit_nc						=> sub { CheckPrivilege('nc_ph_new') },
+    submit_nc_execute   => sub { CheckPrivilege('nc_ph_new') },
+    confirm_nc_list     => sub { CheckPrivilege('nc_ph_confirm') },
+		confirm_nc					=> sub { CheckPrivilege('nc_ph_confirm') },
+		validate_nc					=> sub { CheckPrivilege('nc_ph_validate') },
+		validate_nc_list		=> sub { CheckPrivilege('nc_ph_validate') },
+		fix_nc							=> sub { CheckPrivilege('nc_ph_new') },
+		fix_nc_list					=> sub { CheckPrivilege('nc_ph_new') },
+		edit_nc_form				=> sub { CheckPrivilege('nc_ph_confirm') },
+		edit_nc_save				=> sub { CheckPrivilege('nc_ph_confirm') },
+		delshow							=> sub { CheckPrivilege('documentation_edit') },
+		delexec							=> sub { CheckPrivilege('documentation_edit') },
+		findshow						=> sub { CheckPrivilege('documentation_view') },
+		findexec						=> sub { CheckPrivilege('documentation_view') },
+		default_action			=> sub { CheckPrivilege('nc_ph_new') });
 		
 
 ############################################################################
@@ -45,9 +47,15 @@ IG::DTable (
 sub submit_nc
  {
  
-  HtmlHead();
-  TaskHead(	title=>"Segnala NC",
-		width=>500);
+  HtmlHead( title => "Segnala nuova NC" );
+  TaskHead( title => "Segnala nuova NC",
+      minwidth  => 500 );
+  
+	$on{user} ||= $auth_user;
+  ( $on{calendarday},
+    $on{calendarmonth},
+    $on{calendaryear}   ) = IG::GetValuesByDate( $on{eventdate} || $tv{today} )
+                              if !$on{calendarday};
 
   FormHead(	cgiaction=>'submit_nc_execute',
 		enctype=>"multipart/form-data");
@@ -66,20 +74,32 @@ sub submit_nc
 		size=>30,
 		maxlen=>30);
 
+       Input( type       => 'date',
+              float      => 'left',
+              name       => 'submitter_date',
+              labelstyle => 'margin-left:10px; width:auto',
+              show       => $lang{date},
+              value      => IG::GetDateByFormat( $on{calendarday},
+                                                 $on{calendarmonth},
+                                                 $on{calendaryear}) );
+
   Input (	show=>"Oggetto NC",
-		type=>'text',
+		type=>'textarea',
+    style=> 'width:300px; height:120px; clear:both',
 		name=>'desc_oggetto',
 		size=>50,
 		maxlen=>60);
 		
   Input (	show=>"Descrizione NC",
-		type=>'text',
+		type=>'textarea',
+    style=> 'width:300px; height:120px; clear:both',
 		name=>'desc_nc',
 		size=>50,
 		maxlen=>60);
 		
   Input (	show=>"Trattamento proposto",
-		type=>'text',
+		type=>'textarea',
+    style=> 'width:300px; height:120px; clear:both',
 		name=>'desc_trattamento',
 		size=>50,
 		maxlen=>60);
@@ -98,10 +118,10 @@ sub submit_nc
 
 sub submit_nc_execute {
   QuoteParams();
-  DbQuery(query =>[( "INSERT INTO nc_ph ( id, status, desc_oggetto, desc_nc, desc_trattamento, submitter_name)".
+  DbQuery(query =>[( "INSERT INTO nc_ph ( id, status, desc_oggetto, desc_nc, desc_trattamento, submitter_name, submitter_date)".
                      "VALUES ('$in{id}', 'S1', '$in{desc_oggetto}',".
                      " '$in{desc_nc}', '$in{desc_trattamento}',".
-                     "'$in{submitter}')"
+                     "'$in{submitter}', '$in{submitter_date}' )"
 			)]
 );
 default_action();
@@ -109,14 +129,7 @@ default_action();
  
  
 ############################################################################
-############################################################################
-sub close_nc
- {
- 
- }
- 
-
-############################################################################
+# Lista NC chiuse?
 ############################################################################
 sub default_action
  {
@@ -130,7 +143,7 @@ sub default_action
 
   TaskListMenu (
 	["ID"],
-	["Desc oggetto"],
+	["Oggetto"],
 	[$lang{date}],
 		 );
 
@@ -143,7 +156,7 @@ sub default_action
     $prece  = $row;
 
     TaskListItem (
-	["$linea  $row[0]"],
+	["$linea  $row[0]","nc_ph?action=edit_nc_form&amp;id=$row[0]"],
 	["$linea $row[1]","","align=center"],
 	["$linea $row[2]","","align=center"],
 		 );
@@ -164,7 +177,9 @@ sub confirm_nc_list
 	  "where status='S1' ".
 	  "ORDER BY id");
 
-  Header();
+  HtmlHead( title => "NC da confermare" );
+  TaskHead( title => "Lista NC in attesa di conferma",
+      minwidth  => 500 );
 
   TaskListMenu (
 	["ID"],
@@ -183,7 +198,7 @@ sub confirm_nc_list
     $prece  = $row;
 
     TaskListItem (
-	["$linea $row[0]"],
+	["$linea $row[0]","nc_ph?action=edit_nc_form&amp;id=$row[0]"],
 	["$linea $row[1]","","align=center"],
 	["$linea $row[2]","","align=center"],
 	["$linea $row[3]"],
@@ -198,9 +213,12 @@ sub confirm_nc_list
 sub confirm_nc
 {
 ## TODO check privilege
+  $on{user} ||= $auth_user;
+  ( $on{calendarday},$on{calendarmonth},$on{calendaryear}) = IG::GetValuesByDate( $on{eventdate} || $tv{today} ); 
+	my $date = IG::GetDateByFormat( $on{calendarday},$on{calendarmonth},$on{calendaryear});
 
   QuoteParams();
-  DbQuery("update nc_ph set status = 'S2' ".
+  DbQuery("update nc_ph set status = 'S2', confirmer_name='$auth_user', confirmer_date='$date' ".
           "where id='$in{id}' and status = 'S1'");
 confirm_nc_list();
 }
@@ -234,7 +252,7 @@ sub validate_nc_list
     $prece  = $row;
 
     TaskListItem (
-	["$linea $row[0]"],
+	["$linea $row[0]","nc_ph?action=edit_nc_form&amp;id=$row[0]"],
 	["$linea $row[1]","","align=center"],
 	["$linea $row[2]","","align=center"],
 	["$linea $row[3]"],
@@ -248,18 +266,26 @@ sub validate_nc_list
 
 sub validate_nc
 {
+
 ## TODO check privilege
+
+	if ($_[0] != undef) { $in{id} = $_[0] ; }
+	if ($_[1] != undef) { $in{status} = $_[1]; }
+  $on{user} ||= $auth_user;
+  ( $on{calendarday},$on{calendarmonth},$on{calendaryear}) = IG::GetValuesByDate( $on{eventdate} || $tv{today} );
+  my $date = IG::GetDateByFormat( $on{calendarday},$on{calendarmonth},$on{calendaryear});
 
   QuoteParams();
   if ($in{status} eq 'S2'){
-  DbQuery("update nc_ph set status = 'S3' ".
+  DbQuery("update nc_ph set status = 'S3' , verifier1_name='$auth_user', verifier1_date='$date'".
           "where id='$in{id}' and status = 'S2'");
-}
+	}
   else {
-  DbQuery("update nc_ph set status = 'S5' ".
+  DbQuery("update nc_ph set status = 'S5' , verifier2_name='$auth_user', verifier2_date='$date'".
           "where id='$in{id}' and status = 'S4'");
-}
-validate_nc_list();
+	}
+
+	validate_nc_list();
 }
 
 ############################################################################
@@ -269,8 +295,10 @@ sub fix_nc_list
 {
   my ($prece, $linea, $counter);
 
+  $on{user} ||= $auth_user;
+
   DbQuery("SELECT id, desc_oggetto, submitter_name, submitter_date FROM nc_ph ".
-	  "where status='S3' ".
+	  "where status='S3'".
 	  "ORDER BY id");
 
   Header();
@@ -292,7 +320,7 @@ sub fix_nc_list
     $prece  = $row;
 
     TaskListItem (
-	["$linea $row[0]"],
+	["$linea $row[0]","nc_ph?action=edit_nc_form&amp;id=$row[0]"],
 	["$linea $row[1]","","align=center"],
 	["$linea $row[2]","","align=center"],
 	["$linea $row[3]"],
@@ -308,10 +336,196 @@ sub fix_nc
 {
 ## TODO check privilege
 
+  $on{user} ||= $auth_user;
+  ( $on{calendarday},$on{calendarmonth},$on{calendaryear}) = IG::GetValuesByDate( $on{eventdate} || $tv{today} );
+  my $date = IG::GetDateByFormat( $on{calendarday},$on{calendarmonth},$on{calendaryear});
+
   QuoteParams();
-  DbQuery("update nc_ph set status = 'S4' ".
+  DbQuery("update nc_ph set status = 'S4', fixxer_name='$auth_user', fixxer_date='$date' ".
           "where id='$in{id}' and status = 'S3'");
 fix_nc_list();
+}
+###############################################################################
+# Form dove vedere o modificare i dati della NC
+###############################################################################
+sub edit_nc_form
+{
+
+  QuoteParams();
+  DbQuery("select * from nc_ph ".
+    "where id='$in{id}'");
+
+  ( $on{id},
+	$on{status},
+  $on{desc_oggetto},
+  $on{desc_nc},
+  $on{desc_trattamento},
+	$on{due_date},
+  $on{submitter_name},
+  $on{submitter_date},
+  $on{confirmer_name},
+  $on{confirmer_date},
+  $on{verifier1_name},
+  $on{verifier1_date},
+  $on{fixer_name},
+  $on{fixer_date},
+  $on{verifier2_name},
+  $on{verifier2_date},
+  ) = FetchRow();
+
+	HtmlHead( title => "NC" );
+  TaskHead( title => "NC",
+      minwidth  => 500 );
+
+	my $link_action_button;
+    if ($on{status} =~ /S1/) { $link_action_button = "nc_ph?action=confirm_nc&amp;id=$on{id}&amp;status=$on{status}"; }
+    if ($on{status} =~ /S2/) { $link_action_button = "nc_ph?action=validate_nc&amp;id=$on{id}&amp;status=$on{status}"; }
+    if ($on{status} =~ /S3/) { $link_action_button = "nc_ph?action=fix_nc&amp;id=$on{id}&amp;status=$on{status}"; }
+    if ($on{status} =~ /S4/) { $link_action_button = "nc_ph?action=validate_nc&amp;id=$on{id}&amp;status=$on{status}"; }
+
+	if ($on{status} !~ /S5/) {
+ 		HLayer(
+	 		MkButton( text => "Firma e avanza di stato",
+              	link => $link_action_button,
+              	privilege => CheckPrivilege("nc_ph_new") )
+  	);
+	}
+  
+
+FormHead(	cgiaction=>'edit_nc_save',
+		enctype=>"multipart/form-data");
+
+  Input (	show=>'Id',
+		type=>'text',
+		name=>'id',
+		value=>$on{id},
+		size=>10,
+		maxlen=>10);
+
+  Input (	show=>"Autore",
+		type=>'text',
+		name=>'submitter',
+	    	value=>$on{submitter_name},
+		size=>30,
+		maxlen=>30);
+
+       Input( type       => 'date',
+              float      => 'left',
+              name       => 'submitter_date',
+			        readonly   => 'true',
+              labelstyle => 'margin-left:10px; width:auto',
+              show       => $lang{date},
+              value      => $on{submitter_date} );
+
+  Input (	show=>"Oggetto NC",
+		type=>'textarea',
+    style=> 'width:300px; height:120px; clear:both',
+		name=>'desc_oggetto',
+		size=>50,
+		value=>$on{desc_oggetto},
+		maxlen=>60);
+		
+  Input (	show=>"Descrizione NC",
+		type=>'textarea',
+    style=> 'width:300px; height:120px; clear:both',
+		name=>'desc_nc',
+		size=>50,
+		value=>$on{desc_nc},
+		maxlen=>60);
+		
+  Input (	show=>"Trattamento proposto",
+		type=>'textarea',
+    style=> 'width:300px; height:120px; clear:both',
+		name=>'desc_trattamento',
+		size=>50,
+		value=>$on{desc_trattamento},
+		);
+
+	if ($on{confirmer_name}) {
+  Input ( show=>"Confermato da",
+    type=>'text',
+    name=>'confirmer_name',
+    value=>$on{confirmer_name},
+    size=>30,
+    maxlen=>30);
+
+       Input( type       => 'date',
+              float      => 'left',
+              name       => 'confirmer_date',
+              readonly   => 'true',
+              labelstyle => 'margin-left:10px; width:auto',
+              show       => $lang{date},
+              value      => $on{confirmer_date} );
+	}
+	if ( $on{verifier1_name}) {
+  Input ( show=>"Verifica Apertura da",
+    type=>'text',
+    name=>'verifier1_name',
+        value=>$on{verifier1_name},
+    size=>30,
+    maxlen=>30);
+
+       Input( type       => 'date',
+              float      => 'left',
+              name       => 'verifier1_date',
+              readonly   => 'true',
+              labelstyle => 'margin-left:10px; width:auto',
+              show       => $lang{date},
+              value      => $on{verifier1_date} );
+	}
+
+	if ($on{fixer_name}) {
+  Input ( show=>"Risoluzione da",
+    type=>'text',
+    name=>'fixxer_name',
+    value=>$on{fixer_name},
+    size=>30,
+    maxlen=>30);
+
+       Input( type       => 'date',
+              float      => 'left',
+              name       => 'fixxer_date',
+              readonly   => 'true',
+              labelstyle => 'margin-left:10px; width:auto',
+              show       => $lang{date},
+              value      => $on{fixer_date} );
+	}
+
+	if ($on{verifier2_name}) {
+  Input ( show=>"Verifica Chiusura da",
+    type=>'text',
+    name=>'verifier2_name',
+    value=>$on{verifier2_name},
+    size=>30,
+    maxlen=>30);
+
+       Input( type       => 'date',
+              float      => 'left',
+              name       => 'verifier2_date',
+              readonly   => 'true',
+              labelstyle => 'margin-left:10px; width:auto',
+              show       => $lang{date},
+              value      => $on{verifier2_date} );
+	}
+
+  Input (	type=>'submit',
+		value=>$lang{save});
+
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+
+}
+
+sub edit_nc_save
+{
+
+	QuoteParams();
+  DbQuery("UPDATE nc_ph SET desc_oggetto='$on{desc_oggetto}', desc_nc='$on{desc_nc}',desc_trattamento='$on{desc_trattamento}' ".
+          "WHERE id='$in{id}'");
+	edit_nc_form();
 }
 ###############################################################################
 ###############################################################################
@@ -463,6 +677,7 @@ sub Footer
 
 sub Header 
  {
+
   HtmlHead();
   TaskHead( title => "Gestione Non Conformit&agrave;" );
   HLayer(
@@ -482,6 +697,7 @@ sub Header
 	            link => "nc_ph?action=fix_nc_list",
                     privilege => CheckPrivilege("nc_ph_new") ),
 	);
+
  }
 
 ################################################################################
