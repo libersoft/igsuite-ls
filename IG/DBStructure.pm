@@ -876,13 +876,13 @@ nc_ph=> [
 	  itype=>'date',
 	  type=>'date',},
 	  
-	# Validator1
-	{ name=>'validator1_name',
-	  label=>'validator1_name',
+	# verifier1
+	{ name=>'verifier1_name',
+	  label=>'verifier1_name',
 	  itype=>'text',
 	  type=>'varchar(255)',},
-	{ name=>'validator1_date',
-	  label=>'validator1_date',
+	{ name=>'verifier1_date',
+	  label=>'verifier1_date',
 	  itype=>'date',
 	  type=>'date',},
 	  
@@ -896,13 +896,13 @@ nc_ph=> [
 	  itype=>'date',
 	  type=>'date',},
 
-	# Validator2
-	{ name=>'validator2_name',
-	  label=>'validator2_name',
+	# verifier2
+	{ name=>'verifier2_name',
+	  label=>'verifier2_name',
 	  itype=>'text',
 	  type=>'varchar(255)',},
-	{ name=>'validator2_date',
-	  label=>'validator2_date',
+	{ name=>'verifier2_date',
+	  label=>'verifier2_date',
 	  itype=>'date',
 	  type=>'date',},
 	  
