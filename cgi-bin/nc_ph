@@ -177,9 +177,7 @@ sub confirm_nc_list
 	  "where status='S1' ".
 	  "ORDER BY id");
 
-  HtmlHead( title => "NC da confermare" );
-  TaskHead( title => "Lista NC in attesa di conferma",
-      minwidth  => 500 );
+  Header();
 
   TaskListMenu (
 	["ID"],
