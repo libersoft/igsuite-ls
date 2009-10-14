@@ -551,17 +551,12 @@ sub protomaster
 		float=>'left',
 		style=>'width: 100px',
 		type=>'select',
-		data=>[(['0',$lang{to_start}],
-			[10, "10% $lang{in_progress}"],
-			[20, "20% $lang{in_progress}"],
-			[30, "30% $lang{in_progress}"],
-			[40, "40% $lang{in_progress}"],
-			[50, "50% $lang{in_progress}"],
-			[60, "60% $lang{in_progress}"],
-			[70, "70% $lang{in_progress}"],
-			[80, "80% $lang{in_progress}"],
-			[90, "90% $lang{in_progress}"],
-			[100, "100% $lang{completed}"])]).
+		data=>[(['0','Da iniziare'],
+			[30, "30% Sopralluogo"],
+			[50, "50% Planimetria"],
+			[70, "70% Relazione"],
+			[90, "90% Formazione"],
+			[100, "100% Consegna"])]).
 
         Input(	type=>'submit',
 		style=>"visibility: hidden;");
