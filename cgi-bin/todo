@@ -142,8 +142,8 @@ sub default_action
        $page_selector ) = IG::MkTaskPaging($base_query, $base_url);
 
   HtmlHead( shortcuts=>_short_cuts(), 
-            title=>'IGToDo' );
-  TaskHead( title=>'IGToDo',
+            title=>'Commesse' );
+  TaskHead( title=>'Commesse',
             width=>'100%' );
 
   HLayer( bottom_space => 15,
@@ -458,7 +458,7 @@ sub protomaster
 				    "recordid=$on{todoid}";
    }
 
-  my $pagetitle = "IGToDo - $lang{code} ".
+  my $pagetitle = "Commesse - $lang{code} ".
 		  ( $on{todoid} ? $on{todoid} : $lang{to_assign} );
   HtmlHead(     ajax_req  => \%ajax_req,
                 title     => $pagetitle );
@@ -668,7 +668,7 @@ sub protomaster
                label_type => 1,
                margin_top => 2,
                default    => $on{default_panel},
-               data       => [( [ 'IGToDo',            $pan0 ],
+               data       => [( [ 'Commesse',            $pan0 ],
                                 [ $lang{participants}, $pan1 ],
                                 $pan3,
                                 $pan4 )] );
@@ -863,7 +863,7 @@ sub protoslave
   DbQuery("SELECT todotext FROM todo where todoid='".DbQuote($on{master})."'");
   ($on{textmaster}) = FetchRow();
 
-  my $pagetitle = "IGToDo $on{textmaster} [$on{master}] - Task $on{todoid}";
+  my $pagetitle = "Commesse $on{textmaster} [$on{master}] - Task $on{todoid}";
   HtmlHead( title    => $pagetitle );
   TaskHead( title    => $pagetitle,
 	   minwidth=>650);
@@ -1258,11 +1258,11 @@ sub findexec
     $IG::set_cookie{lastsearch} = $on{keytofind};
 
     HtmlHead();
-    TaskHead( title=>'IGToDo', minwidth=>650 );
+    TaskHead( title=>'Commesse', minwidth=>650 );
 
     HLayer( MkButton( text => $lang{todo_list}, link => 'todo') );
 
-    TaskMsg("IGToDo - $lang{find}: <strong>$on{keytofind}</strong>",4);
+    TaskMsg("Commesse - $lang{find}: <strong>$on{keytofind}</strong>",4);
    }
 
   ## Build Query
