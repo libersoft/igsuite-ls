@@ -194,12 +194,14 @@ sub default_action
     [$lang{due_date},
      "pos=$on{pos}&amp;order=duedate&amp;category=$on{category}",
      " style=\"font-size:10px\""],
+    ["Cliente",
+     "pos=$on{pos}&amp;order=contactid&amp;category=$on{category}"],
     [$lang{title},
      "pos=$on{pos}&amp;order=todotext&amp;category=$on{category}"],
-    ["Assegnato a",
+    ["Categoria",
      "pos=$on{pos}&amp;category=$on{category}"],
     ["Azioni"],
-    $IG::tema eq 'printable_' ? '' : []
+    #$IG::tema eq 'printable_' ? '' : []
    );
 
 
@@ -242,13 +244,13 @@ sub default_action
 		value=>$on{todotext}),
 	 '',
 	 'width="100%" style="background: #EEEEEE;"'],
-	[ Input(name=>'priority',
-		fieldstyle=>'width:52px;margin:0px; padding:0px',
-		style=>'width:50px; font-size: 10px;',
-		type=>'select',
-		data=>[(1,2,3,4,5)] ),
-	 '',
-	 "style=\"background: #EEEEEE;\""],
+#	[ Input(name=>'priority',
+#		fieldstyle=>'width:52px;margin:0px; padding:0px',
+#		style=>'width:50px; font-size: 10px;',
+#		type=>'select',
+#		data=>[(1,2,3,4,5)] ),
+#	 '',
+#	 "style=\"background: #EEEEEE;\""],
 	[ Input(name=>'category',
 		fieldstyle=>'width:102px; margin:0px; padding:0px',
 		style=>'width:100px; font-size:10px;',
@@ -303,7 +305,7 @@ sub default_action
      { $row[6] = Blush($row[6]) }
 
     if ( $row[9] )
-     { $row[4] = "$row[11] - $row[4]" }
+     { $row[4] = "$row[4]" }
 
     if ($row[7])
      { $row[4] = "<span style=\"color:#9933ff\">$row[4]</span>" }
@@ -352,6 +354,10 @@ sub default_action
 	[$row[6],
 	 $edit_link,
 	 "style=\"$mystyle; font-size:10px; text-align:center;\""],
+
+  [$row[11],
+   "contacts?action=showrecord&backtoreferer=1&contactid=$row[9]",
+   "style=\"$mystyle\""],
 
 	[$row[4],
 	 $edit_link,
