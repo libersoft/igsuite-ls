@@ -43,7 +43,7 @@ require Exporter;
 	fax_received		=> [ 10,'id;issue'],
 	nc_ext			=> [ 9,	'id'],
 	nc_int			=> [ 9,	'id'],
-    nc_ph			=> [ 15,'id'],
+  nc_ph			=> [ 18,'id'],
 	pages			=> [ 17,'id;name'],
 	contracts		=> [ 17,'id;issue;phase'],
 	contracts_phases	=> [ 14,'id'],
@@ -855,6 +855,7 @@ nc_ph=> [
 	  label=>'due_date',
 	  itype=>'date',
 	  type=>'date',},
+
 	
 	# Submitter
 	{ name=>'submitter_name',
@@ -906,6 +907,15 @@ nc_ph=> [
 	  itype=>'date',
 	  type=>'date',},
 	  
+  { name=>'assigned_to',
+    label=>'assigned_to',
+    itype=>'text',
+    type=>'varchar(255)',},
+
+  { name=>'desc_risoluzione',
+    label=>'desc_risoluzione',
+    itype=>'text',
+    type=>'varchar(255)',},
 	],
 
 pages=>[

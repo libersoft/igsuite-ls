@@ -369,6 +369,7 @@ sub edit_nc_form
   $on{fixer_date},
   $on{verifier2_name},
   $on{verifier2_date},
+  $on{assigned_to},
   ) = FetchRow();
 
 	HtmlHead( title => "NC" );
@@ -454,7 +455,22 @@ FormHead(	cgiaction=>'edit_nc_save',
               labelstyle => 'margin-left:10px; width:auto',
               show       => $lang{date},
               value      => $on{confirmer_date} );
+
+      Input(    type      => 'logins',
+      show      => "Assegnato a",
+      name      => 'assigned_to',
+      value     => $on{assigned_to}
+      );
+
+       Input( type       => 'date',
+              float      => 'left',
+              name       => 'due_date',
+              readonly   => 'false',
+              labelstyle => 'margin-left:10px; width:auto',
+              show       => "Scadenza",
+              value      => $on{due_date} );
 	}
+
 	if ( $on{verifier1_name}) {
   Input ( show=>"Verifica Apertura da",
     type=>'text',
@@ -521,7 +537,8 @@ sub edit_nc_save
 {
 
 	QuoteParams();
-  DbQuery("UPDATE nc_ph SET desc_oggetto='$on{desc_oggetto}', desc_nc='$on{desc_nc}',desc_trattamento='$on{desc_trattamento}' ".
+  DbQuery("UPDATE nc_ph SET desc_oggetto='$on{desc_oggetto}', desc_nc='$on{desc_nc}',desc_trattamento='$on{desc_trattamento}', ".
+         "assigned_to='$on{assigned_to}', due_date='$on{due_date}' ".
           "WHERE id='$in{id}'");
 	edit_nc_form();
 }
