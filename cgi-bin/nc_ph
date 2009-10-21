@@ -31,6 +31,7 @@ IG::DTable (
 		confirm_nc					=> sub { CheckPrivilege('nc_ph_confirm') },
 		validate_nc					=> sub { CheckPrivilege('nc_ph_validate') },
 		validate_nc_list		=> sub { CheckPrivilege('nc_ph_validate') },
+    delete_nc           => sub { CheckPrivilege('nc_ph_validate') },
 		fix_nc							=> sub { CheckPrivilege('nc_ph_new') },
 		fix_nc_list					=> sub { CheckPrivilege('nc_ph_new') },
 		edit_nc_form				=> sub { CheckPrivilege('nc_ph_confirm') },
@@ -200,7 +201,7 @@ sub confirm_nc_list
 	["$linea $row[1]","","align=center"],
 	["$linea $row[2]","","align=center"],
 	["$linea $row[3]"],
-	["Approva","nc_ph?action=confirm_nc&amp;id=$row[0]"],
+  ["Cancella","nc_ph?action=delete_nc&amp;id=$row[0]"],
 		 );
    }
 
@@ -227,7 +228,7 @@ sub validate_nc_list
 {
   my ($prece, $linea, $counter);
 
-  DbQuery("SELECT id, desc_oggetto, submitter_name, submitter_date, status FROM nc_ph ".
+  DbQuery("SELECT id, desc_oggetto, submitter_name, submitter_date, status, assigned_to FROM nc_ph ".
 	  "where status='S2' OR status='S4' ".
 	  "ORDER BY id");
 
@@ -254,7 +255,7 @@ sub validate_nc_list
 	["$linea $row[1]","","align=center"],
 	["$linea $row[2]","","align=center"],
 	["$linea $row[3]"],
-	["Approva","nc_ph?action=validate_nc&amp;id=$row[0]&amp;status=$row[4]"],
+  ["Cancella","nc_ph?action=delete_nc&amp;id=$row[0]"],
 		 );
    }
 
@@ -277,6 +278,7 @@ sub validate_nc
   if ($in{status} eq 'S2'){
   DbQuery("update nc_ph set status = 'S3' , verifier1_name='$auth_user', verifier1_date='$date'".
           "where id='$in{id}' and status = 'S2'");
+  IG::SendIsms (  receiver  => "$in{assigned_to}", body    => "Nuova NC a te assegnata." );
 	}
   else {
   DbQuery("update nc_ph set status = 'S5' , verifier2_name='$auth_user', verifier2_date='$date'".
@@ -322,7 +324,7 @@ sub fix_nc_list
 	["$linea $row[1]","","align=center"],
 	["$linea $row[2]","","align=center"],
 	["$linea $row[3]"],
-	["Approva","nc_ph?action=fix_nc&amp;id=$row[0]"],
+	["Cancella","nc_ph?action=delete_nc&amp;id=$row[0]"],
 		 );
    }
 
@@ -378,11 +380,15 @@ sub edit_nc_form
 
 	my $link_action_button;
     if ($on{status} =~ /S1/) { $link_action_button = "nc_ph?action=confirm_nc&amp;id=$on{id}&amp;status=$on{status}"; }
-    if ($on{status} =~ /S2/) { $link_action_button = "nc_ph?action=validate_nc&amp;id=$on{id}&amp;status=$on{status}"; }
+    if ($on{status} =~ /S2/) {
+      if (! length($on{assigned_to}) == 0) {
+        $link_action_button = "nc_ph?action=validate_nc&amp;id=$on{id}&amp;status=$on{status}&amp;assigned_to=$on{assigned_to}";
+      }
+    }
     if ($on{status} =~ /S3/) { $link_action_button = "nc_ph?action=fix_nc&amp;id=$on{id}&amp;status=$on{status}"; }
     if ($on{status} =~ /S4/) { $link_action_button = "nc_ph?action=validate_nc&amp;id=$on{id}&amp;status=$on{status}"; }
 
-	if ($on{status} !~ /S5/) {
+	if ($on{status} !~ /S5/ && length($link_action_button)!~ 0) {
  		HLayer(
 	 		MkButton( text => "Firma e avanza di stato",
               	link => $link_action_button,
@@ -541,6 +547,15 @@ sub edit_nc_save
          "assigned_to='$on{assigned_to}', due_date='$on{due_date}' ".
           "WHERE id='$in{id}'");
 	edit_nc_form();
+}
+###############################################################################
+###############################################################################
+sub delete_nc
+{
+
+	QuoteParams();
+  DbQuery("DELETE FROM nc_ph WHERE id='$in{id}'");
+	default_action();
 }
 ###############################################################################
 ###############################################################################
