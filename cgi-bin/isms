@@ -515,6 +515,27 @@ sub isms_arrived
         _sysmsg("E' in scadenza la patente speciale n. $row[1] intestata a <a href=\"users?action=protomodi&amp;userid=$row[4]\">$row[0]</a> del tipo $row[2] scadente il $row[3]\n");
        }
      }
+    #### NC da confermare
+    if (CheckPrivilege("nc_ph_confirm"))
+     {
+      DbQuery("SELECT COUNT(*) ".
+        "FROM nc_ph WHERE status='S1'");
+      while (my @row = FetchRow())
+       {
+         if ($row[0]>0) { _sysmsg("NC: ci sono $row[0] in attesa di conferma <a href=\"nc_ph?action=confirm_nc_list\">Vai a gestione NC</a>\n"); }
+       }
+     }
+    #### NC da confermare
+    if (CheckPrivilege("nc_ph_validate"))
+     { 
+      DbQuery("SELECT COUNT(*) ".
+        "FROM nc_ph WHERE status='S2' OR status='S4'");
+      while (my @row = FetchRow())
+       {
+        if ($row[0]>0) { _sysmsg("NC: ci sono $row[0] in attesa di validazione <a href=\"nc_ph?action=validate_nc_list\">Vai a gestione NC</a>\n"); }
+       }
+     }
+
    }
   TaskListFoot();
   FormFoot();
