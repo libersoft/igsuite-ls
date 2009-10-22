@@ -610,7 +610,7 @@ sub delexec
   my ($file_name) = <$on{id}.*>;
 
 
-  push @IG::errmsg, "$on{id} $IG::htdocs_dir/$IG::default_lang{documentation}/$file_name";
+  push @IG::errmsg, "Documento Cancellato: $row[0] pubb $row[1] rev $row[2]";
 
   IG::FileCopy(	"$IG::htdocs_dir/$IG::default_lang{documentation}/$file_name",
 		"$IG::htdocs_dir/$IG::default_lang{basket}/$file_name",
@@ -618,10 +618,11 @@ sub delexec
 
   DbQuery("delete from documentation ".
 	  "where id='$row[0]'".
-	  " and description='$row[1]'".
-	  " and revisionid=$row[2]");
+	  " and issueid='$row[1]'".
+	  " and revisionid='$row[2]'");
 
   LogD('','delete','documentation',$on{id});
+  push @IG::errmsg, "'$row[0]' '$row[1]' '$row[2]'";
   delshow();
  }
 
