@@ -912,8 +912,13 @@ nc_ph=> [
     itype=>'text',
     type=>'varchar(255)',},
 
-  { name=>'desc_risoluzione',
-    label=>'desc_risoluzione',
+  { name=>'confirmer_to',
+    label=>'confirmer_to',
+    itype=>'text',
+    type=>'varchar(255)',},
+
+  { name=>'note',
+    label=>'note',
     itype=>'text',
     type=>'varchar(255)',},
 	],
