@@ -830,7 +830,7 @@ sub MkEnv
   require "$conf_dir${S}igsuite.conf";
 
   ## Set a default session timeout if not defined by igsuite.conf
-  $session_timeout ||= 1.5/24; ## 1.5 hours
+  $session_timeout ||= 8/24; ## default: 1.5 hours
 
   ## Set logs directory (temp)
   $logs_dir ||= "$cgi_dir${S}log";
