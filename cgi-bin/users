@@ -723,27 +723,15 @@ sub proto
                       validate => { onerror   => $lang{Err_birthday_date},
                                     mandatory => 'false' },
                       name     => 'birthday',
-                      size     => 50).
-
-               Input( show     => "Luogo Nascita",
-                      type     => 'text',
-                      name     => 'luogo_nascita',
-                      size     => 50,
-                      maxlen   => 255);
+                      size     => 50);
 
 
   ## job info ###############################################################
   my $panel1 = Input( show     => $lang{company},
-                      type     => 'select',
+                      type     => 'text',
                       name     => 'company',
                       maxlen   => 70,
-                      style    => 'width:350px',
-                      data     => [(
-                                  [ '' , 'Nessuna' ],
-                                  [ 'pH s.r.l.' , 'pH s.r.l.' ],
-                                  [ 'pH Servizi s.r.l.','pH Servizi s.r.l.'      ],
-                                  [ 'pH Consulenze s.r.l.','pH Consulenze s.r.l.' ]
-                                  )]
+                      style    => 'width:350px').
                     ).
 
                 Input( show     => 'Sede Aziendale',
@@ -751,11 +739,6 @@ sub proto
                       name     => 'sede_aziendale',
                       maxlen   => 70,
                       style    => 'width:350px',
-                      data     => [(
-                                  [ 'Sangallo','Via Sangallo, 29 Tavarnelle V.P.'      ],
-                                  [ 'Bramante','Via Bramante, 10/12 Tavarnelle V.P.'       ],
-                                  [ 'Altro','Altro' ]
-                                  )]
                       ).
 
                Input( show     => $lang{emplacement},
@@ -860,26 +843,6 @@ sub proto
 				     'Non idoneo',
 				     'Temporaneamente non idoneo',
 				     'Idoneo con prescrizione')]); #XXX2TRANSLATE
-
-               Input( show     => "Posizione INPS",
-                      type     => 'text',
-                      name     => 'posizione_inps',
-                      style    => 'width:350px',
-                      maxlen   => 255).
-
-               Input( show     => "Posizione INAIL",
-                      type     => 'text',
-                      name     => 'posizione_inail',
-                      style    => 'width:350px',
-                      maxlen   => 255).
-
-               Input( show     => "Carta Credito",
-                      type     => 'text',
-                      name     => 'carta_credito',
-                      style    => 'width:350px',
-                      maxlen   => 255);
-
-
 
   ## personal info #########################################################
   my $panel2 = Input( show     => $lang{drive_licence},
@@ -1265,18 +1228,8 @@ sub protoagg
 		    " '$in{jobformation}', '$in{isosyncpwd}',".
 		    " '$in{lastsync}', '$in{lastpwdchange}',".
 		    " '$in{note}', '$in{dismissal}', '$in{emailfrom}',".
-		    " '$in{hostsallow}',".
-                    "  '$in{luogo_nascita}','$in{sede_aziendale}',".
-                    " '$in{operativita}', '$in{reparto}',".
-                    " '$in{mansione}', '$in{scadenza_qualifica}',".
-                    " '$in{titolo_studio}', '$in{interno_telefonico}',".
-                    " '$in{email_aziendale}','$in{tipo_contratto}',".
-                    " '$in{posizione_inps}', '$in{posizione_inail}',".
-                    " '$in{frequenza_visita_medica}', '$in{carta_credito}',".
-                    " '$in{ordine_professionale}', '$in{ordine_professionale_rif}',".
-                    " '$in{ordine_professionale_iscr}', '$in{qualifica_prof}',".
-                    " '$in{qualifica_prof_rif}', '$in{qualifica_prof_iscr}',".
-                    " '$in{qualifica_prof_scad}' )"  )] );
+		    " '$in{hostsallow}' )"
+		  )] );
 
   ## Create Filemanager User Home directory
   if ($on{login} && !(-e "$IG::htdocs_dir${S}$IG::default_lang{home}${S}$on{login}"))
@@ -1379,29 +1332,7 @@ sub protomodi
 	$on{note},
 	$on{dismissal},
 	$on{emailfrom},
-	$on{hostsallow},
-        $on{luogo_nascita},
-        $on{sede_aziendale},
-        $on{operativita},
-        $on{reparto},
-        $on{mansione},
-        $on{scadenza_qualifica},
-        $on{titolo_studio},
-        $on{interno_telefonico},
-        $on{email_aziendale},
-        $on{tipo_contratto},
-        $on{posizione_inps},
-        $on{posizione_inail},
-        $on{frequenza_visita_medica},
-        $on{carta_credito},
-        $on{ordine_professionale},
-        $on{ordine_professionale_rif},
-        $on{ordine_professionale_iscr},
-        $on{qualifica_prof},
-        $on{qualifica_prof_rif},
-        $on{qualifica_prof_iscr},
-        $on{qualifica_prof_scad}
-) = FetchRow();
+	$on{hostsallow} ) = FetchRow();
 
   ## exists?
   IG::Warn($lang{Err_nodocument}) && return 0 if !$on{name};
