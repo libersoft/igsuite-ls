@@ -123,13 +123,14 @@ sub submit_nc
 
 sub submit_nc_execute {
   QuoteParams();
-  DbQuery(query =>[( "INSERT INTO nc_ph ( id, status, desc_oggetto, desc_nc, desc_trattamento, submitter_name, submitter_date)".
+  DbQuery(query =>[( "INSERT INTO nc_ph ( id, status, desc_oggetto, desc_nc, desc_trattamento, submitter_name, submitter_date, confirmer_to)".
                      "VALUES ('$in{id}', 'S1', '$in{desc_oggetto}',".
                      " '$in{desc_nc}', '$in{desc_trattamento}',".
-                     "'$in{submitter}', '$in{submitter_date}' )"
+                     "'$in{submitter}', '$in{submitter_date}', '$in{confirmer_to} )"
 			)]
 );
-default_action();
+  IG::SendIsms (  receiver  => "$in{confirmer_to}", body    => "Nuova NC da confermare." );
+  default_action();
 }
  
  
@@ -222,6 +223,10 @@ sub confirm_nc
   QuoteParams();
   DbQuery("update nc_ph set status = 'S2', confirmer_name='$auth_user', confirmer_date='$date' ".
           "where id='$in{id}' and status = 'S1'");
+
+  DbQuery("select validation_to from nc_ph where id='$in{id}'");
+  ( $on{validation_to} ) = FetchRow();
+  IG::SendIsms (  receiver  => "$on{validation_to}", body    => "Nuova NC da validare." );
   default_action();
 }
 #############################################################################
@@ -242,7 +247,10 @@ sub validate_nc
   if ($in{status} eq 'S2'){
   DbQuery("update nc_ph set status = 'S3' , verifier1_name='$auth_user', verifier1_date='$date'".
           "where id='$in{id}' and status = 'S2'");
-  IG::SendIsms (  receiver  => "$in{assigned_to}", body    => "Nuova NC a te assegnata." );
+  
+  DbQuery("select assigned_to from nc_ph where id='$in{id}'");
+  ( $on{assigned_to} ) = FetchRow();
+  IG::SendIsms (  receiver  => "$on{assigned_to}", body    => "Nuova NC a te assegnata." );
 	}
   else {
   DbQuery("update nc_ph set status = 'S5' , verifier2_name='$auth_user', verifier2_date='$date'".
@@ -266,7 +274,11 @@ sub fix_nc
   QuoteParams();
   DbQuery("update nc_ph set status = 'S4', fixxer_name='$auth_user', fixxer_date='$date' ".
           "where id='$in{id}' and status = 'S3'");
-default_action();
+  
+  DbQuery("select validation_to from nc_ph where id='$in{id}'");
+  ( $on{validation_to} ) = FetchRow();
+  IG::SendIsms (  receiver  => "$on{validation_to}", body    => "Nuova NC risolta da validare." );
+  default_action();
 }
 ###############################################################################
 # Form dove vedere o modificare i dati della NC
@@ -496,6 +508,7 @@ sub edit_nc_save
 	QuoteParams();
   DbQuery("UPDATE nc_ph SET desc_oggetto='$on{desc_oggetto}', desc_nc='$on{desc_nc}',desc_trattamento='$on{desc_trattamento}', ".
          "assigned_to='$on{assigned_to}', due_date='$on{due_date}', confirmer_to='$on{confirmer_to}', note='$on{note}' ".
+         "confirmer_to='$on{confirmer_to}', validation_to='$on{validation_to}' ".
           "WHERE id='$in{id}'");
 	edit_nc_form();
 }
