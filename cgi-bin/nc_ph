@@ -309,6 +309,7 @@ sub edit_nc_form
   $on{assigned_to},
   $on{confirmer_to},
   $on{note},
+  $on{closing_state},
   ) = FetchRow();
 
 	HtmlHead( title => "NC" );
@@ -471,6 +472,18 @@ if ($on{status} =~ /S1/ && CheckPrivilege("nc_ph_confirm") ) {
               labelstyle => 'margin-left:10px; width:auto',
               show       => $lang{date},
               value      => $on{fixer_date} );
+
+  Input ( show=>"Stato Finale",
+    type=>'select',
+    name=>'closing_state',
+    value=>$on{closing_state},
+    data=> {
+            'nonconforme' => 'Rimasto non conforme',
+            'conforme' => 'Tornato conforme',
+            'eliminato' => 'Stato eliminato',
+           },  
+    style=>'width: 160px',
+  );
 	}
 
 	if ($on{verifier2_name}) {
@@ -508,7 +521,7 @@ sub edit_nc_save
 	QuoteParams();
   DbQuery("UPDATE nc_ph SET desc_oggetto='$on{desc_oggetto}', desc_nc='$on{desc_nc}',desc_trattamento='$on{desc_trattamento}', ".
          "assigned_to='$on{assigned_to}', due_date='$on{due_date}', confirmer_to='$on{confirmer_to}', note='$on{note}' ".
-         "confirmer_to='$on{confirmer_to}', validation_to='$on{validation_to}' ".
+         "confirmer_to='$on{confirmer_to}', validation_to='$on{validation_to}', closing_state='$on{closing_state}' ".
           "WHERE id='$in{id}'");
 	edit_nc_form();
 }
