@@ -43,7 +43,7 @@ require Exporter;
 	fax_received		=> [ 10,'id;issue'],
 	nc_ext			=> [ 9,	'id'],
 	nc_int			=> [ 9,	'id'],
-  nc_ph			=> [ 18,'id'],
+  nc_ph			=> [ 19,'id'],
 	pages			=> [ 17,'id;name'],
 	contracts		=> [ 17,'id;issue;phase'],
 	contracts_phases	=> [ 14,'id'],
@@ -921,7 +921,13 @@ nc_ph=> [
     label=>'note',
     itype=>'text',
     type=>'varchar(255)',},
-	],
+	
+  { name=>'validation_to',
+    label=>'validation_to',
+    itype=>'text',
+    type=>'varchar(255)',},
+
+],
 
 pages=>[
 	{ name=>'id',

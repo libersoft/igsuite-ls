@@ -353,6 +353,14 @@ FormHead(	cgiaction=>'edit_nc_save',
     value     => $on{confirmer_to}
   );
 
+if ($on{status} =~ /S1/ && CheckPrivilege("nc_ph_confirm") ) {
+  Input(    type      => 'logins',
+    show      => "Validazione richiesta a:",
+    name      => 'validation_to',
+    value     => $on{validation_to}
+  );
+}
+
   Input (	show=>"Requisiti",
 		type=>'textarea',
     style=> 'width:300px; height:120px; clear:both',
