@@ -1,0 +1,567 @@
+#! /usr/bin/perl
+# Procedure: complaints
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable (
+		submit_comp  	      => sub { CheckPrivilege('complaints_new') },
+    submit_comp_execute  => sub { CheckPrivilege('complaints_new') },
+		validate_comp					=> sub { CheckPrivilege('complaints_validate') },
+    delete_comp           => sub { CheckPrivilege('complaints_validate') },
+		edit_comp_form				=> sub { CheckPrivilege('complaints_new') },
+		edit_comp_save				=> sub { CheckPrivilege('complaints_new') },
+    archived_comp_list    => sub { CheckPrivilege('complaints_new') },
+		delshow							=> sub { CheckPrivilege('complaints_edit') },
+		delexec							=> sub { CheckPrivilege('complaints_edit') },
+		findshow						=> sub { CheckPrivilege('complaints_view') },
+		findexec						=> sub { CheckPrivilege('complaints_view') },
+		default_action			=> sub { CheckPrivilege('complaints_new') });
+		
+
+############################################################################
+############################################################################
+sub submit_comp
+ {
+ 
+  HtmlHead( title => "Segnala nuovo Reclamo" );
+  TaskHead( title => "Segnala nuova Reclamo",
+      minwidth  => 500 );
+  
+	$on{user} ||= $auth_user;
+  ( $on{calendarday},
+    $on{calendarmonth},
+    $on{calendaryear}   ) = IG::GetValuesByDate( $on{eventdate} || $tv{today} )
+                              if !$on{calendarday};
+
+  FormHead(	cgiaction=>'submit_comp_execute',
+		enctype=>"multipart/form-data");
+
+  Input (	show=>'Id',
+		type=>'text',
+		name=>'id',
+		value=>_mk_new_id(),
+		size=>10,
+		maxlen=>10);
+
+  Input (	show=>"Autore",
+		type=>'text',
+		name=>'submitter_name',
+	    	value=>$auth_user,
+		size=>30,
+		maxlen=>30);
+
+       Input( type       => 'date',
+              float      => 'left',
+              name       => 'submitter_date',
+              labelstyle => 'margin-left:10px; width:auto',
+              show       => $lang{date},
+              value      => IG::GetDateByFormat( $on{calendarday},
+                                                 $on{calendarmonth},
+                                                 $on{calendaryear}) );
+
+  Input(    type      => 'logins',
+    show      => "All'attenzione di",
+    name      => 'verifier_to',
+  );
+
+  Input(    type      => 'text',
+    show      => "Contatto",
+    name      => 'contact_id',
+  );
+
+
+  Input (	show=>"Rif",
+		type=>'textarea',
+    style=> 'width:300px; height:120px; clear:both',
+		name=>'rif',
+		size=>50,
+		maxlen=>60);
+		
+  Input (	show=>"Descrizione",
+		type=>'textarea',
+    style=> 'width:300px; height:120px; clear:both',
+		name=>'desc',
+		size=>50,
+		maxlen=>60);
+		
+  Input (	type=>'submit',
+		value=>$lang{save});
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ 
+ }
+
+sub submit_nc_execute {
+  QuoteParams();
+  DbQuery(query =>[( "INSERT INTO complaints ( id, status, rif, desc, contact_id, submitter_name, submitter_date, confirmer_to)".
+                     "VALUES ('$in{id}', 'S1', '$in{rif}',".
+                     " '$in{desc}', '$in{contact_id}',".
+                     "'$in{submitter_name}', '$in{submitter_date}', '$in{confirmer_to} )"
+			)]
+);
+  IG::SendIsms (  receiver  => "$in{confirmer_to}", body    => "Nuovo reclamo da validare." );
+  default_action();
+}
+ 
+ 
+############################################################################
+# Lista reclami aperti
+############################################################################
+sub default_action
+ {
+  my ($prece, $linea, $counter);
+
+  DbQuery("SELECT id, contact_id,submitter_date,status FROM complaints ".
+	  "where status<>'S3' ".
+	  "ORDER BY status DESC");
+
+  Header("Reclami Aperti");
+
+  TaskListMenu (
+	["ID"],
+	["Contatto"],
+	[$lang{date}],
+  ["Status"],
+		 );
+
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+    my $row = $row[0];
+       $row =~ s/\d//g;
+    $linea  = $prece ne $row && $counter ne 0 ? '<hr>' : '';
+    $prece  = $row;
+
+    TaskListItem (
+	["$linea  $row[0]","complaints?action=edit_comp_form&amp;id=$row[0]"],
+	["$linea $row[1]","","align=center"],
+	["$linea $row[2]","","align=center"],
+	["$linea $row[3]","","align=center"],
+		 );
+   }
+
+  TaskListFoot();
+  Footer();
+ }
+############################################################################
+# Archivio NC chiuse
+############################################################################
+sub archived_nc_list
+ {
+  my ($prece, $linea, $counter);
+
+  DbQuery("SELECT id, desc,submitter_date FROM complaints ".
+	  "where status='S3' ".
+	  "ORDER BY id DESC");
+
+  Header("Reclami Archiviati");
+
+  TaskListMenu (
+	["ID"],
+	["Oggetto"],
+	[$lang{date}],
+		 );
+
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+    my $row = $row[0];
+       $row =~ s/\d//g;
+    $linea  = $prece ne $row && $counter ne 0 ? '<hr>' : '';
+    $prece  = $row;
+
+    TaskListItem (
+	["$linea  $row[0]","complaints?action=edit_comp_form&amp;id=$row[0]"],
+	["$linea $row[1]","","align=center"],
+	["$linea $row[2]","","align=center"],
+		 );
+   }
+
+  TaskListFoot();
+  Footer();
+ }
+#############################################################################
+# Supervisore - Vede NC confermate dai capireparto e le valida
+#############################################################################
+sub validate_nc
+{
+
+## TODO check privilege
+
+	if ($_[0] != undef) { $in{id} = $_[0] ; }
+	if ($_[1] != undef) { $in{status} = $_[1]; }
+  $on{user} ||= $auth_user;
+  ( $on{calendarday},$on{calendarmonth},$on{calendaryear}) = IG::GetValuesByDate( $on{eventdate} || $tv{today} );
+  my $date = IG::GetDateByFormat( $on{calendarday},$on{calendarmonth},$on{calendaryear});
+
+  QuoteParams();
+  if ($in{status} eq 'S1'){
+  DbQuery("update complaints set status = 'S2' , verifier_name='$auth_user', verifier_date='$date'".
+          "where id='$in{id}' and status = 'S1'");
+	}
+  else {
+  DbQuery("update complaints set status = 'S5' , verifier2_name='$auth_user', verifier2_date='$date'".
+          "where id='$in{id}' and status = 'S4'");
+	}
+
+	default_action();
+}
+
+sub edit_comp_form
+{
+
+  QuoteParams();
+  DbQuery("select * from complaints ".
+    "where id='$in{id}'");
+
+  ( $on{id},
+	$on{status},
+  $on{rif},
+  $on{contact_id},
+  $on{submitter_name},
+  $on{submitter_date},
+  $on{desc},
+  $on{verifier_name},
+  $on{verifier_date},
+  $on{ragione_cliente},
+  $on{note},
+  $on{rif_nc},
+  ) = FetchRow();
+
+	HtmlHead( title => "Reclami" );
+  TaskHead( title => "Reclami",
+      minwidth  => 500 );
+
+	my $link_action_button;
+    if ($on{status} =~ /S1/ && CheckPrivilege("complaints_validate") ) { $link_action_button = "complaints?action=validate_comp&amp;id=$on{id}&amp;status=$on{status}"; }
+    if ($on{status} =~ /S2/ && CheckPrivilege("complaints_validate") ) {
+      ### TODO chiudi comp  
+    }
+
+	if ($on{status} !~ /S3/ && length($link_action_button)!~ 0) {
+ 		HLayer(
+	 		MkButton( text => "Firma e avanza di stato",
+              	link => $link_action_button,
+              	privilege => CheckPrivilege("complaints_new") )
+  	);
+	}
+  
+
+FormHead(	cgiaction=>'edit_comp_save',
+		enctype=>"multipart/form-data");
+
+Input (	show=>'Id',
+		type=>'text',
+		name=>'id',
+		value=>_mk_new_id(),
+		size=>10,
+		maxlen=>10);
+
+  Input (	show=>"Autore",
+		type=>'text',
+		name=>'submitter_name',
+	    	value=>$auth_user,
+		size=>30,
+		maxlen=>30);
+
+       Input( type       => 'date',
+              float      => 'left',
+              name       => 'submitter_date',
+              labelstyle => 'margin-left:10px; width:auto',
+              show       => $lang{date},
+              value      => IG::GetDateByFormat( $on{calendarday},
+                                                 $on{calendarmonth},
+                                                 $on{calendaryear}) );
+
+  Input(    type      => 'logins',
+    show      => "All'attenzione di",
+    name      => 'verifier_to',
+  );
+
+  Input(    type      => 'text',
+    show      => "Contatto",
+    name      => 'contact_id',
+  );
+
+
+  Input (	show=>"Rif",
+		type=>'textarea',
+    style=> 'width:300px; height:120px; clear:both',
+		name=>'rif',
+		size=>50,
+		maxlen=>60);
+		
+  Input (	show=>"Descrizione",
+		type=>'textarea',
+    style=> 'width:300px; height:120px; clear:both',
+		name=>'desc',
+		size=>50,
+		maxlen=>60);
+
+  Input ( show=>"Ragione Cliente",
+    type=>'select',
+    name=>'ragione_cliente',
+    value=>$on{ragione_cliente},
+    data=> {
+            'si' => 'si',
+            'no' => 'no',
+            'nd' => 'nd',
+           },  
+    style=>'width: 160px',
+  );
+	}
+
+  Input ( show=>"Note",
+    type=>'textarea',
+    style=> 'width:300px; height:120px; clear:both',
+    name=>'desc',
+    size=>50,
+    maxlen=>60);
+
+  Input ( show=>"Rif NC",
+    type=>'textarea',
+    style=> 'width:300px; height:120px; clear:both',
+    name=>'rif_nc',
+    size=>50,
+    maxlen=>60);
+
+
+  Input (	type=>'submit',
+		value=>$lang{save});
+
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+
+}
+
+sub edit_comp_save
+{
+
+	QuoteParams();
+  DbQuery("UPDATE complaints SET rif='$on{rif}', desc='$on{desc}',desc_trattamento='$on{desc_trattamento}', ".
+         "contact_id='$on{contact_id}', verifier_to='$on{verifier_to}', ragione_cliente='$on{ragione_cliente}', rif_nc='$on{rif_nc}' ".
+          "WHERE id='$in{id}'");
+	edit_nc_form();
+}
+###############################################################################
+###############################################################################
+sub delete_comp
+{
+
+	QuoteParams();
+  DbQuery("DELETE FROM complaints WHERE id='$in{id}'");
+	default_action();
+}
+###############################################################################
+###############################################################################
+sub findshow
+ {
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer
+     ( bottom_space => 0,
+       right_layers
+        =>[(
+	    FormHead (	name	   => 'findnavi',
+			method	   => 'get',
+			autofocus  => 'false',
+                        labelstyle => 'border:0px; width:auto;',
+			target	   => 'mainf',
+			cgiaction  => 'findexec',
+			float	   => 'left' ),
+
+	    Input (	type       => 'findable' ),
+
+	    Input (	type       => 'select',
+			name       => 'method',
+			data       => [(
+				        			['id',    $lang{with_protocol}],
+							        ['description', $lang{with_description}],
+							        ['quality_system', $lang{with_quality_system}],
+						        )]
+						 ),
+
+	    Input (	type       => 'text',
+			name       => 'keytofind',
+                        focus      => 'true',
+			value      => $IG::cookie{lastsearch},
+                        style      => 'width:100px; margin-right: -5px;',
+	        	onblur     => "document.cookie='lastsearch=' + escape(this.value)"),
+
+	    Input (	type       => 'image',
+			name       => $lang{find},
+			src        => "$IG::img_url/${IG::tema}search.gif",
+			alt        => $lang{find}),
+			
+	    FormFoot()
+	  )]
+	 );
+   }
+  HtmlFoot();
+ }
+
+############################################################################
+############################################################################
+sub findexec
+ {
+  my $query;
+  $IG::set_cookie{lastsearch} = $on{keytofind};
+
+  Header();
+
+  TaskMsg("$lang{documentation_protocol} - ".
+          "$lang{find}: <strong>$on{keytofind}</strong>",4);
+
+  ## Build Query
+  QuoteParams();
+  if ( length($on{keytofind}) < 2 )
+   {
+    push @IG::errmsg, $lang{Err_find};
+    $query = '1=0';
+   }
+  elsif ($on{method} eq 'id' || $on{keytofind} =~ /4\d\d\d\d\d\.\d\d/)
+   { $query = "documentation.id ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'description')
+   { $query = "documentation.description ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'quality_system')
+   { $query = "documentation.quality_system ~* '$in{keytofind}'"; }
+ 
+
+  my $counter = 0;
+  TaskListMenu
+   (
+    [$lang{code}],
+    [$lang{issue}],
+    [$lang{revision}],
+    [$lang{description}],
+    [$lang{function}],
+    [$lang{pages}],
+    [$lang{date}],
+    [$lang{quality_system}],
+   );
+
+  DbQuery( "SELECT id, issueid, revisionid, description, function, pages, issue, quality_system ".
+           "FROM documentation ".
+           "WHERE publishstatus='S' and approvalstatus ='A' and $query ".
+           "ORDER BY issueid desc, id desc" );
+
+  while ( my @row = FetchRow() )
+   {
+    ++$counter;
+    TaskListItem( [ _idToLink("$row[0]_$row[1]_$row[2]") ],
+                  [ $row[1] ],
+                  [ $row[2] ],
+                  [$row[3],"documentation?action=protomodi&amp;id=$row[0]&amp;issueid=$row[1]&amp;revisionid=$row[2]"],
+                  [ $row[4] ], 
+                  [ $row[5] ],
+                  [ $row[6] ],
+                  [ $row[7] ],
+                  );
+   }
+  push @IG::errmsg, $lang{no_items} if !$counter && length($on{keytofind}) > 1;
+
+  TaskListFoot();
+  Footer();
+ }
+ 
+###########################################################################
+###########################################################################
+sub _idToLink
+ {
+  my $protocol = shift;
+  my $file_name;
+
+  chdir ("$IG::htdocs_dir/$IG::default_lang{documentation}/");
+  my ($id) = (<$protocol.*>);
+
+  $protocol =~ s/^([^_]+).+/$1/;
+
+  if ( $id && CheckPrivilege('documentation_view') )
+   {
+    my $href = IG::GetHref('documentation', $id);
+
+    return "<a href=\"$href\" target=\"".
+	   ( $href =~ /\.html*$/i
+		   ? "_blank"
+		   : "mainf" ).
+	   "\">$protocol<\/a>";
+   }
+  else
+   { return $protocol }
+ }
+
+#############################################################################
+#############################################################################
+sub Footer
+ {
+  TaskFoot();
+  HtmlFoot();
+ }
+
+
+sub Header 
+ {
+
+  my($title) = @_;
+
+  HtmlHead();
+  TaskHead( title => $title, minwidth  => 500 );
+  HLayer(
+    MkButton( text => "Reclami Aperti",
+              link => "complaints?action=default_action",
+              privilege => CheckPrivilege("complaints_new") ),
+
+	  MkButton( text => "Nuovo Reclami",
+	            link => "complaints?action=submit_nc",
+	            privilege => CheckPrivilege("complaints_new") ),
+	            
+    MkButton( text => "Archivio Reclami",
+              link => "complaints?action=archived_comp_list",
+                    privilege => CheckPrivilege("complaints_new") ),
+	);
+
+ }
+
+################################################################################
+################################################################################
+sub _mk_new_id
+ {
+  my $conn = DbQuery( query => $IG::db_driver eq 'sqlite'
+                            ?  "SELECT MAX(id) FROM complaints"
+                            :  "SELECT MAX(lpad(id,10,'0')) ".
+                               "FROM complaints",
+                      type  => 'UNNESTED' );
+
+  my $new_id = FetchRow( $conn );
+  $new_id = 0 if $new_id < 1;
+  $new_id +=1; ## increase id && delete 00000
+  return $new_id;
+ }
