@@ -126,7 +126,7 @@ sub submit_nc_execute {
   DbQuery(query =>[( "INSERT INTO nc_ph ( id, status, desc_oggetto, desc_nc, desc_trattamento, submitter_name, submitter_date, confirmer_to)".
                      "VALUES ('$in{id}', 'S1', '$in{desc_oggetto}',".
                      " '$in{desc_nc}', '$in{desc_trattamento}',".
-                     "'$in{submitter}', '$in{submitter_date}', '$in{confirmer_to} )"
+                     "'$in{submitter}', '$in{submitter_date}', '$in{confirmer_to}' )"
 			)]
 );
   IG::SendIsms (  receiver  => "$in{confirmer_to}", body    => "Nuova NC da confermare." );
@@ -135,15 +135,25 @@ sub submit_nc_execute {
  
  
 ############################################################################
-# Lista NC chiuse?
+# Lista NC aperte
 ############################################################################
 sub default_action
  {
   my ($prece, $linea, $counter);
 
+  if (CheckPrivilege('nc_ph_validate')) {
   DbQuery("SELECT id, desc_oggetto,submitter_date,status FROM nc_ph ".
 	  "where status<>'S5' ".
 	  "ORDER BY status DESC");
+  } elsif (CheckPrivilege('nc_ph_confirm')) {
+  DbQuery("SELECT id, desc_oggetto,submitter_date,status,assigned_to, confirmer_to FROM nc_ph ".
+    "where status<>'S5' AND confirmer_to='".$auth_user."'".
+    "ORDER BY status DESC");
+  } elsif (CheckPrivilege('nc_ph_new')) {
+  DbQuery("SELECT id, desc_oggetto,submitter_date,status,assigned_to, cofirmer_to FROM nc_ph ".
+    "where status='S3' AND assigned_to='".$auth_user."'".
+    "ORDER BY status DESC");
+  }
 
   Header("NC Aperte");
 
@@ -155,20 +165,32 @@ sub default_action
 		 );
 
   while (my @row = FetchRow())
-   {
+  {
     ++$counter;
     my $row = $row[0];
        $row =~ s/\d//g;
     $linea  = $prece ne $row && $counter ne 0 ? '<hr>' : '';
     $prece  = $row;
 
+    my $status;
+
+    if ($row[3] =~ /S1/) {$status='In attesa di conferma';}
+    if ($row[3] =~ /S2/) {$status='In attesa di validazione';}
+    if ($row[3] =~ /S3/) {$status='In attesa di risoluzione';}
+    if ($row[3] =~ /S4/) {$status='In attesa di chiusura';}
+    if ($row[3] =~ /S5/) {$status='Chiusa';}
+
+    my $color = 'trasparent';
+    if ($row[5] =~ $auth_user && $row[3] =~ /S1/) { $color='#FF0000'; }
+    if ($row[4] =~ $auth_user && $row[3] =~ /S3/) { $color='#FF0000'; }
+
     TaskListItem (
-	["$linea  $row[0]","nc_ph?action=edit_nc_form&amp;id=$row[0]"],
+	["$linea  $row[0]","nc_ph?action=edit_nc_form&amp;id=$row[0]","align=center style='background-color:$color;'"],
 	["$linea $row[1]","","align=center"],
 	["$linea $row[2]","","align=center"],
-	["$linea $row[3]","","align=center"],
+	["$linea $status","","align=center"],
 		 );
-   }
+  }
 
   TaskListFoot();
   Footer();
@@ -317,17 +339,18 @@ sub edit_nc_form
   TaskHead( title => "NC",
       minwidth  => 500 );
 
-	my $link_action_button;
+	my $link_action_button = 'null';
     if ($on{status} =~ /S1/ && CheckPrivilege("nc_ph_confirm") ) { $link_action_button = "nc_ph?action=confirm_nc&amp;id=$on{id}&amp;status=$on{status}"; }
     if ($on{status} =~ /S2/ && CheckPrivilege("nc_ph_validate") ) {
-      if (! length($on{assigned_to}) == 0) {
+      if (length($on{assigned_to}) !~ /0/) {
         $link_action_button = "nc_ph?action=validate_nc&amp;id=$on{id}&amp;status=$on{status}&amp;assigned_to=$on{assigned_to}";
       }
     }
     if ($on{status} =~ /S3/ && CheckPrivilege("nc_ph_new") ) { $link_action_button = "nc_ph?action=fix_nc&amp;id=$on{id}&amp;status=$on{status}"; }
     if ($on{status} =~ /S4/ && CheckPrivilege("nc_ph_validate") ) { $link_action_button = "nc_ph?action=validate_nc&amp;id=$on{id}&amp;status=$on{status}"; }
 
-	if ($on{status} !~ /S5/ && length($link_action_button)!~ 0) {
+	if ($on{status} !~ /S5/ && ($link_action_button !~ /null/)) {
+	#if ($on{status} !~ /S5/ ) {
  		HLayer(
 	 		MkButton( text => "Firma e avanza di stato",
               	link => $link_action_button,
@@ -505,9 +528,13 @@ if ($on{status} =~ /S1/ && CheckPrivilege("nc_ph_confirm") ) {
               value      => $on{verifier2_date} );
 	}
 
+if (  ($on{status} =~ /S1/ && CheckPrivilege("nc_ph_confirm")) ||
+      ($on{status} =~ /S3/ && CheckPrivilege("nc_ph_new")) ||
+      CheckPrivilege("nc_ph_validate")    )
+{ 
   Input (	type=>'submit',
 		value=>$lang{save});
-
+}
 
   FormFoot();
   TaskFoot();
