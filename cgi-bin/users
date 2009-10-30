@@ -731,7 +731,7 @@ sub proto
                       type     => 'text',
                       name     => 'company',
                       maxlen   => 70,
-                      style    => 'width:350px').
+                      style    => 'width:350px',
                     ).
 
                 Input( show     => 'Sede Aziendale',
