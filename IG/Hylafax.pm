@@ -250,6 +250,7 @@ sub FaxOutGoing
  {
   ConnectFax() or return 0;
   my @queue = $ftp->dir('sendq');
+  @queue = sort ( @queue );
   $ftp->quit();
   return @queue; 
  }
@@ -260,6 +261,7 @@ sub FaxDone
  {
   ConnectFax() or return 0;
   my @queue = $ftp->dir('doneq');
+  @queue = sort ( @queue );
   $ftp->quit();
   return @queue;
  }
