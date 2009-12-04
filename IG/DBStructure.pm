@@ -413,7 +413,7 @@ archive=>[
 	{ name=>'docref',
 	  label=>'document_reference',
 	  itype=>'text',
-	  type=>'varchar(250)',},	#numrif
+	  type=>'varchar(255)',},	#numrif
 
 	{ name=>'issue',
 	  label=>'issue',
@@ -503,7 +503,7 @@ letters=>[
 	{ name=>'docref',
 	  label=>'docref',
 	  itype=>'text',
-	  type=>'varchar(30)',},
+	  type=>'varchar(255)',},
 	],
 
 offers=>[
@@ -589,7 +589,7 @@ orders=>[
 	{ name=>'docref',
 	  label=>'document_reference',
 	  itype=>'text',
-	  type=>'varchar(30)',},	#ordine
+	  type=>'varchar(255)',},	#ordine
 
 	{ name=>'contactname',
 	  label=>'contact_name',
@@ -678,7 +678,7 @@ fax_sent=> [
 	{ name=>'docref',
 	  label=>'docref',
 	  itype=>'text',
-	  type=>'varchar(30)',},
+	  type=>'varchar(255)',},
 	],
 
 fax_received=>[
@@ -731,7 +731,7 @@ fax_received=>[
 	{ name=>'docref',
 	  label=>'docref',
 	  itype=>'text',
-	  type=>'varchar(30)',},
+	  type=>'varchar(255)',},
 	],
 
 nc_ext=> [
@@ -779,7 +779,7 @@ nc_ext=> [
 	{ name=>'docref',
 	  label=>'docref',
 	  itype=>'text',
-	  type=>'varchar(30)',},
+	  type=>'varchar(255)',},
 	],
 nc_int=> [
 	{ name=>'id',
@@ -824,7 +824,7 @@ nc_int=> [
 	{ name=>'docref',
 	  label=>'docref',
 	  itype=>'text',
-	  type=>'varchar(30)',},
+	  type=>'varchar(255)',},
 	],
 	
 nc_ph=> [
@@ -1099,7 +1099,7 @@ contracts=>[
 	{ name=>'docref',
 	  label=>'document_reference',
 	  itype=>'text',
-	  type=>'varchar(30)',},	# refnum
+	  type=>'varchar(255)',},	# refnum
 
 	{ name=>'duration',
 	  type=>'int',},
@@ -1879,7 +1879,7 @@ services=>[
 	{ name=>'servicetype',	type=>'varchar(5)',}, #servizio
 	{ name=>'materials',	type=>'varchar(5)',}, #materiale
 	{ name=>'priority',	type=>'varchar(5)',}, #priorita
-	{ name=>'docref',	type=>'varchar(30)',},#numero
+	{ name=>'docref',	type=>'varchar(255)',},#numero
 	{ name=>'weight',	type=>'int',},        #kg 
 	{ name=>'volume',	type=>'int',},        #mc
 	{ name=>'contactname',	type=>'varchar(70)',},#contact

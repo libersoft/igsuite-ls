@@ -267,7 +267,7 @@ sub proto
             name      => 'docref',
             type      => 'text',
             size      => 50,
-            maxlen    => 250 );
+            maxlen    => 255 );
 
   Input(    show      => $lang{document_type},
 	    type      => 'select',

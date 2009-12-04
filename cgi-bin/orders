@@ -284,8 +284,8 @@ sub proto
 
   Input(    type      => 'text',
 	    name      => 'docref',
-	    size      => 15,
-	    maxlen    => 15,
+	    size      => 50,
+	    maxlen    => 255,
             show      => $lang{order_reference});
 
   Input(    type      => 'date',

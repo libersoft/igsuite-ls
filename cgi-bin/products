@@ -969,7 +969,7 @@ sub lettproto
   Input(    name      => 'docref',
             type      => 'text',
             style     => 'width:350;',
-            maxlen    => 30,
+            maxlen    => 255,
             show      => $lang{document_reference});
 
   Input ( show=>$lang{notes},
