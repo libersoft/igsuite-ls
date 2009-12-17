@@ -2071,7 +2071,7 @@ equipments_maintenance=>[
 	],
 documentation=>[
 	{ name=>'id',		type=>'varchar(15)',}, #numero
-	{ name=>'description',	type=>'varchar(100)',},#descrizione
+	{ name=>'description',	type=>'varchar(255)',},#descrizione
 	{ name=>'function',	type=>'varchar(32)',},  #ente
 	{ name=>'pages',	type=>'int',},         #pagine 
 	{ name=>'issueid',	type=>'int',},         #emissione

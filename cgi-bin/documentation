@@ -97,7 +97,7 @@ sub proto
 		type=>'text',
 		name=>'description',
 		size=>50,
-		maxlen=>60);
+		maxlen=>255);
 
   Input (	show=>$lang{date},
 		type=>'date',
