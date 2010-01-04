@@ -120,38 +120,39 @@ sub docview
   Header();
 
   IG::ShowProtocolInfo
-   ( id     => $row[0],
-     title  => $lang{archive_protocol},
-     fields => [( [ $lang{contact_name},
-                    "<a href=\"contacts?".
-			      "action=showrecord&amp;".
-			      "contactid=$row[9]\">".
-			      "$row[9] $row[3]</a>" ],
-                  [ $lang{referring},
-                    IG::UsrInf('name',$row[6]) ],
-	          [ $lang{document_date},
-	            $row[10] ],
-                  [ $lang{protocol_number},
-                    $row[0] ],
-                  [ $lang{document_expire},
-                    $row[4] ],
-	          [ $lang{issue},
-	            $row[2] ],
-                  [ $lang{document_reference},
-                    $row[1] ],
-	          [ $lang{document_type},
-	            $IG::docs_type{$row[7]} ],
-	          [ $lang{document_integrity},
-	            IG::CkSign( id=>$row[0], owner=>$row[6] ) ],
-                  [ $lang{days_before_alert},
-                    $row[8] ],
-                  [ $lang{archive_position},
-                    $row[11] ],
-                  [ '&nbsp;',
-                    '&nbsp;' ],
-	          [ $lang{notes},
-	       	    $row[5] ],
-                )] );
+   ( id        => $row[0],
+     contactid => $row[9],
+     title     => $lang{archive_protocol},
+     fields    => [( [ $lang{contact_name},
+                       "<a href=\"contacts?".
+		   	      "action=showrecord&amp;".
+		   	      "contactid=$row[9]\">".
+		   	      "$row[9] $row[3]</a>" ],
+                     [ $lang{referring},
+                       IG::UsrInf('name',$row[6]) ],
+	             [ $lang{document_date},
+	               $row[10] ],
+                     [ $lang{protocol_number},
+                       $row[0] ],
+                     [ $lang{document_expire},
+                       $row[4] ],
+                     [ $lang{issue},
+	               $row[2] ],
+                     [ $lang{document_reference},
+                       $row[1] ],
+	             [ $lang{document_type},
+	               $IG::docs_type{$row[7]} ],
+	             [ $lang{document_integrity},
+	               IG::CkSign( id=>$row[0], owner=>$row[6] ) ],
+                     [ $lang{days_before_alert},
+                       $row[8] ],
+                     [ $lang{archive_position},
+                       $row[11] ],
+                     [ '&nbsp;',
+                       '&nbsp;' ],
+	             [ $lang{notes},
+	               $row[5] ],
+                   )] );
 
   ## Related Documents
   IG::RelatedTo( $on{id}, $row[9] );
@@ -340,7 +341,8 @@ sub protoagg
   proto() && return if @IG::errmsg;
  
   ## Insert into DB
-  $on{id} ||= IG::MkLastNum('archive');
+  $on{id}   ||= IG::MkLastNum('archive');
+  $on{days} ||= '0';
  
   DbWrite( overwrite_clause => "id = '".DbQuote($on{id})."'",
            action           => 'insert',
@@ -431,7 +433,9 @@ sub findshow
 	                              ['date',     $lang{with_date}],
 	                              ['note',     $lang{with_notes}],
 	                              ['npa',      $lang{with_npa}],
-	                              ['all',      $lang{all}])]),
+	                              ['all',      $lang{all}],
+                                      ['comments', $lang{with_comments}],
+                                     )]),
 
 	    Input(    type       => 'text',
 	              name       => 'keytofind',
@@ -455,7 +459,7 @@ sub findshow
 #############################################################################
 sub findexec
  {
-  my ($type, $owner, $query);
+  my ( $type, $owner, $query, $join );
   my $counter = 0;
 
   ## Build query
@@ -496,6 +500,11 @@ sub findexec
    { $query = "archive.id ~* '$in{keytofind}' $type$owner"; }
   elsif ($on{fieldtofind} eq 'date')
    { $query = "archive.issue = '".CkDate($in{keytofind})."' $type$owner"; }
+  elsif ($on{fieldtofind} eq 'comments')
+   {
+     $query = "comments.comment ~* '$in{keytofind}'";
+     $join  = "LEFT JOIN comments ON comments.referenceid = archive.id ";
+   }
 
   if ( $on{ajax_request} )
    {
@@ -506,7 +515,7 @@ sub findexec
                                   "archive?".
                                           "action=proto&amp;".
                                           "contactid=$on{contactid}&amp;".
-                                          "backtoreferer=1';",
+                                          "btr=1';",
                     show      => $lang{new_item},
                     fieldstyle=> 'margin:0px',
                     style     => 'margin:0px;font-size:10px; height:15px' ).
@@ -548,13 +557,14 @@ sub findexec
 	[$lang{references}]
                );
 
-  DbQuery("SELECT archive.id, archive.docref, archive.issue,".
+  DbQuery("SELECT DISTINCT".
+          " archive.id, archive.docref, archive.issue,".
           " archive.contactname, archive.expire, archive.note,".
           " archive.owner, archive.type, archive.days,".
           " archive.contactid, archive.docdate, archive.npa,".
           " expire-current_date, users.initial ".
           "FROM archive ".
-          "LEFT JOIN users ON archive.owner=users.login ".
+          "LEFT JOIN users ON archive.owner=users.login $join".
           "WHERE $query ".
           "ORDER BY archive.issue desc, archive.id desc");
 

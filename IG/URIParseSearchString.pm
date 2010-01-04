@@ -23,8 +23,8 @@
 package URI::ParseSearchString;
 
 #use warnings; #XXXIG
-use IG::URISplit ( "uri_split" ) ; #XXXIG
-use IG::URIEscape ( "uri_unescape" ) ; #XXXIG
+use IG::URISplit; #XXXIG
+use IG::URIEscape; #XXXIG
 
 require Exporter;
 @ISA = (Exporter);

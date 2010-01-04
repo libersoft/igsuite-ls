@@ -22,7 +22,7 @@
 
 package Mail::IMAPClient;
 
-# $Id: IMAPClient.pm,v 20001010.20 2003/06/13 18:30:55 dkernen Exp $
+# $Id: MailIMAPClient.pm,v 1.396 2009/12/30 15:43:59 lucas73 Exp $
 
 $Mail::IMAPClient::VERSION = '2.2.9';
 $Mail::IMAPClient::VERSION = '2.2.9';  	# do it twice to make sure it takes

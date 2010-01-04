@@ -110,9 +110,10 @@ sub docview
   Header();
 
   IG::ShowProtocolInfo
-   ( id     => $row[0],
-     title  => $lang{letters_protocol},
-     fields => [( [ $lang{contact_name},
+   ( id        => $row[0],
+     contactid => $row[7],
+     title     => $lang{letters_protocol},
+     fields    => [( [ $lang{contact_name},
                     "<a href=\"contacts?".
 			      "action=showrecord&amp;".
 			      "contactid=$row[7]\">".
@@ -343,11 +344,13 @@ sub findshow
 		
 	    Input(    type       => 'select',
 		      name       =>'fieldtofind',
-		      data       =>[(['from',	 $lang{with_header}],
-				     ['id',      $lang{with_protocol}],
-			             ['date', 	 $lang{with_date}],
-			             ['npa', 	 $lang{with_npa}],
-			             ['notes',   $lang{with_notes}])]),
+		      data       =>[(['from',	  $lang{with_header}],
+				     ['id',       $lang{with_protocol}],
+			             ['date', 	  $lang{with_date}],
+			             ['npa', 	  $lang{with_npa}],
+			             ['notes',    $lang{with_notes}],
+			             ['comments', $lang{with_comments}]
+			            )]),
 	
 	    Input(    type       => 'text',
 		      name       => 'keytofind',
@@ -372,6 +375,7 @@ sub findshow
 sub findexec
  {
   my $query;
+  my $join;
   my $counter = 0;
 
   if ( $on{ajax_request} )
@@ -384,7 +388,7 @@ sub findexec
                                   "letters?".
                                          "action=proto&amp;".
                                          "contactid=$on{contactid}&amp;".
-                                         "backtoreferer=1';",
+                                         "btr=1';",
                     show       => $lang{new_item},
                     fieldstyle => 'margin:0px',
                     style      => 'margin:0px;font-size:10px; height:15px' ).
@@ -428,6 +432,11 @@ sub findexec
    }
   elsif ($on{fieldtofind} eq 'notes')
    { $query = "letters.note ~* '$in{keytofind}'"; }
+  elsif ($on{fieldtofind} eq 'comments')
+   {
+     $query = "comments.comment ~* '$in{keytofind}'";
+     $join  = "LEFT JOIN comments ON comments.referenceid = letters.id ";
+   }
 
   TaskListMenu
    (
@@ -438,10 +447,11 @@ sub findexec
     [$lang{notes}],
    );
 
-  DbQuery( "SELECT letters.id, letters.issue, letters.contactname,".
+  DbQuery( "SELECT DISTINCT".
+           " letters.id, letters.issue, letters.contactname,".
            " letters.owner, letters.note, users.initial ".
            "FROM letters ".
-           "LEFT JOIN users ON letters.owner=users.login ".
+           "LEFT JOIN users ON letters.owner=users.login $join".
            "WHERE $query ".
            "ORDER BY letters.issue desc, letters.id desc");
 

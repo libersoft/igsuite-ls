@@ -1,6 +1,6 @@
 ## IGSuite 4.0.0
 ## Procedure: AuthLDAP.pm
-## Last update: 25/05/2009
+## Last update: 26/05/2009
 #############################################################################
 # IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
 # Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
@@ -134,7 +134,9 @@ sub getUserInfo
   ## bind to ldap server by admin dn
   my $mesg = $ldap->bind( $self->{admin_dn},
                           password => $self->{admin_pwd} );
-  die "Error can't bind Admin DN: ",ldap_error_name($mesg) if $mesg->code;
+
+  die( "Error can't bind Admin DN: ".
+        Net::LDAP::Util::ldap_error_name($mesg) ) if $mesg->code;
 
   $mesg = $ldap->search( base   => $self->{search_base},
                          filter => "$self->{user_dn}=$guid",

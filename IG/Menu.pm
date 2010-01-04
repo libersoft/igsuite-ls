@@ -103,7 +103,7 @@ sub MkMenu
 
     $html .= _mk_menu(	'management', 1,
 	  	[ $lang{staff},		'users',	'mainf'],
-		[ $lang{contacts},	'contacts',	'mainf'],
+		[ $lang{contacts},	'contacts',     'mainf'],
 		[ $lang{opportunities},	'opportunities','mainf'],
 		[ $lang{products},	'products',	'mainf'],
 		[ $lang{services},	'services',	'mainf'],

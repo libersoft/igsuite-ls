@@ -450,7 +450,7 @@ __END__
 
 File::DirSync - Syncronize two directories rapidly
 
-$Id: DirSync.pm,v 1.27 2006/04/18 23:55:42 rob Exp $
+$Id: FileDirSync.pm,v 1.351 2009/12/30 15:43:59 lucas73 Exp $
 
 =head1 SYNOPSIS
 

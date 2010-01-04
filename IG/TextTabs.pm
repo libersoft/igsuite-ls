@@ -92,9 +92,6 @@ sub unexpand
 	return $l[0];
 }
 
-1;
-__END__
-
 sub expand
 {
 	my (@l) = @_;
@@ -108,6 +105,9 @@ sub expand
 	return @l if wantarray;
 	return $l[0];
 }
+
+1;
+__END__
 
 
 =head1 NAME

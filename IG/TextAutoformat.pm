@@ -1,6 +1,6 @@
 ## IGSuite 4.0.0
 ## Procedure: TextAutoformat.pm
-## Last update: 25/05/2009
+## Last update: 26/05/2009
 #############################################################################
 # IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
 # Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
@@ -24,7 +24,8 @@ package Text::Autoformat;
 
 use strict; use vars qw($VERSION @ISA @EXPORT @EXPORT_OK); use Carp;
 use 5.005;
-use version; $VERSION = qv('1.666.0');
+#XXXIGuse version; $VERSION = qv('1.666.0');
+$VERSION = '1.666.0';
 
 require Exporter;
 
@@ -712,6 +713,7 @@ sub new {
         local $^W;
         my $cut;
         while (length $_[1]) {
+            last if $_[1] eq '0'; #XXX2TEST
             last if $_[1] =~ m#\A($ows)($abbrev)#
                  && (length $1 || !@vals);  # ws-separated or first
 

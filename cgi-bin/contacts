@@ -1,6 +1,6 @@
 #! /usr/bin/perl
 # Procedure: contacts
-# Last update: 25/05/2009
+# Last update: 01/07/2009
 #############################################################################
 # IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
 # Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
@@ -25,7 +25,8 @@ use IG;
 IG::MkEnv(__PACKAGE__);
 
 
-IG::DTable (	protoagg	=> sub { CheckPrivilege( _new_or_edit() ) },
+IG::DTable(     summary         => sub { CheckPrivilege('contacts_view') },
+                protoagg	=> sub { CheckPrivilege( _new_or_edit() ) },
 		proto		=> sub { CheckPrivilege( _new_or_edit() ) },
 		protosub	=> sub { CheckPrivilege( _new_or_edit() ) },
 		clone		=> sub { CheckPrivilege( _new_or_edit() ) },
@@ -47,6 +48,8 @@ IG::DTable (	protoagg	=> sub { CheckPrivilege( _new_or_edit() ) },
 		usereport	=> sub { CheckPrivilege('contacts_report') },
 		showrecord	=> sub { CheckPrivilege('contacts_view') },
 		showgroup	=> sub { CheckPrivilege('contacts_view') },
+		mkonelabel      => sub { CheckPrivilege('contacts_view') },
+		mklabels        => sub { CheckPrivilege('contacts_view') },
 		configure	=> sub { CheckPrivilege('contacts_edit') },
 		configureagg	=> sub { CheckPrivilege('contacts_edit') },
 		contactevents	=> sub { CheckPrivilege('contacts_report') },
@@ -57,6 +60,180 @@ IG::DTable (	protoagg	=> sub { CheckPrivilege( _new_or_edit() ) },
 		changemasteragg	=> sub { CheckPrivilege('contacts_edit') },
 		default_action 	=> sub { CheckPrivilege('contacts_view') },
 	   );
+
+###########################################################################
+###########################################################################
+sub summary
+ {
+  my @results;
+
+  ## We will show these info
+  my @label = ( [ 'contacts_unqualified',
+                  'allmineinvalid',
+                  'allinvalid'   ],
+
+                [ 'contacts_qualified',
+                  'allminevalid',
+                  'allvalid'     ],
+
+                [ 'contacts_personal',
+                  '',
+                  ''             ],
+
+                [ 'contacts_closed',
+                  '',
+                  ''             ],
+
+                [ 'customers_potential',
+                  'allminepotential',
+                  'allpotential' ],
+
+                [ 'customers_active',
+                  '',
+                  ''             ],
+
+                [ 'customers_occasional',
+                  '',
+                  ''             ],
+
+                [ 'customers_neglected',
+                  'allmineneglectedcustomers',
+                  'allneglectedcustomers' ],
+
+                [ 'customers_lost',
+                  '',
+                  ''             ]);
+
+  my @idx   = ( 0, 3, 1, 5, undef, undef, 8, 4, 2, 5, 6 );
+  my $user  = $on{user} || $auth_user;
+  my $vdate = IG::SumDate( $tv{day}, $tv{month}, $tv{year}, -120);
+
+  ## user contacts type
+  DbQuery( "select contacttype, count(*) from contacts ".
+           "where master='0' and owner='$user' and category<>'group' ".
+           "group by contacttype" );
+  while ( my ( $_contacttype, $_count ) = FetchRow() )
+   {
+    next if ! defined $idx[$_contacttype];
+    $results[ $idx[$_contacttype] ][0] += $_count;
+   }           
+
+  ## all user contacts type
+  DbQuery( "select contacttype, count(*) from contacts ".
+           "where master='0' and category<>'group' ".
+           "group by contacttype" );
+  while ( my ( $_contacttype, $_count ) = FetchRow() )
+   {
+    next if ! defined $idx[$_contacttype];
+    $results[ $idx[$_contacttype] ][1] += $_count;
+   }           
+
+  ## user neglected customers
+  DbQuery( "select count(*) from contacts ".
+           "where owner='$user'".
+           " and category<>'group'".
+           " and ( contacttype=3 ".
+                 " or contacttype=9 ".
+                 " or contacttype=10 ) ".
+           " and lastupdate < '$vdate'");
+  $results[7][0] = FetchRow();
+
+  ## all neglected customers
+  DbQuery( "select count(*) from contacts ".
+           "where category<>'group'".
+           " and ( contacttype=3 ".
+                 " or contacttype=9 ".
+                 " or contacttype=10 ) ".
+           " and lastupdate < '$vdate'");
+  $results[7][1] = FetchRow();
+
+  ## build table
+  my @table_types;
+  my $base_url = 'contacts?action=default_action';
+  for my $i ( 0 .. 8 )
+   {
+    $results[$i][0] ||= 0;
+    $results[$i][1] ||= 0;
+
+    push @table_types,
+                 [ $lang{$label[$i][0]},
+    
+                   ( $label[$i][1]
+                     ? "<a href=\"$base_url&amp;view=$label[$i][1]\">".
+                       $results[$i][0].
+                       "</a>"
+                     : $results[$i][0] ).
+                   ' / '.
+                   ( $label[$i][2]
+                     ? "<a href=\"$base_url&amp;view=$label[$i][2]\">".
+                       $results[$i][1].
+                       "</a>"
+                     : $results[$i][1] )
+                 ];
+   }
+
+  ## Build Economic Sector BOX
+  my @table_sectors;
+  DbQuery( "select economicsector, count(*) as cnt ".
+           "from contacts ".
+           "where economicsector<>''".
+           " and economicsector is not null".
+           " and (contacttype='3' or contacttype='9' or contacttype='10') ".
+           "group by economicsector ".
+           "order by cnt desc limit 15" );
+
+  while( my ( $_sector, $_count ) = FetchRow() )
+   {
+    push @table_sectors,
+         [    IG::GetTableVal( 'economicsector', $_sector )
+           || $lang{zone_not_selected},
+           $_count ];
+   }
+
+  HtmlHead( shortcuts => _short_cuts(),
+            title     => $lang{contact_management} );
+  TaskHead( title     => $lang{contact_management},
+            icon      => 0,
+            width     => '100%' );
+
+  HLayer( MkButton( text => $lang{new_contact_card},
+	            link => "contacts?action=proto&amp;btr=1" ),
+	            
+	  MkButton( text => $lang{group_administration},
+	            link => "contacts?action=show_groups" ),
+	            
+	  MkButton( text => $lang{reports},
+	            link => "contacts?action=listreport" ),
+	            
+          MkButton( text => $lang{vendors},
+                    link => "vendors",
+                    privilege => CheckPrivilege('vendors_view') ),
+
+          MkButton( text => $lang{import_contacts},
+                    link => "contacts?action=import_contacts",
+                    privilege => CheckPrivilege('contacts_import') ),
+	);
+
+  Br(2);
+  TaskMsg( IG::MkTable( values      => \@table_types,
+                        cellpadding => 3,
+                        style_c1_r  => 'width:300px; font-size:16px;',
+                        style_c2_r  => 'text-align:right; font-size:16px;',
+                        style_c3_r  => 'text-align:right; font-size:16px;',
+                        style       => 'padding:5px; border:1px; width:100%' ),
+           4 );
+
+  TaskMsg( IG::MkTable( values      => \@table_sectors,
+                        cellpadding => 3,
+                        style_c1_r  => 'width:300px; font-size:16px;',
+                        style_c2_r  => 'text-align:right; font-size:16px;',
+                        style_c3_r  => 'text-align:right; font-size:16px;',
+                        style       => 'padding:5px; border:1px; width:100%' ),
+           4 );
+
+  TaskFoot();
+  HtmlFoot();
+ }
 
 ###########################################################################
 ###########################################################################
@@ -156,8 +333,8 @@ sub import_contacts
     Input( show      => $lang{contact_type},
            type      => 'select',
            style     => 'font-size:10px',
-           zerovalue => 'true',
-           data      => { 1  => $lang{type1},
+           data      => { 0  => $lang{type0},
+                          1  => $lang{type1},
                           2  => $lang{type2},
                           3  => $lang{type3},
                           4  => $lang{type4},
@@ -454,13 +631,14 @@ sub import_contactsagg
         next if FetchRow();
        }
 
-      $dbcols{contacttype} = $on{contacttype};
+      $dbcols{contacttype} = $on{contacttype} || '0';
       $dbcols{nospace}     = $dbcols{contactname};
       $dbcols{nospace}     =~ s/\.|\-|\'| //g;
       $dbcols{owner}       = $auth_user;
       $dbcols{contactid}   = _mk_new_id();
       $dbcols{lastupdate}  = $tv{today};
       $dbcols{sharemode}   = $on{sharemode};
+      $dbcols{category}  ||= '0';
       $dbcols{master}      = '0';
 
       DbWrite( table            => 'contacts',
@@ -1297,7 +1475,7 @@ sub default_action
   IG::Redirect("igsuite?action=summary") && return if !CheckPrivilege();
 
   ## Mk Query to filter records
-  $on{view}     ||= 'allvalid';
+  $on{view}     ||= 'allrecent';
   my $query = "((contacts.contacttype=8 and contacts.owner='$auth_user')".
 	      " or contacts.contacttype<>8 or contacts.contacttype is null) and "; 
   my $order = "contacts.contactname, contacts.contactid";
@@ -1309,6 +1487,12 @@ sub default_action
   elsif ( $on{view} eq 'allpotential' )
    {
     $query .= "contacts.contacttype=7 and contacts.category<>'group'";
+   }
+  elsif ( $on{view} eq 'allminepotential' )
+   {
+    $query .= "contacts.owner='$auth_user'".
+              " and contacts.contacttype=7".
+              " and contacts.category<>'group'";
    }
   elsif ( $on{view} eq 'allminevalid' )
    {
@@ -1328,10 +1512,29 @@ sub default_action
 	       " and contacts.lastupdate < '".
 	       IG::SumDate( $tv{day}, $tv{month}, $tv{year}, -360)."'))";
    }
+  elsif ( $on{view} eq 'allneglectedcustomers' )
+   {
+    $query .= "contacts.category<>'group'".
+	      " and ( contacts.contacttype=3 ".
+	         " or contacts.contacttype=9 ".
+	         " or contacts.contacttype=10 ) ".
+	      " and contacts.lastupdate < '".
+	       IG::SumDate( $tv{day}, $tv{month}, $tv{year}, -120)."'";
+   }
+  elsif ( $on{view} eq 'allmineneglectedcustomers' )
+   {
+    $query .= "contacts.owner='$auth_user'".
+              " and contacts.category<>'group'".
+	      " and ( contacts.contacttype=3 ".
+	         " or contacts.contacttype=9 ".
+	         " or contacts.contacttype=10 ) ".
+	      " and contacts.lastupdate < '".
+	       IG::SumDate( $tv{day}, $tv{month}, $tv{year}, -120)."'";
+   }
   elsif ( $on{view} eq 'allmineinvalid' )
    {
     $query .= "contacts.owner='$auth_user'".
-              " and contacts.contacttype<1".
+              " and (contacts.contacttype=0 or contacts.contacttype is null)".
               " and contacts.category<>'group'";
    }
   elsif ( $on{view} eq 'allinvalid' )
@@ -1388,8 +1591,10 @@ sub default_action
   my ( $limit,
        $offset,
        $page_selector ) = IG::MkTaskPaging( "select count(*) from contacts ".
-                                            "left join contacts_group ".
-                                            "on contacts_group.contactid = contacts.contactid ".
+                                            ( $query =~ /contacts\_group\.groupid/
+                                              ? "left join contacts_group ".
+                                                "on contacts_group.contactid = contacts.contactid "
+                                              : '' ).
                                             "where $query",
                                             $base_url );
 
@@ -1414,9 +1619,12 @@ sub default_action
             icon      => 0,
             width     => '100%' );
 
-  HLayer( MkButton( text => $lang{new_contact_card},
-	            link => "contacts?action=proto" ),
-	            
+  HLayer( MkButton( text => $lang{summary},
+	            link => "contacts?action=summary" ),
+
+          MkButton( text => $lang{new_contact_card},
+	            link => "contacts?action=proto&amp;btr=1" ),	            
+
 	  MkButton( text => $lang{group_administration},
 	            link => "contacts?action=show_groups" ),
 	            
@@ -1433,23 +1641,29 @@ sub default_action
 
          $page_selector
 	);
+
+  my $alphaView = $on{view};
+     $alphaView = 'allvalid' if $alphaView =~ /recent$/; ## or AlphabetSelector is useless
 	  
   IG::AlphabetSelector
     (	param   => 'alphabet',
-	link    => "contacts?view=$on{view}",
+	link    => "contacts?view=$alphaView",
 	filter  => Input ( name=>'view',
 			   type=>'select',
 			   style=>'width: 250px',
 			   onchange=>"location.href = 'contacts?alphabet=$on{alphabet}&amp;view=' + this.options[this.selectedIndex].value;",
-			   data=>[([ 'allvalid',	$lang{allvalid}],
-				   [ 'allinvalid',	$lang{allinvalid}],
-				   [ 'allminevalid',	$lang{allminevalid}],
-				   [ 'allmineinvalid',	$lang{allmineinvalid}],
-				   [ 'allmineold',	$lang{allmineold}],
-				   [ 'allrecent',	$lang{allrecent}],
-				   [ 'allminerecent',	$lang{allminerecent}],
-				   [ 'allpotential',	$lang{allpotential}],
-				   [ '',		'-'x50],
+			   data=>[([ 'allvalid',              $lang{allvalid}],
+				   [ 'allminevalid',          $lang{allminevalid}],
+				   [ 'allinvalid',            $lang{allinvalid}],
+				   [ 'allmineinvalid',        $lang{allmineinvalid}],
+				   [ 'allmineold',            $lang{allmineold}],
+				   [ 'allneglectedcustomers', $lang{allneglectedcustomers}],
+				   [ 'allmineneglectedcustomers',$lang{allmineneglectedcustomers}],
+				   [ 'allrecent',             $lang{allrecent}],
+				   [ 'allminerecent',         $lang{allminerecent}],
+				   [ 'allpotential',          $lang{allpotential}],
+				   [ 'allminepotential',      $lang{allminepotential}],
+				   [ '',                      '-'x50],
 				   @personal_reports
 				 )] )
    );
@@ -1472,7 +1686,7 @@ sub default_action
     TaskListItem
      (
 	[$row[1],
-	 "contacts?action=showrecord&amp;backtoreferer=1&amp;contactid=$row[1]",
+	 "contacts?action=showrecord&amp;btr=1&amp;contactid=$row[1]",
 	 "align=\"right\""],
 	[$row[0]],
 	[$row[11]],
@@ -1547,6 +1761,7 @@ sub delexec
       LogD("delete subcontact $soc", "delete", "contacts", $on{contactid});
       IG::Redirect("contacts?".
 			"action=showrecord&amp;".
+			"btr=".MkUrl($on{btr})."&amp;".
 			"default_pane=4&amp;".
 			"contactid=$mast" );
 
@@ -1555,7 +1770,7 @@ sub delexec
      {
       ## we have deleted a contact
       LogD("delete contact $soc", "delete", "contacts", $on{contactid});
-      IG::Redirect('contacts');
+      IG::BackToReferer( default => 'contacts' );
      }
    }
   else
@@ -1682,12 +1897,109 @@ sub showrecord
    { proto();       }
  }
 
+###########################################################################
+###########################################################################
+sub mkonelabel
+ {
+  #XXX2DEVELOPE check privilege
+  $on{address}   =~ s/[^\d]//;
+  $on{address} ||= 1;
+
+  DbQuery("SELECT contactname, address$on{address}, city$on{address},".
+          " zip$on{address}, prov$on{address}, country$on{address} ".
+          "FROM contacts ".
+          "where contactid = '".DbQuote($on{cid})."'");
+
+  my (	$contactname,
+	$address,
+	$city,
+	$zip,
+	$prov,
+	$country ) = FetchRow();
+
+  my $cntry = uc( $IG::countries{$country || $IG::soc_country} );
+  $IG::clr{bg}   = '#FFFFFF';
+  $IG::clr{font} = '#000000';
+  HtmlHead( onevent => "onload=\"self.print();\"" );
+
+  PrOut <<END;
+  <table><td style="align:left">
+      <span style=\"font-size:13px; font-weight:bold\">$contactname</span><br>
+      <span style=\"font-size:12px\">$address</span><br>
+      <span style=\"font-size:12px\">$zip $city ($prov)</span><br>
+      <span style=\"font-size:12px\">$cntry</span><br>
+  </td></table>
+END
+
+  HtmlFoot();
+ }
+
+##############################################################################
+##############################################################################
+sub mklabels
+ {
+  my $counter = 0;
+  $IG::clr{bg}   = '#FFFFFF';
+  $IG::clr{font} = '#000000';
+
+  HttpHead();
+  PrOut "<html><body>";
+
+  #XXX2DEVELOPE check privilege
+  $on{address} =~ s/[^\d]//;
+  $on{address} ||= 1;
+
+  DbQuery("SELECT contacts.contactname, contacts.address$on{address},".
+          " contacts.city$on{address}, contacts.zip$on{address},".
+          " contacts.prov$on{address}, contacts.country$on{address}, ".
+          " contacts.contactid, contacts.contacttype ".
+	  "from contacts, contacts_group ".
+	  "where contacts.contactid = contacts_group.contactid".
+	  " and contacts_group.groupid='".DbQuote($on{groupid})."' ".
+	  "order by contacts.contactname asc" );
+
+  PrOut "<table width=\"100%\" height=\"100%\" rules=none style=\"page-break-inside:avoid;\">\n<tr>\n";
+
+  while ( my @row = FetchRow() )
+   {
+    my $country = uc( $IG::countries{$row[5] || $IG::soc_country} );
+
+    PrOut <<END;
+    <td width="50%" height="20%" valign="top">
+     <table width="100%" height="100%">
+      <tr>
+       <td width="100%" height="100%" style="align:left; vertical-align:middle;">
+        <div style=\"margin-left:10px; font-size:13px; width:8cm; font-weight:bold\">$row[0]</div>
+        <div style=\"margin-left:10px; font-size:12px\">$row[1]</div>
+        <div style=\"margin-left:10px; font-size:12px\">$row[3] $row[2] ($row[4])</div>
+        <div style=\"margin-left:10px; font-size:12px\">- $country -</div>
+       </td>
+      </tr>
+     </table>
+    </td>
+END
+
+    $counter++;
+    PrOut "</tr>\n"           if ! ($counter % 2);
+    PrOut "</table>\n\n".
+          "<table width=\"100%\" height=\"100%\" rules=none style=\"page-break-inside:avoid;\">\n" if ! ($counter % 10);
+    PrOut '<tr>'            if ! ($counter % 2);
+   }
+  PrOut '<td></td>' if $counter % 2;
+  PrOut "</tr></table>\n";
+  PrOut "</body></html>\n";
+ }
+
 ##########################################################################
 ##########################################################################
 sub protoagg
  {
   my $nospace;
   my $caps_mode = IG::ConfigParam('contacts.contactname_capitalization_mode');
+
+  ## back to referer if user type "cancel"
+  if ( $on{cancel_and_btr} && $on{btr} )
+   { IG::BackToReferer(); return; }
 
   if ( $caps_mode eq 'allup' )
    {
@@ -1764,7 +2076,7 @@ sub protoagg
    }
 
   ## Any error?
-  push @IG::errmsg, IG::FormValidate();
+  push @IG::errmsg, IG::FormValidate() if $on{action} ne 'clone';
   if ( @IG::errmsg )
    {
     $on{category} eq 'group' ? protogroup()
@@ -1881,7 +2193,7 @@ sub protoagg
 	                 "user.\n");
    }
 
-  if ( $on{backtoreferer} )
+  if ( $on{btr} && !$on{master} && !$on{update_contact} )
    {
     IG::BackToReferer();
    }  
@@ -1903,6 +2215,7 @@ sub protoagg
       IG::Redirect( "contacts?".
 			"action=showrecord&amp;".
 			"edit=1&amp;".
+			"btr=".MkUrl($on{btr})."&amp;".
 			"contactid=$on{contactid}" );
      }
    }
@@ -1911,6 +2224,7 @@ sub protoagg
     IG::Redirect( "contacts?".
 			"action=showrecord&amp;".
 			"default_pane=4&amp;".
+			"btr=".MkUrl($on{btr})."&amp;".
 			"contactid=$on{master}" );
    }
  }
@@ -2049,9 +2363,10 @@ sub proto
        personalized_fields
                  => { ajax_link => "igforms?".
                                    "action=build_form_mask&amp;".
+                                   "readonly=".( not $_write_mode )."&amp;".
 				   "igformid=contacts&amp;".
 				   "recordid=$on{contactid}",
-                      checks    => sub { CheckPrivilege('igforms_view') }
+                      checks    => sub { 1 }
                     },
        open_repository
                  => { ajax_link => "filemanager?".
@@ -2078,8 +2393,9 @@ sub proto
     for my $pn ( split /\|/, $pnls )
      {
       my $privilege = &{$available_panels{$pn}{checks}};
-      $ajax_req{"get${pn}list"} = $available_panels{$pn}{ajax_link}
-        if $privilege;
+      $ajax_req{"get${pn}list"} = ( $available_panels{$pn}{ajax_link} .
+                                    "&amp;backtopane=$layer_cnt"
+                                  ) if $privilege;
 
       push @panels, [ $lang{$pn},
                       $privilege ? '&nbsp;' : '', 
@@ -2093,6 +2409,7 @@ sub proto
   $ajax_req{getstafflist}
 			      = "contacts?".
 				"action=findstaff&amp;".
+                                "btr=".MkUrl($on{btr})."&amp;".
 				"ajax_request=1&amp;".
 				"contactid=$on{contactid}&amp;".
 				"contacttype=$on{contacttype}"
@@ -2180,11 +2497,13 @@ sub proto
 		( $auth_user eq $on{owner} || CheckPrivilege("sys_user_admin")
 		  ? Img(href=>	"contacts?".
 				"action=configure&amp;".
+				"btr=".MkUrl($on{btr})."&amp;".
 				"contactid=$on{contactid}",
 			src=>	"$IG::img_url/prefs.png",
 			width=> 26,
 			title=>	$lang{configure} )
-		  : '')
+		  : ''),
+
 	]);
      }
 
@@ -2257,17 +2576,19 @@ sub proto
   Input (	show=>$lang{contact_type},
 		type=>'select',
 		style=>'width: 160px',
-		zerovalue=>'true',
-		data=>{ 1 => $lang{type1},
-			2 => $lang{type2},
-			3 => $lang{type3},
-			4 => $lang{type4},
-			5 => $lang{type5},
-			6 => $lang{type6},
-			7 => $lang{type7},
-			8 => $lang{type8},
-			9 => $lang{type9},
-			10=> $lang{type10}, },
+		data=> [( [ 0,  $lang{type0}  ],
+                          [ 2,  $lang{type2}  ],
+                          [ 8,  $lang{type8}  ],
+                          [ 1,  $lang{type1}  ],
+                          [ 0,  ( '-' x30 )   ],
+                          [ 7,  $lang{type7}  ],
+                          [ 3,  $lang{type3}  ],
+                          [ 9,  $lang{type9}  ],
+                          [ 10, $lang{type10} ],
+                          [ 6,  $lang{type6}  ],
+                          [ 0,  ( '-' x30 )   ],
+                          [ 4,  $lang{type4}  ],
+                          [ 5,  $lang{type5}  ] )],
 		name=>'contacttype');
 
   Input (	show=>$lang{economic_sector},
@@ -2295,10 +2616,43 @@ sub proto
 		maxlen=>20);
 
 
+  my $extra_pan
+   = TaskMsg( $lang{operations_headquarters}.
+   
+              Input( type    => 'button',
+                     float   => 'right',
+                     onclick => "javascript:winPopUp('".
+ 		                "contacts?".
+				"action=mkonelabel&amp;".
+				"address=1&amp;".
+				"cid=$on{contactid}".
+				"',420,300,'Labels')",
+                     show    => 'Genera Etichetta', #XXX2TRANSLATE
+		     readonly=> 'never',
+                     fieldstyle=>'margin:0px',
+                     style=>'margin:0px;font-size:10px; height:15px' ).
+                     
+              Input( type    => 'button',
+                     float   => 'right',
+                     onclick => "document.location='".
+                                IG::MkMapLink( country => $on{country1},
+					       zip     => $on{zip1},
+					       address => $on{address1},
+					       city    => $on{city1}
+					     ).
+                                "';",
+                     show    => 'Indicazioni Stradali', #XXX2TRANSLATE
+		     readonly=> 'never',
+                     fieldstyle=>'margin:0px',
+                     style=>'margin:0px 5px;font-size:10px; height:15px' ),
+            ,7);
+  
   #####################################################################
   ## Tab Pane
 
-  my $pan0 = Input (	show=>$lang{address},
+  my $pan0 = ( $on{print} ? '' : $extra_pan ).
+  
+             Input (	show=>$lang{address},
 			type=>'text',
 			name=>'address1',
                         style=>'width:350px;',
@@ -2339,22 +2693,46 @@ sub proto
 			data=>\%IG::countries,
 			zerovalue=>'true');
 
-  $pan0 .=   Img(	href  => IG::MkMapLink( country => $on{country1},
-					        zip     => $on{zip1},
-					        address => $on{address1},
-					        city    => $on{city1} ),
-			title => "maps.google.com",
-		        style => 'margin-top:3px;width:20px',
-			src   => "$IG::img_url/map.png" ) if !$on{print};
-
   $pan0 .=   Input (	show=>$lang{phone_number},
 			type=>'phonenumber',
 			name=>'tel2',
 			style=>'width:160px',
 			maxlen=>20);
 
+  $extra_pan
+   = TaskMsg( $lang{legal_situs}.
+   
+              Input( type    => 'button',
+                     float   => 'right',
+                     onclick => "javascript:winPopUp('".
+ 		                "contacts?".
+				"action=mkonelabel&amp;".
+				"address=3&amp;".
+				"cid=$on{contactid}".
+				"',420,300,'Labels')",
+                     show    => 'Genera Etichetta', #XXX2TRANSLATE
+		     readonly=> 'never',
+                     fieldstyle=>'margin:0px',
+                     style=>'margin:0px;font-size:10px; height:15px' ).
+                     
+              Input( type    => 'button',
+                     float   => 'right',
+                     onclick => "document.location='".
+                                IG::MkMapLink( country => $on{country3},
+					       zip     => $on{zip3},
+					       address => $on{address3},
+					       city    => $on{city3}
+					     ).
+                                "';",
+                     show    => 'Indicazioni Stradali', #XXX2TRANSLATE
+		     readonly=> 'never',
+                     fieldstyle=>'margin:0px',
+                     style=>'margin:0px 5px;font-size:10px; height:15px' ),
+            ,7);
 
-  my $pan1 = Input (	show=>$lang{address},
+  my $pan1 = ( $on{print} ? '' : $extra_pan ).
+  
+             Input (	show=>$lang{address},
 			type=>'text',
 			name=>'address3',
                         style=>'width:350px;',
@@ -2395,22 +2773,46 @@ sub proto
 			data=>\%IG::countries,
 			zerovalue=>'true');
 
-  $pan1 .=   Img(	href  => IG::MkMapLink( country => $on{country3},
-					        address => $on{address3},
-					        zip     => $on{zip3},
-					        city    => $on{city3} ),
-			title => "maps.google.com",
-        		style => 'margin-top:3px;width:20px',
-			src   => "$IG::img_url/map.png" ) if !$on{print};
-
   $pan1 .=   Input (	show=>$lang{phone_number},
 			type=>'phonenumber',
 			name=>'tel3',
 			style=>'width:160px',
 			maxlen=>20);
 
+  $extra_pan
+   = TaskMsg( $lang{operating_center}.
+   
+              Input( type    => 'button',
+                     float   => 'right',
+                     onclick => "javascript:winPopUp('".
+ 		                "contacts?".
+				"action=mkonelabel&amp;".
+				"address=2&amp;".
+				"cid=$on{contactid}".
+				"',420,300,'Labels')",
+                     show    => 'Genera Etichetta', #XXX2TRANSLATE
+		     readonly=> 'never',
+                     fieldstyle=>'margin:0px',
+                     style=>'margin:0px;font-size:10px; height:15px' ).
+                     
+              Input( type    => 'button',
+                     float   => 'right',
+                     onclick => "document.location='".
+                                IG::MkMapLink( country => $on{country2},
+					       zip     => $on{zip2},
+					       address => $on{address2},
+					       city    => $on{city2}
+					     ).
+                                "';",
+                     show    => 'Indicazioni Stradali', #XXX2TRANSLATE
+		     readonly=> 'never',
+                     fieldstyle=>'margin:0px',
+                     style=>'margin:0px 5px;font-size:10px; height:15px' ),
+            ,7);
 
-  my $pan2 = Input (	show=>$lang{address},
+  my $pan2 = ( $on{print} ? '' : $extra_pan ).
+  
+             Input (	show=>$lang{address},
 			type=>'text',
 			name=>'address2',
                         style=>'width:350px;',
@@ -2442,14 +2844,6 @@ sub proto
 			value=>$IG::soc_country,
 			data=>\%IG::countries,
 			zerovalue=>'true');
-
-  $pan2 .=   Img(	href  => IG::MkMapLink( country => $on{country2},
-			                        address => $on{address2},
-					        zip     => $on{zip2},
-					        city    => $on{city2} ),
-			title => "maps.google.com",
-		        style => 'margin-top:3px;width:20px',
-			src   => "$IG::img_url/map.png" ) if !$on{print};
 
   $pan2 .=   Input (	show=>$lang{zone},
 			type=>'basictable',
@@ -2537,7 +2931,7 @@ sub proto
 			style=>'width: 150px;',
 			name=>'email',
 			size=>50,
-			maxlen=>40).
+			maxlen=>100).
 
 	     Input (	show=>$lang{no_email},
 			type=>'checkbox',
@@ -2617,15 +3011,20 @@ sub proto
          value   => $lang{restore} );
 
   Input( type    => 'submit',
-         name    => 'update_contact',
+         name    => 'cancel_and_btr',
          float   => 'left',
-         value   => $lang{apply} );
+         value   => $lang{cancel} ) if $on{btr};
 
   Input( type    => 'submit',
          name    => 'save_contact',
-         float   => 'left',
+         float   => 'right',
          value   => $lang{save} ) if $on{contactid};
-         
+
+  Input( type    => 'submit',
+         name    => 'update_contact',
+         float   => 'right',
+         value   => $lang{apply} );
+
   FormFoot();
   TaskFoot();
   HtmlFoot();
@@ -2700,20 +3099,16 @@ sub _can_edit_master
  {
   return 1 if CheckPrivilege('sys_user_admin');
   my $contactid = DbQuote(shift);
+
   if ( $contactid )
    {
-    DbQuery("select sharemode, owner from contacts ".
-            "where contactid='$contactid'");
-    my ($_sharemode, $_owner) = FetchRow();
-
-    return    ( $_sharemode != 2 || $_owner eq $auth_user || !$_owner )
-           && CheckPrivilege('contacts_edit')
-           ? 1
-           : 0;
+    return IG::CheckResourcePrivileges( id           => $contactid,
+                                        resource_cgi => 'contacts',
+                                        mode         => 'w' );
    }
   else
    {
-    return CheckPrivilege('contacts_new') ? 1 : 0;
+    return IG::CheckPrivilege('contacts_new');
    }
  }
 
@@ -2776,7 +3171,9 @@ sub findstaff
 		      align => 'absmiddle',
 		      width => 16,
 		      style => 'margin-right:3px') . $row[0],
-		 "contacts?action=showrecord&amp;contactid=$row[0]",
+		 "contacts?action=showrecord&amp;".
+		          "btr=".MkUrl($on{btr})."&amp;".
+		          "contactid=$row[0]",
 		 'nowrap'],
  		[$row[6],
  		 '',
@@ -3225,7 +3622,8 @@ sub protosub
     HLayer(
 	   MkButton( text    => $lang{back_tomaster},
 	             link    => "contacts?action=showrecord&amp;".
-	                              "contactid=$on{master}" ),
+                                         "btr=".MkUrl($on{btr})."&amp;".
+	                                 "contactid=$on{master}" ),
 
            ( !$_write_mode
 	     ?  MkButton( text => $lang{edit},
@@ -3584,11 +3982,12 @@ sub configure
    }
 
   HtmlHead( title => $lang{configure} );
-  TaskHead( title => $lang{configure}, width => 600 );
+  TaskHead( title => $lang{configure}, width => 700 );
   HLayer(
 	 MkButton( text    => $lang{delete_contact},
                    onclick => IG::JsConfirm($lang{are_you_sure}),
 	           link    => "contacts?action=delexec&amp;".
+	                               "btr=".MkUrl($on{btr})."&amp;".
 	                               "contactid=$on{contactid}" ),
 	                            
 	 MkButton( text    => $lang{clone_contact},
@@ -3639,6 +4038,7 @@ sub configure
   Input (	type => 'multiselect',
 		name => 'groups',
 		show => $lang{groups},
+		style=> 'height: 200px; width:220px;',
 		data => "SELECT contactid, contactname ".
                         "FROM contacts where category='group' ".
                         "ORDER BY contactname");
@@ -3682,6 +4082,7 @@ sub configureagg
 
   IG::Redirect( "contacts?".
 		"action=showrecord&amp;".
+		"btr=".MkUrl($on{btr})."&amp;".
 		"contactid=$on{contactid}" );
  }
 
@@ -3711,7 +4112,7 @@ sub show_groups
             width     => '100%' );
 
   HLayer( MkButton( text => $lang{new_group},
-                    link => "contacts?action=protogroup&amp;backtoreferer=1"),
+                    link => "contacts?action=protogroup&amp;btr=1"),
           MkButton( text => $lang{contact_management},
                     link => "contacts"),
         );
@@ -3741,7 +4142,7 @@ sub show_groups
     TaskListItem (
 	[$row[1],
 	 "contacts?action=participant&amp;".
-	          "backtoreferer=1&amp;".
+	          "btr=1&amp;".
 	          "groupid=$row[0]"],
 	[$row[2],
 	 ""],
@@ -3750,7 +4151,7 @@ sub show_groups
         [ Img( src   => "$IG::img_url/group_green.gif",
                title => $lang{add_participant},
                href  => "contacts?action=protopart&amp;".
-                                 "backtoreferer=1&amp;".
+                                 "btr=1&amp;".
 	                         "groupid=$row[0]" ).
 
           Img( src   => "$IG::img_url/edit.gif",
@@ -3795,7 +4196,7 @@ sub participant
   HLayer( left_layers => [(
            MkButton( text => $lang{add_participant},
 	             link => "contacts?action=protopart&amp;".
-	                              "backtoreferer=1&amp;".
+	                              "btr=1&amp;".
 	                              "groupid=$on{groupid}" ),
 
            MkButton( text => $lang{delete_group},
@@ -3804,13 +4205,18 @@ sub participant
 
            MkButton( text => $lang{edit},
                      link => "contacts?action=protogroup&amp;".
-                                      "backtoreferer=1&amp;".
+                                      "btr=1&amp;".
                                       "contactid=$on{groupid}" ),
 
            MkButton( text => $lang{back_to_list},
-                     link => "contacts?action=show_groups" )
-                         )],
+                     link => "contacts?action=show_groups" ),
 
+
+           MkButton( text => 'Stampa Etichette', ##XXX2TRANSLATE
+                     link => "contacts?action=mklabels&amp;".
+                                      "address=1&amp;".
+                                      "groupid=$on{groupid}" )
+                         )],
           right_layers => [( $page_selector )]
  	 );
  
@@ -3843,7 +4249,7 @@ sub participant
     TaskListItem
       (
 	["$counter) $row[1]",
-	 "contacts?action=showrecord&amp;backtoreferer=1&amp;contactid=$row[1]",
+	 "contacts?action=showrecord&amp;btr=1&amp;contactid=$row[1]",
 	 "nowrap"],
 	[$row[0],
 	 "",
@@ -3906,6 +4312,11 @@ sub protopart
 
   Input( type    => 'contactfinder',
          show    => $lang{contact_name});
+         
+  Input( type    => 'text',
+         name    => 'usrcontactid',
+         show    => $lang{number},
+         style   => 'width:100px' );
 
   Input( type    => 'submit',
          style   => 'margin-top:20px',
@@ -3927,6 +4338,7 @@ sub protopart
 ##############################################################################
 sub protopartagg
  {
+  $on{contactid} = $on{usrcontactid} if $on{usrcontactid};
   push @IG::errmsg, IG::ContactFinder('contact_name');
   protopart() && return if @IG::errmsg;
 
@@ -4025,18 +4437,16 @@ sub findshow
 
                Input( type  => 'select',
                       name  => 'fieldtofind',
-                      data  => [(['name',    $lang{contact_name}],
-                                 ['tel',     "$lang{phone_number}/Fax"],
-                                 ['address', "$lang{address}/$lang{city}"],
-                                 ['email',   $lang{email}],
-                                 ['number',  $lang{number}],
-                                 ['note',    $lang{notes}])]),
+                      value => 'name',
+                      data  => _get_fields_to_find() ),
+
 
                Input( type  => 'select',
                       name  => 'method',
                       value => 'contain',
-                      data  => [(['start',   $lang{with_begin}],
-                               ['contain', $lang{contain}])] ),
+                      data  => [( ['start',   $lang{with_begin}],
+                                  ['contain', $lang{contain}],
+                                  ['equal',   $lang{equal_to}] )] ),
 
                Input( type  => 'text',
                       name  => 'keytofind',
@@ -4061,14 +4471,48 @@ sub findshow
 
 ###########################################################################
 ###########################################################################
+sub _get_fields_to_find
+ {
+  my %fields = ( name    => $lang{contact_name},
+                 tel     => "$lang{phone_number}/Fax",
+                 address => "$lang{address}/$lang{city}",
+                 email   => $lang{email},
+                 number  => $lang{number},
+                 note    => $lang{notes},
+               );
+
+  ## add personal fields
+  %fields = ( %fields, %{_get_personal_fields()} );
+  return \%fields;
+ }
+
+###########################################################################
+###########################################################################
+sub _get_personal_fields
+ {
+  my %fields;
+  DbQuery( "select fieldid, fieldlabel from form_defs ".
+           "where igformid='contacts'" );
+  while ( my @row = FetchRow() )
+   { $fields{"forms:$row[0]"} = $row[1]; }
+
+  return \%fields;
+ }
+
+###########################################################################
+###########################################################################
 sub findexec
  {
   my ($color, $counter);
 
-  my $products_link = $on{linktoproducts}
-		    ? "products?action=revisione&amp;contactid="
-		    : "contacts?action=showrecord&amp;contactid=";
+  my $base_link = $on{linktoproducts}
+                ? "products?action=revisione&amp;contactid="
+                : "contacts?action=showrecord&amp;contactid=";
 
+  ## method
+  my $method        = $on{method} eq 'equal' ? '=' : '~*';
+
+  ## base query
   my $query         = "(contacts.contacttype<>8 or".
                       " contacts.owner='$auth_user' or".
                       " contacts.contacttype is null) and ". 
@@ -4076,6 +4520,10 @@ sub findexec
                       " masterCnt.contacttype<>8 or".
                       " masterCnt.owner='$auth_user' or".
                       " masterCnt.contacttype is null) and ";
+
+  ## base join
+  my $join          = "LEFT JOIN contacts masterCnt ".
+                      "ON masterCnt.contactid=contacts.master";
 
   ## Make a query
   QuoteParams();
@@ -4106,54 +4554,61 @@ sub findexec
    }
   elsif ($in{fieldtofind} eq 'tel')
    {
-    $query .= "(contacts.fax ~* '$in{keytofind}' or".
-              " contacts.tel1 ~* '$in{keytofind}' or".
-              " contacts.tel2 ~* '$in{keytofind}' or".
-              " contacts.tel3 ~* '$in{keytofind}' or".
-              " contacts.tel4 ~* '$in{keytofind}' or".
-              " contacts.tel5 ~* '$in{keytofind}') ";
+    $query .= "(contacts.fax $method '$in{keytofind}' or".
+              " contacts.tel1 $method '$in{keytofind}' or".
+              " contacts.tel2 $method '$in{keytofind}' or".
+              " contacts.tel3 $method '$in{keytofind}' or".
+              " contacts.tel4 $method '$in{keytofind}' or".
+              " contacts.tel5 $method '$in{keytofind}') ";
    }
   elsif ($in{fieldtofind} eq 'note')
    {
-    $query .= "contacts.note ~* '$in{keytofind}' ";
+    $query .= "contacts.note $method '$in{keytofind}' ";
    }
   elsif ($in{fieldtofind} eq 'number')
    {
-    $query .= "contacts.contactid ~* '$in{keytofind}' ";
+    $query .= "contacts.contactid $method '$in{keytofind}' ";
    }
   elsif ($in{fieldtofind} eq 'email')
    {
-    $query .= "contacts.email ~* '$in{keytofind}' ";
+    $query .= "contacts.email $method '$in{keytofind}' ";
    }
   elsif ($in{fieldtofind} eq 'address')
    {
-    $query .= "(contacts.address1 ~* '$in{keytofind}' or".
-              " contacts.address3 ~* '$in{keytofind}' or".
-              " contacts.address2 ~* '$in{keytofind}' or".
-              " contacts.city1 ~* '$in{keytofind}' or".
-              " contacts.city3 ~* '$in{keytofind}' or".
-              " contacts.city2 ~* '$in{keytofind}') ";
+    $query .= "(contacts.address1 $method '$in{keytofind}' or".
+              " contacts.address3 $method '$in{keytofind}' or".
+              " contacts.address2 $method '$in{keytofind}' or".
+              " contacts.city1 $method '$in{keytofind}' or".
+              " contacts.city3 $method '$in{keytofind}' or".
+              " contacts.city2 $method '$in{keytofind}') ";
+   }
+  elsif ( $in{fieldtofind} =~ /^forms\:(.+)$/ )
+   {
+    $join   = "LEFT JOIN contacts masterCnt ".
+              "ON masterCnt.contactid=contacts.master ".
+              "LEFT JOIN form_records ".
+              "ON contacts.contactid=form_records.recordid ".
+              "LEFT JOIN form_defs ".
+              "ON form_defs.fieldid=form_records.fieldid";
+            
+    $query .= "form_defs.igformid='contacts' and ".
+              "form_defs.fieldid='$1' and ".
+              "form_records.value $method '$in{keytofind}' ";
    }
 
-  DbQuery( "select COUNT(*) ".
-           "FROM contacts ".
-           "LEFT JOIN contacts masterCnt ".
-           "ON masterCnt.contactid=contacts.master ".
-           "WHERE $query" );
+  DbQuery( "SELECT COUNT(*) ".
+           "FROM contacts $join WHERE $query" );
   ($counter) = FetchRow();
 
   if ($counter == 1)
    {
     ## In this case open directly the contact
-    DbQuery("SELECT contacts.contactid, contacts.contacttype ".
-	    "FROM contacts ".
-            "LEFT JOIN contacts masterCnt ".
-            "ON masterCnt.contactid=contacts.master ".
-	    "WHERE $query");
+    DbQuery( "SELECT contacts.contactid, contacts.contacttype ".
+	     "FROM contacts $join WHERE $query" );
     my @row = FetchRow();
     if ($row[1] != 1 && $row[1] != 6)
      {
-      IG::Redirect( "$products_link$row[0]" );
+      IG::Redirect( $base_link . $row[0] );
       return;
      }
    }
@@ -4174,10 +4629,9 @@ sub findexec
           " contacts.email, contacts.tel1, contacts.fax, ".
           " masterCnt.contactname, contacts.tel3, masterCnt.contacttype, ".
           " contacts.jobtitle ".
-	  "FROM contacts ".
-          "LEFT JOIN contacts masterCnt ".
-          "ON masterCnt.contactid=contacts.master ".
-          "WHERE $query order by contacts.contactname, contacts.contactid");
+	  "FROM contacts $join ".
+          "WHERE $query ".
+          "ORDER BY contacts.contactname, contacts.contactid");
 
   while (my @row = FetchRow())
    {
@@ -4189,7 +4643,7 @@ sub findexec
                                sms       => $row[7] ? $row[13] : '',
                                fax       => $row[11] );
 
-    $color = ($row[6]==1 || $row[6]==6) ? '#b5b5b5' : 'black';
+    $color = $row[6]==1 ? '#b5b5b5' : 'black';
 
     if ( $row[7] )
      {
@@ -4205,7 +4659,7 @@ sub findexec
 	      align => 'absmiddle',
 	      style => 'margin-right:3px').
 	 $row[1],
-	 "$products_link$row[1]",
+	 "$base_link$row[1]&amp;btr=1",
 	 'nowrap'],
 	[$row[0] . ( $row[15] ? "<span style=\"font-size:10px;\"> ($row[15])</span>" : ''),
 	 "",
@@ -4229,7 +4683,7 @@ sub findexec
 	      align =>'absmiddle',
 	      style =>'margin-right:3px').
 	 $row[1],
-	 "$products_link$row[1]",
+	 "$base_link$row[1]&amp;btr=1",
 	 'nowrap'],
 	[$row[0],
 	 "",
@@ -4328,7 +4782,7 @@ sub listreport
                title => $lang{delete},
                href  => "reports?action=deletereport&amp;".
                                 "id=$row[0]&amp;".
-                                "backtoreferer=1" ).
+                                "btr=1" ).
           Img( src   => "$IG::img_url/report_go.png",
 	       width => 16,
                title => $lang{make_report},
@@ -4370,7 +4824,7 @@ sub mkreport
 
   my ( $query, $columns);
   my %cols = _find_report_cols();
-  my %fields = %{$cols{fields}};
+  my %fields = ( %{$cols{fields}}, %{_get_personal_fields()} );
 
   if    ($on{undo} && $on{columns2query})
    { $on{columns2query}--   }
@@ -4384,18 +4838,18 @@ sub mkreport
    {
     $on{columns2query}=0;
     DbQuery("delete from reports ".
-	    "where id='".DbQuery($on{id})."'".
+	    "where id='".DbQuote($on{id})."'".
 	    " and owner='$auth_user'") if $on{id};
    }
 
   $on{columns2query}   ||= 0;
   $on{columns2extract} ||= 3;
-  $on{id}	       ||= MkId(15);
 
   ## build the query
   if ( $on{columns2query} )
    {
     $on{logic} ||= 'and';
+    $on{personalized_fields} = 0;
 
     for (1 .. $on{columns2query})
      {
@@ -4429,7 +4883,18 @@ sub mkreport
           $field_name  = "lower($field_name)";
          }
 
-        $query .= "$field_name $operator '$field_value' $on{logic} ";
+        if ( $field_name =~ /contacts\.forms\:(.+)\)*$/ )
+         {
+          $on{personalized_fields} = 1;
+          $query .= "(form_defs.igformid='contacts' and ".
+                     "form_defs.fieldid='$1' and ".
+                     "form_records.value $operator '$field_value'".
+                    ") $on{logic} ";
+         }
+        else
+         {
+          $query .= "$field_name $operator '$field_value' $on{logic} ";
+         }
        }
      }
     $query =~ s/(.+)(and|or) $/\($1\) and contacts.master\=\'0\'/;
@@ -4447,15 +4912,22 @@ sub mkreport
   $query ||= '1=0';
   DbQuery( "select count(*) from contacts ".
 	   ( $on{group_filter}
-	     ? "left join contacts_group ".
-	       "on contacts_group.contactid = contacts.contactid "
-	     : "" ).
+	     ? "LEFT JOIN contacts_group ".
+	       "ON contacts_group.contactid = contacts.contactid "
+	     : '' ).
+           ( $on{personalized_fields}
+             ? "LEFT JOIN form_records ".
+               "ON contacts.contactid=form_records.recordid ".
+               "LEFT JOIN form_defs ".
+               "ON form_defs.fieldid=form_records.fieldid "
+             : '' ).
 	   "where $query" );
   my $records_nmb = FetchRow() || '0';
 
   ## Save report if requested
   if ($on{savereport} && $query ne '1=0' && $on{reportname})
    {
+    $on{id} ||= MkId(15);
     my $fake_qs = $IG::query_string;
        $fake_qs =~ s/savereport/dontsavereport/g;
 
@@ -4493,6 +4965,11 @@ sub mkreport
 
   Input (	type=>'hidden',
 		name=>'id'); 
+
+  Input (	type=>'hidden',
+                override=>1,
+                value=>$on{personalized_fields},
+		name=>'personalized_fields'); 
 
   Input (	type=>'hidden',
 		override=>1,
@@ -4609,17 +5086,19 @@ sub mkreport
 		type=>'select',
 		float=>'left',
 		style=>'width:250px',
-		data=> [(	[0, $lang{type0}],
-				[1, $lang{type1}],
-				[2, $lang{type2}],
-				[3, $lang{type3}],
-				[4, $lang{type4}],
-				[5, $lang{type5}],
-				[6, $lang{type6}],
-				[7, $lang{type7}],
-				[8, $lang{type8}],
-				[9, $lang{type9}],
-				[10, $lang{type10}],
+		data=> [( [ 0,  $lang{type0}  ],
+                          [ 2,  $lang{type2}  ],
+                          [ 8,  $lang{type8}  ],
+                          [ 1,  $lang{type1}  ],
+                          [ 0,  ( '-' x30 )   ],
+                          [ 7,  $lang{type7}  ],
+                          [ 3,  $lang{type3}  ],
+                          [ 9,  $lang{type9}  ],
+                          [ 10, $lang{type10} ],
+                          [ 6,  $lang{type6}  ],
+                          [ 0,  ( '-' x30 )   ],
+                          [ 4,  $lang{type4}  ],
+                          [ 5,  $lang{type5}  ],
 			)]);
        }
       elsif  ($field_name eq 'owner')
@@ -4743,17 +5222,15 @@ sub viewreport
   TaskHead(	title=>$on{reportname},
 	   	width=>'100%');
 
-  FormHead(	cgiaction=>'mkreport');
-
-  Input (	type=>'hidden',
-		name=>'id');
-
-  Input (	type=>'submit',
-		name=>'delall',
-		style => 'font-size:10px',
-		show=>$lang{new_report});
-
-  FormFoot();
+  Input (	type    => 'button',
+		style   => 'font-size:10px',
+		onclick => "document.location = ".
+		           ( $on{id}
+                             ?  "'reports?action=loadreport&amp;id=$on{id}';"
+                             :  "'contacts?action=mkreport';"),
+		show    => $on{id}
+		        ?  $lang{modify_report}
+		        :  $lang{new_report});
 
   FormHead(	name=>'usereport',
 		cgiaction=>'usereport');
@@ -4793,7 +5270,7 @@ sub viewreport
 
   ## make table header and query fields
   $list_menu[0][0] = $lang{number};
-  for (1..$on{columns2extract})
+  for (1 .. $on{columns2extract})
    {
     $fields .= ", contacts." . $on{"r$_"};
     $list_menu[$_][0] = $fields{$on{"r$_"}};
@@ -4801,9 +5278,15 @@ sub viewreport
   TaskListMenu (@list_menu);
 
   DbQuery( "select $fields from contacts ".
-           ( $on{group_filter}
-	     ? "left join contacts_group ".
-	       "on contacts_group.contactid = contacts.contactid "
+	   ( $on{group_filter}
+	     ? "LEFT JOIN contacts_group ".
+	       "ON contacts_group.contactid = contacts.contactid "
+	     : '' ).
+           ( $on{personalized_fields}
+             ? "LEFT JOIN form_records ".
+               "ON contacts.contactid=form_records.recordid ".
+               "LEFT JOIN form_defs ".
+               "ON form_defs.fieldid=form_records.fieldid "
              : '' ).
 	   "where $on{query} ".
 	   "order by contacts.$on{orderby}" );
@@ -4811,9 +5294,11 @@ sub viewreport
   while ( my @row = FetchRow() )
    {
     $list_item[0][0] = $row[0];
-    $list_item[0][1] = "contacts?action=showrecord&amp;contactid=$row[0]";
+    $list_item[0][1] = "contacts?action=showrecord&amp;".
+                                "btr=1&amp;".
+                                "contactid=$row[0]";
 
-    for (1..$on{columns2extract})
+    for (1 .. $on{columns2extract})
      {
       ## popolate fields
       if ($on{"r$_"} eq "owner")

@@ -194,9 +194,10 @@ sub docview
   Header();
 
   IG::ShowProtocolInfo
-   ( id     => $row[0],
-     title  => $lang{fax_received_protocol},
-     fields => [( [ $lang{contact_name},
+   ( id        => $row[0],
+     contactid => $row[8],
+     title     => $lang{fax_received_protocol},
+     fields    => [( [ $lang{contact_name},
                     "<a href=\"contacts?".
                     "action=showrecord&amp;".
                     "contactid=$row[8]\">".
@@ -327,11 +328,13 @@ sub findshow
 
 	    Input(    type       => 'select',
 		      name       => 'method',
-		      data       => [(['from',	$lang{with_header}],
-				      ['id',	$lang{with_protocol}],
-				      ['date',	$lang{with_date}],
-				      ['npa',	$lang{with_npa}],
-				      ['notes', $lang{with_notes}])]),
+		      data       => [(['from',     $lang{with_header}],
+				      ['id',       $lang{with_protocol}],
+				      ['date',     $lang{with_date}],
+				      ['npa',      $lang{with_npa}],
+				      ['notes',    $lang{with_notes}],
+                                      ['comments', $lang{with_comments}],
+                                     )]),
 
 	    Input(    type       => 'text',
 		      name       => 'keytofind',
@@ -356,7 +359,7 @@ sub findshow
 #############################################################################
 sub findexec
  {
-  my ($query, $counter);
+  my ($query, $join, $counter);
 
   if ($on{ajax_request})
    {
@@ -368,7 +371,7 @@ sub findexec
                                  "fax_received?".
                                         "action=proto&amp;".
                                         "contactid=$on{contactid}&amp;".
-                                        "backtoreferer=1';",
+                                        "btr=1';",
                     show      => $lang{new_item},
                     fieldstyle=> 'margin:0px',
                     style     => 'margin:0px;font-size:10px; height:15px' ).
@@ -419,6 +422,11 @@ sub findexec
    { $query = "fax_received.npa ~* '$in{keytofind}' $fax_category"; }
   elsif ( $on{method} eq 'from' )
    { $query = "fax_received.contactname ~* '$in{keytofind}' $fax_category"; }
+  elsif ( $on{method} eq 'comments' )
+   {
+     $query = "comments.comment ~* '$in{keytofind}'";
+     $join  = "LEFT JOIN comments ON comments.referenceid = fax_received.id ";
+   }
 
   TaskListMenu(	[$lang{number}],
 		["$lang{sender} $lang{receiver}"],
@@ -426,12 +434,13 @@ sub findexec
 		[$lang{type}],
 		[$lang{notes}] );
 
-  DbQuery("SELECT fax_received.id, fax_received.issue, fax_received.timeissue,".
+  DbQuery("SELECT DISTINCT".
+          " fax_received.id, fax_received.issue, fax_received.timeissue,".
           " fax_received.category, fax_received.faxnumber, fax_received.note,".
           " fax_received.contactname, fax_received.owner, fax_received.contactid,".
           " fax_received.npa, fax_received.docref, users.name ".
           "FROM fax_received ".
-          "LEFT JOIN users ON fax_received.owner=users.login ".
+          "LEFT JOIN users ON fax_received.owner=users.login $join".
           "WHERE $query ".
           "order by fax_received.issue desc, fax_received.timeissue desc");
 

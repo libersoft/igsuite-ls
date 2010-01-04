@@ -1,6 +1,6 @@
 ## IGSuite 4.0.0
 ## Procedure: IG.pm
-## Last update: 25/05/2009
+## Last update: 27/05/2009
 #############################################################################
 # IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
 # Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
@@ -955,8 +955,7 @@ sub MkEnv
     $clr{font} = $clr{font_link} = $clr{font_menu};
    }
 
-  ## Set default value for undefined vars
-  $crypt_key		||= $pwd_admin; #XXX2FIX DANGEROUS!
+  ## Set default values for undefined vars
   $link			||= 'http';
   $screen_size		||= 'large';
   $page_results		||= 13;
@@ -1377,6 +1376,26 @@ sub DeUrl
   my @ulinks = @_;
   s/%([[:xdigit:]]{2})/chr hex "0x$1"/eg for @ulinks;
   return (wantarray ? @ulinks : $ulinks[0]);
+ }
+
+##############################################################################
+##############################################################################
+
+=head3 NormalizeNewline($Text)
+
+Normalize Newline
+
+=cut
+
+ {
+  my $ALT_NL = "\n" eq "\012" ? "\015" : "\012";
+  sub NormalizeNewline
+   {
+    my ($text, $nl) = @_;
+    $nl ||= "\n";
+    $text =~ s/\015\012|$ALT_NL|\x{0085}|\x{000C}|\x{2028}|\x{2029}/$nl/go;
+    return $text;
+   }
  }
 
 ##############################################################################
@@ -2070,6 +2089,8 @@ sub SumDate
   $day   ||= $tv{day};
   $month ||= $tv{month};
   $year  ||= $tv{year};
+  
+  my $lastDoM = $day == GetDaysInMonth($month, $year);
 
   if ( $dd=~ /(\-|\+)?(\d+)(d|m|y)?/ )
    {
@@ -2086,6 +2107,7 @@ sub SumDate
      }
     else
      {
+      $lastDoM = 0;
       while (1)
        { 
         $ck_month = GetDaysInMonth($month, $year);
@@ -2126,7 +2148,7 @@ sub SumDate
    }
 
   $ck_month = GetDaysInMonth($month, $year);
-  $day = $ck_month if $day > $ck_month;
+  $day = $ck_month if $day > $ck_month || $lastDoM;
 
   return ( GetDateByFormat($day, $month, $year) );
  }
@@ -2250,7 +2272,7 @@ sub DTable
       IG::Redirect("igsuite?".
                    "action=summary&amp;".
                    "errmsg=".
-                   MkUrl($lang{Err_you_have_to_login} || "You have to login!").
+                   IG::Crypt( $lang{Err_you_have_to_login} || 'You have to login!').
                    (    $IG::screen_size =~ /^noframe/
                      && ($cgi_name eq 'igwiki' || $cgi_name eq 'webmail')
                      ? "&amp;caller=$cgi_name&amp;caller_action=$on{action}"
@@ -2447,11 +2469,13 @@ Check if two user have the same group membership
 
 =head3 CheckResourcePrivileges(%arguments)
 
-Check if an user can access (r or rw) to a resource ( protocol id )
-two user have the same group membership. Return a document status where:
--1 Document doesn't exist
-0  Document exists but user can't access it
-1  Document exists and user can access it
+Check if an user can access (r or rw) to a resource ( id ) defined optionally
+by ( resource_cgi ). Return a resource status where:
+  -1  Resource doesn't exist
+   0  Resource exists but user can't access it
+   1  Resource exists and user can access it
+Resources are: contacts; equipments; users; todo; igwiki; calendar (events);
+               and all protocols ( letters; offers; emails etc)
 
 =cut
 
@@ -2465,7 +2489,99 @@ sub CheckResourcePrivileges
   $data{mode}    ||= 'r';
   $data{user}    ||= $auth_user;
 
-  ## Find resource info
+  ## resource = contacts
+  if ( $data{resource_cgi} eq 'contacts' )
+   {
+    ## we suppose this is an id of a master contact
+    my $cid = DbQuery( query => "select contactid, sharemode, owner, contacttype ".
+                                "from contacts ".
+                                "where contactid='$data{id}' limit 1",
+                       type  => 'UNNESTED' );
+    my ($_contactid, $_sharemode, $_owner, $_ctype) = FetchRow( $cid );
+
+    return -1 if !$_contactid;
+    return  1 if CheckPrivilege('sys_user_admin', $data{user});
+    
+    if ( $data{mode} eq 'r' )
+     {
+      return    $_owner eq $data{user}
+             || (    $_ctype != 8
+                  && CheckPrivilege('contacts_view', $data{user}) )
+             ? 1
+             : 0;
+     }
+    else
+     {
+      return    ( $_sharemode != 2 || $_owner eq $data{user} || !$_owner )
+             && CheckPrivilege('contacts_edit', $data{user})
+             ? 1
+             : 0;
+     }
+   }
+
+  ## resource = calendar
+  if ( $data{resource_cgi} eq 'calendar' )
+   {
+    ## we suppose this is an id of a calendar event
+    my $cid = DbQuery( query => "select eventid, reserved, fromuser, touser ".
+                                "from calendar ".
+                                "where eventid='$data{id}' limit 1",
+                       type  => 'UNNESTED' );
+    my ($_eventid, $_sharemode, $_fromuser, $_touser) = FetchRow( $cid );
+
+    return -1 if !$_eventid;
+    return  1 if CheckPrivilege('sys_user_admin', $data{user});
+    return  0 if    $_sharemode == 1
+                 && $_fromuser ne $data{user} 
+                 && $_touser   ne $data{user};    
+    return  0 if    $_touser ne $data{user}
+                 && CheckPrivilege('sys_limit_calendar', $data{user});
+    return  0 if ! CheckPrivilege();
+    return  1;
+   }
+
+  ## resource = igwiki #XXX2DEVELOPE extended privileges to pages
+  if ( $data{resource_cgi} eq 'igwiki' )
+   {
+    no strict 'refs';
+    ## we suppose this is an IGWiki page id
+    my $cid = DbQuery( query => "select owner, showperm, editperm ".
+                                "from pages ".
+                                "where id='$data{id}' limit 1",
+                       type  => 'UNNESTED' );
+    my ($_owner, $_r, $_w) = FetchRow( $cid );
+    my $privilege = ${"_$data{mode}"};
+
+    return ( (!$privilege        && $data{user} eq 'guest'                  ) ||
+             ( $privilege eq 'P' && $_owner ne $data{user}                  ) ||
+             ( $privilege eq 'S' && $data{user} eq 'guest'                  ) ||
+             ( $privilege eq 'F' && !IG::CheckSameMembership( $_owner, $data{user} ) )
+           ) && !CheckPrivilege('sys_user_admin')
+           ? 0
+           : 1;
+   }
+
+  ## resource = users
+  if ( $data{resource_cgi} eq 'users' )
+   {
+    return 1 if    ( $data{mode} eq 'r' && CheckPrivilege('users_view') )
+                || ( $data{mode} eq 'w' && CheckPrivilege('users_edit') );
+    return 0;
+   }
+
+  ## resource = todo #XXX2DEVELOPE we have to rewrite todo module (too old)
+  if ( $data{resource_cgi} eq 'todo' )
+   { return CheckPrivilege('todo_view') ? 1 : 0; }
+
+  ## resource = equipment
+  if ( $data{resource_cgi} eq 'equipments' )
+   { $data{resource_dbtable} = 'equipments'; }
+
+  ## resource = email
+  if ( $data{resource_cgi} eq 'webmail' )
+   { $data{resource_dbtable} = 'email_msgs'; }
+
+  ## Find resource info by id
   ( $data{resource_cgi},
     $data{resource_dbtable} ) = ( ProtocolToDocType( $data{id} ) )[1,2]
                                 if     ! $data{resource_cgi}
@@ -2476,8 +2592,11 @@ sub CheckResourcePrivileges
   my $cid = DbQuery( query => "select owner from $data{resource_dbtable} ".
                               "where id='$data{id}' limit 1",
                      type  => 'UNNESTED' );
-  my $resource_owner = FetchRow($cid);
-  return -1 if !$resource_owner;
+  my $resource_owner = FetchRow( $cid );
+  return -1 if ! $resource_owner;
+
+  ## First Check administrative privileges
+  return 1 if CheckPrivilege('sys_user_admin', $data{user});
 
   ## check default owner share mode
   my $share_mode = ConfigParam( "$data{resource_cgi}.share_mode",
@@ -2496,37 +2615,44 @@ sub CheckResourcePrivileges
   else
    {
     ## share customized per protocol
-    ## resolve common cases
     my $cid = DbQuery( query => "select count(*), owner ".
                                 "from users_privileges ".
                                 "where resource_id='$data{id}' group by owner",
                        type  => 'UNNESTED' );
     my ( $rules, $doc_owner ) = FetchRow($cid);
     DbFinish($cid);
-    return 1 if !$rules || $doc_owner eq $data{user};
 
-    ## remember if a user have 'w' privilege he also have 'r' privilege
-    $cid =
-    DbQuery(query =>"select users.login, users_privileges.privilege_type ".
-                    "from users_groups_link, users_privileges, users ".
-                    "where users_privileges.resource_id = '$data{id}'".
-                    " and ( users_privileges.who=users.login".
-                          " or (users_privileges.who=users_groups_link.groupid".
-                               " and users.login=users_groups_link.userid)) ".
-                    "group by users.login, users_privileges.privilege_type",
-            type  =>'UNNESTED' );
-
-    while ( my @row = FetchRow($cid) )
+    ## resolve common cases
+    if ( !$rules && $share_mode eq 'dont_share' && $doc_owner ne $data{user} )
      {
-      DbFinish($cid) && return 1
-        if    $row[0] eq $data{user}
-           && ( $row[1] eq $data{mode} || $row[1] eq 'w' );
+      # return 0 but not here
+     }
+    elsif ( !$rules || $doc_owner eq $data{user} )
+     {
+      return 1;
+     }
+    else
+     {
+      ## remember if a user have 'w' privilege he also have 'r' privilege
+      $cid =
+      DbQuery(query =>"select users.login, users_privileges.privilege_type ".
+                      "from users_groups_link, users_privileges, users ".
+                      "where users_privileges.resource_id = '$data{id}'".
+                      " and ( users_privileges.who=users.login".
+                            " or (users_privileges.who=users_groups_link.groupid".
+                                 " and users.login=users_groups_link.userid)) ".
+                      "group by users.login, users_privileges.privilege_type",
+              type  =>'UNNESTED' );
+ 
+      while ( my @row = FetchRow($cid) )
+       {
+        DbFinish($cid) && return 1
+          if    $row[0] eq $data{user}
+             && ( $row[1] eq $data{mode} || $row[1] eq 'w' );
+       }
      }
    }
   
-  ## Finally check administration privileges
-  return 1 if CheckPrivilege('sys_user_admin', $data{user});
-
   ## Return '0' according to the call
   return (0) if wantarray;
   undef $prout_page;
@@ -3323,7 +3449,7 @@ sub HtmlFoot
    }
 
   ## Show errors
-  for (@errmsg, $on{errmsg})
+  for (@errmsg, IG::Crypt( $on{errmsg}, 'decrypt') )
    {
     $html .= ToolTip( width    => '300px',
                       visible  => 'true',
@@ -3359,7 +3485,7 @@ sub HtmlFoot
   $html .= "// Form Autofocus\n".
            ( $form{focusthis}
              ? "Event.observe(window, \"load\", function()".
-               " { $form{focusthis}.focus(); } );\n"
+               " { if( $form{focusthis} ) $form{focusthis}.focus(); } );\n"
              : $form{autofocus} eq 'true'
                ? "Event.observe(window, \"load\", function()".
                  " { if(document.forms[0]) ".
@@ -4377,6 +4503,18 @@ sub ShowProtocolInfo
                               "onsend=close&amp;".
                               "text_msg=$data{id}".
                               "',500,220,'composemessage')" ),
+
+                Img( title => $lang{new_event},
+                     width => 16,
+                     class => 'noprint',
+                     src   => "$IG::img_url/calendar.gif",
+                     href  => "javascript:winPopUp(".
+                              "'calendar?".
+                                       "action=proto&amp;".
+                                       "contactid=$data{contactid}&amp;".
+                                       "backto=none&amp;".
+                                       "eventtext=$data{id}'".
+                                       ",600,550,'calendar');" ),
 	     )]);
 
   my $bar = HLayer( bottom_space => 0,
@@ -4940,6 +5078,10 @@ sub MkCgiEnv
   ## Default action
   $on{action} ||= 'default_action';
 
+  ## BackToReferer Mechanism
+  if ( $on{btr} == 1 )
+   { $on{btr} = Crypt( $ENV{HTTP_REFERER}, 'crypt' ); }
+
   ## Set a revisited Query String
   if ($ENV{QUERY_STRING})
    {
@@ -5021,12 +5163,10 @@ sub FormHead
                        " ('$cookie{igsuiteid}', '$form{id}', '$form{name}',".
                        " '$form{id}', '$tv{today}')",
                        
-                       ( $on{backtoreferer}
+                       ( $on{btr}
                          ? "insert into sessions_cache values".
-                           " ('$cookie{igsuiteid}', '$form{id}', 'backtoreferer',".
-                           " '". ( $on{backtoreferer} == 1
-                                   ? $ENV{HTTP_REFERER}
-                                   : $on{backtoreferer} ). "', '$tv{today}')"
+                           " ('$cookie{igsuiteid}', '$form{id}', 'btr',".
+                           " '".DbQuote( $on{btr} )."', '$tv{today}')"
                          : '')
                       )],
               type => 'UNNESTED' );
@@ -5075,7 +5215,8 @@ sub Input
     $data{$_} = $attr{$data{name}}{$_} if $attr{$data{name}}{$_};
    }
   
-  my $_is_readonly = $data{readonly} =~ /^(1|true)$/ || $form{status} eq 'r'
+  my $_is_readonly = ($data{readonly} =~ /^(1|true)$/ || $form{status} eq 'r')
+                     && $data{readonly} ne 'never'
                    ? 1
                    : 0;
 
@@ -5098,6 +5239,7 @@ sub Input
                      archive      => 'archive_view',
                      binders      => 'binders_view',
                      calendar     => '',
+                     documentation=> 'documentation_view',
                      equipments   => 'equipments_view',
                      contacts     => 'contacts_view',
                      contracts    => 'contracts_view',
@@ -5119,9 +5261,14 @@ sub Input
                      wikipedia    => '',
                      google       => '',
                    );
-    foreach (keys %findable)
-     { $item{$_} = $lang{$_} ||= ucfirst($_)  if CheckPrivilege($findable{$_}); }
 
+    foreach (keys %findable)
+     {
+      next if ! $findable{$_} && ! -e "$cgi_dir$S$_";
+      next if ! CheckPrivilege($findable{$_});
+      $item{$_} = $lang{$_} || ucfirst($_);
+     }
+                                
     $data{data} = \%item;
     $data{type} = 'select'; 
     $data{show} ||= "<a style=\"font-size:11px; color:$clr{font_menu_title}; background-color:$clr{bg_menu_title}\"".
@@ -5183,7 +5330,7 @@ sub Input
 			'calendar?'.
 			'action=proto&amp;'.
 			"contactid=$on{contactid}&amp;".
-			'onaction=close'.
+			'backto=none'.
 			"',700,500,'composeevent')";
        }
       elsif ( $_ eq 'igmsg')
@@ -6551,10 +6698,12 @@ sub MkTable
 
       ($value, $style, $class) = @$col if ref($col) eq 'ARRAY';
 
-      $style ||= $data{"style_c${col_cnt}_r${row_cnt}"}
-	     ||  $data{"style_c_r${row_cnt}"}
-	     ||  $data{"style_c${col_cnt}_r"}
-	     ||  $data{style_c_r};
+      $style = join ';',
+               grep { $_ } ( $style,
+                             $data{"style_c${col_cnt}_r${row_cnt}"},
+	                     $data{"style_c_r${row_cnt}"},
+	                     $data{"style_c${col_cnt}_r"},
+	                     $data{style_c_r} );
       $style &&= " style=\"$style\"";
 
       $class ||= $data{"class_c${col_cnt}_r${row_cnt}"}
@@ -6625,14 +6774,16 @@ Redirect to previous referer
 
 sub BackToReferer
  {
-  my %data = @_;
-  my $url = $on{backtoreferer} == 1
-          ? $ENV{HTTP_REFERER}
-          : $on{backtoreferer};
+  my %data  = @_;
+  my $url   = $on{btr} == 1
+            ? $ENV{HTTP_REFERER}
+            : $on{btr} 
+              ? Crypt( $on{btr}, 'decrypt' )
+              : $data{default};
 
-  my $reply = Redirect( $url || $data{default} );
+  die( "Exception 22062009.\n" ) if !$url;
 
-  defined wantarray ? return $reply : print STDOUT $reply;
+  Redirect( $url );
  }
 
 ##############################################################################
@@ -6833,7 +6984,7 @@ sub FormValidate
   ## load and parse validation info
   croak('No form validation info') if !$on{ig_form_validation} || !$on{formid};
   eval("%prms = ($on{ig_form_validation})");
-  croak("Some strange error in parsing form validation info!\n") if $@;  
+  croak("Some strange error in parsing form validation info! [$@]\n") if $@;
 
   for my $key (keys %prms)
    {
@@ -7134,10 +7285,6 @@ Convert text from/to different encodings
 
 sub TextConvert
  {
-  ## we have to disable traps beacuse some old release of Encode.pm use eval {}
-  local $SIG{__DIE__};
-  local $SIG{__WARN__};
-
   my %data = @_;
   my $converted = $data{text};
   $data{tocode} ||= $IG::lang_charset;  
@@ -7168,6 +7315,10 @@ sub TextConvert
                         || !$data{fromcode}
                         || !$data{text};
 
+  ## we have to disable traps beacuse some old release of Encode.pm use eval {}
+  local $SIG{__DIE__};
+  local $SIG{__WARN__};
+
   ## try to use Encode
   eval { require Encode };
   if ( !$@ )
@@ -7177,10 +7328,12 @@ sub TextConvert
     my $_to   = Encode::find_encoding( $data{tocode} );
     if ( $_from && $_to )
      {
+      return $converted if $_from eq $_to;
       eval { no strict "subs";
              Encode::from_to( $converted,
                               $data{fromcode}, $data{tocode},
-                              520 ); }; # 520 = Encode::FB_HTMLCREF
+                              520 );
+           }; # 520 = Encode::FB_HTMLCREF
 
       return $converted if !$@;
      }
@@ -7193,7 +7346,8 @@ sub TextConvert
     my $_conv_tmp;
     eval { Text::Iconv->raise_error(1);
            my $converter = Text::Iconv->new( $data{fromcode},$data{tocode} );
-           $_conv_tmp = $converter->convert( $converted ); };
+           $_conv_tmp = $converter->convert( $converted );
+         };
 
     return $_conv_tmp if !$@;
    }
@@ -7423,6 +7577,10 @@ sub DbQuery
       ## change date format
       $result[$dbconn]
         = $conn{$dbase}{connection}->do("set DateStyle='$fake_date_format'");
+
+      ## set client charset encoding
+      $result[$dbconn]
+        = $conn{$dbase}{connection}->do("SET CLIENT_ENCODING='ISO_8859_1'");
      }
 
     if ( $qry eq 'COMMIT' )
@@ -7536,6 +7694,10 @@ sub DbQuery
 
       $result[$dbconn]
         = $conn{$dbase}{connection}->exec("set DateStyle='$fake_date_format'");
+
+      ## set client charset encoding
+      $result[$dbconn]
+        = $conn{$dbase}{connection}->exec("SET CLIENT_ENCODING='ISO_8859_1'");
      }
 
     $result[$dbconn] = $conn{$dbase}{connection}->exec($qry);
@@ -8218,8 +8380,8 @@ sub BuildDoc
 	 "$1.$2");
    }
 
-  IG::Redirect(    $on{backtoreferer} 
-                || "$data{type}?action=docview&amp;id=$data{id}" );
+  BackToReferer( default => "$data{type}?action=docview&amp;".
+                            "id=$data{id}" );
  }
 
 ##########################################################################
@@ -8368,10 +8530,10 @@ sub FileStat
     $file_type = $lang{unknown} if $file_type =~ /x\-system\/x\-error/;
 
     ## fix opendocuments viewed as zipped files
-    if ( $file_type eq 'application/x-zip' )
+    if ( $file_type eq 'application/x-zip' || $file_type eq 'application/msword' )
      {
       $file_type = 'application/msword'  if $file_doc =~ /\.(odt|sxw|doc)$/i;
-      $file_type = 'application/msexcel' if $file_doc =~ /\.(ods|xls|sxc)$/i;
+      $file_type = 'application/msexcel' if $file_doc =~ /\.(ods|xls|xlt|sxc)$/i;
      }
 
     my @file_info = stat( $file_doc );
@@ -8753,8 +8915,9 @@ sub Crypt
    
   require IG::Mydes;
   require IG::MimeBase64;
-  $key ||= $crypt_key;
-  my $ref = Mydes->new($key);
+
+  #XXX2FIX use of $pwd_admin is Dangerous! it could change its value
+  my $ref = Mydes->new( $key || $crypt_key || $pwd_admin ); 
          
   if ($action eq 'decrypt')
    {
@@ -9148,7 +9311,7 @@ sub ContactFinder
                                 " address2, address3, zip1, zip2, zip3,".
                                 " rea, istat, employees, employername,".
                                 " taxidnumber, tel1, email, contactvalue,".
-                                " jobtitle ".
+                                " jobtitle, piva ".
                                 "FROM contacts ".
                                 "WHERE contactid = '$in{contactid}' ".
                                 "LIMIT 1",
@@ -9172,6 +9335,7 @@ sub ContactFinder
       $on{employees}	= $row[16];
       $on{employer}	= $row[17];
       $on{taxidnumber}	= $row[18];
+      $on{vatnumber}    = $row[23];
       $on{tel}		= $row[19];
       $on{email}	= $row[20];
       $on{contactvalue}	= $row[21] ||= '0';

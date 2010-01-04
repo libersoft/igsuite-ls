@@ -29,12 +29,13 @@ IG::DTable (	proto		=> sub { CheckPrivilege('opportunities_edit') },
 		protoagg	=> sub { CheckPrivilege('opportunities_edit') },
 		protomodi	=> sub { CheckPrivilege('opportunities_edit') },
 		protoview	=> sub { CheckPrivilege('opportunities_view') },
-		close           => sub { CheckPrivilege('opportunities_edit') },
+		close_opp       => sub { CheckPrivilege('opportunities_edit') },
 		chart1		=> sub { CheckPrivilege('opportunities_view') },
 		findshow	=> sub { CheckPrivilege('opportunities_view') },
 		findexec	=> sub { CheckPrivilege('opportunities_view') },
 		delshow		=> sub { CheckPrivilege('opportunities_edit') },
 		delexec		=> sub { CheckPrivilege('opportunities_edit') },
+		backtoreferer	=> sub { CheckPrivilege('opportunities_view') },
 		default_action	=> sub { CheckPrivilege('opportunities_view') } );
 
 #############################################################################
@@ -82,8 +83,7 @@ sub default_action
 		 "<span style=\"color:$IG::clr{font_low_evidence};\">".
 		 "$row[12]</span>",
 		 "opportunities?action=protoview&amp;".
-                               "view=$on{view}&amp;".
-                               "alphabet=$on{alphabet}&amp;".
+                               "btr=1&amp;".
                                "id=$row[0]", $style],
 		[$row[7],'',$style],
 		[GetTableVal('opportunities_sales_stage',$row[9]),'',$style],
@@ -96,6 +96,13 @@ sub default_action
   Footer();
  }
 
+#############################################################################
+#############################################################################
+sub backtoreferer
+ {
+  IG::BackToReferer( default => 'opportunities' );
+ }
+ 
 #############################################################################
 #############################################################################
 sub protoview
@@ -114,9 +121,7 @@ sub protoview
 	    width=>'100%');
 
   my $base_link = "&amp;id=$on{id}".
-                  "&amp;view=$on{view}".
-                  "&amp;order=$on{order}".
-                  "&amp;alphabet=$on{alphabet}";
+                  "&amp;btr=" . MkUrl($on{btr});
 
   HLayer( left_layers =>
            [(
@@ -128,11 +133,11 @@ sub protoview
 
              ( $row[13] == 1
                ? MkButton( text => $lang{close_the_opportunity},
-                           link => "opportunities?action=close".$base_link )
+                           link => "opportunities?action=close_opp".$base_link )
                : '' ),
 
              MkButton( text => $lang{back_to_list},
-                       link => "opportunities?action=default_action".$base_link ),
+                       link => "opportunities?action=backtoreferer".$base_link ),
             )]
         );
 
@@ -187,9 +192,9 @@ sub protoview
 sub _short_cuts
  {
   return IG::QuickCreator().
-         TaskHead( title=>$lang{last_documents},
-                   icon=>2,
-                   width=>180 ).
+         TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
          IG::LastDocuments().
          TaskFoot();
  }
@@ -330,9 +335,7 @@ sub protoagg
 
   LogD('', 'insert', 'opportunity', $on{id});
 
-  $on{backtoreferer}
-  ? IG::BackToReferer()
-  : protoview();
+  protoview();
  }
 
 #############################################################################
@@ -419,7 +422,7 @@ sub findexec
 				  "opportunities?".
 					"action=proto&amp;".
 					"contactid=$on{contactid}&amp;".
-					"backtoreferer=1';",
+					"btr=1';",
 		    show       => $lang{new_opportunity},
 		    fieldstyle => 'margin:0px',
 		    style      => 'margin:0px;font-size:10px; height:15px' ).
@@ -487,7 +490,7 @@ sub findexec
 
     TaskListItem (
 		[$row[1],
-		 "opportunities?action=protoview&amp;id=$row[0]",
+		 "opportunities?action=protoview&amp;btr=1&amp;id=$row[0]",
 		 $style],
 		[@opp_status[$row[13]]],
 		[GetTableVal('opportunities_sales_stage',$row[9]),
@@ -552,12 +555,13 @@ sub delexec
    { DbQuery("delete from opportunities where id='$in{id}' and owner='$auth_user'") }
 
   LogD("", "delete" ,"opportunities", $on{id});
-  IG::Redirect( "opportunities" );
+
+  IG::BackToReferer( default => 'opportunities' );
  }
 
 ############################################################################
 ############################################################################
-sub close
+sub close_opp
  {
   QuoteParams();
   if ( CheckPrivilege('sys_user_admin') )
@@ -571,7 +575,10 @@ sub close
    }
 
   LogD("", "close" ,"opportunities", $on{id});
-  IG::Redirect( "opportunities?action=protoview&amp;id=$on{id}" );
+
+  IG::Redirect( "opportunities?action=protoview&amp;".
+                              "btr=" . MkUrl($on{btr}). '&amp;'.
+                              "id=$on{id}" );
  }
 
 ############################################################################
@@ -668,10 +675,10 @@ sub Header
   HLayer( left_layers =>
            [(
 	     MkButton( text => $lang{new_opportunity},
-	               link => 'opportunities?action=proto' ),
+	               link => 'opportunities?action=proto&amp;btr=1' ),
 
              MkButton( text => $lang{delete},
-                       link => 'opportunities?action=delshow' ),
+                       link => 'opportunities?action=delshow&amp;btr=1' ),
 
              MkButton( text => $lang{update_list},
                        link => 'opportunities' ),

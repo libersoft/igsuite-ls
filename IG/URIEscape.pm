@@ -21,7 +21,7 @@
 #############################################################################
 
 #
-# $Id: Escape.pm,v 3.28 2004/11/05 13:58:31 gisle Exp $
+# $Id: URIEscape.pm,v 1.424 2009/12/30 15:43:59 lucas73 Exp $
 #
 
 package URI::Escape;
@@ -171,7 +171,7 @@ require Exporter;
 @ISA = qw(Exporter);
 @EXPORT = qw(uri_escape uri_unescape);
 @EXPORT_OK = qw(%escapes uri_escape_utf8);
-$VERSION = sprintf("%d.%02d", q$Revision: 3.28 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.424 $ =~ /(\d+)\.(\d+)/);
 
 use Carp ();
 

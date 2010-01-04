@@ -139,7 +139,7 @@ sub docview
            ? MkLink( $row[3] )
            : "<a href=\"offers?action=markasnotaccepted&amp;".
                               "id=$row[0]&amp;".
-                              "backtoreferer=1\">[ ".
+                              "btr=1\">[ ".
              $lang{mark_as_not_accepted}.
              ' ]</a>';
 
@@ -154,13 +154,14 @@ sub docview
   Header( undef, undef, $on{id} );
 
   IG::ShowProtocolInfo
-   ( id     => $row[0],
-     title  => $lang{offers_protocol}.
-               Img( src   => "$IG::img_url/${icon}.gif",
-	            width => 16,
-	            style => 'margin-left:3px; vertical-align:middle',
-	            title => $lang{review} ),
-     fields => [( [ $lang{contact_name},
+   ( id        => $row[0],
+     contactid => $row[14],
+     title     => $lang{offers_protocol}.
+                  Img( src   => "$IG::img_url/${icon}.gif",
+	               width => 16,
+	               style => 'margin-left:3px; vertical-align:middle',
+	               title => $lang{review} ),
+     fields    => [( [ $lang{contact_name},
 		    "<a href=\"contacts?".
 			      "action=showrecord&amp;".
 			      "contactid=$row[14]\">".
@@ -335,7 +336,7 @@ sub reviewlist
 	 "offers?action=chflag&amp;".
 	        "id=$row[0]&amp;".
 	        "status=$row[6]&amp;".
-	        "backtoreferer=1&amp;".
+	        "btr=1&amp;".
 	        "flag=1&amp;".
 	        "pos=$on{pos}",
 	 "align=center"],
@@ -343,7 +344,7 @@ sub reviewlist
 	 "offers?action=chflag&amp;".
 	        "id=$row[0]&amp;".
 	        "status=$row[7]&amp;".
-	        "backtoreferer=1&amp;".
+	        "btr=1&amp;".
 	        "flag=2&amp;".
 	        "pos=$on{pos}",
 	 "align=center"],
@@ -351,7 +352,7 @@ sub reviewlist
 	 "offers?action=chflag&amp;".
 	        "id=$row[0]&amp;".
 	        "status=$row[8]&amp;".
-	        "backtoreferer=1&amp;".
+	        "btr=1&amp;".
 	        "flag=3&amp;".
 	        "pos=$on{pos}",
 	 "align=center"]
@@ -400,7 +401,7 @@ sub showreview
 	                                  "id=$on{id}&amp;".
 	                                  "status=$row[0]&amp;".
 	                                  "flag=1&amp;".
-	                                  "backtoreferer=1" ),
+	                                  "btr=1" ),
 
                       Img( src   => $ima2,
                            caption => $lang{technical_review},
@@ -408,7 +409,7 @@ sub showreview
                                           "id=$on{id}&amp;".
                                           "status=$row[1]&amp;".
                                           "flag=2&amp;".
-                                          "backtoreferer=1" ),
+                                          "btr=1" ),
                                           
                       Img( src   => $ima3,
                            caption => $lang{operating_review},
@@ -416,7 +417,7 @@ sub showreview
                                           "id=$on{id}&amp;".
                                           "status=$row[2]&amp;".
                                           "flag=3&amp;".
-                                          "backtoreferer=1" ),
+                                          "btr=1" ),
                     )]
                 ),4 );
 
@@ -860,11 +861,13 @@ sub findshow
 
 	     Input(    type       => 'select',
 		       name       => 'method',
-		       data       =>[( ['from',  $lang{with_header}],
-				       ['id',    $lang{with_protocol}],
-				       ['date',  $lang{with_date}],
-				       ['npa',   $lang{with_npa}],
-				       ['notes', $lang{with_notes}] )]),
+		       data       =>[( ['from',     $lang{with_header}],
+				       ['id',       $lang{with_protocol}],
+				       ['date',     $lang{with_date}],
+				       ['npa',      $lang{with_npa}],
+				       ['notes',    $lang{with_notes}],
+				       ['comments', $lang{with_comments}]
+				     )]),
 
 	     Input(    type       => 'text',
 		       name       => 'keytofind',
@@ -890,6 +893,7 @@ sub findshow
 sub findexec
  {
   my $query;
+  my $join;
   my $counter;
  
   if ($on{ajax_request})
@@ -902,7 +906,7 @@ sub findexec
                                    "offers?".
                                         "action=proto&amp;".
                                         "contactid=$on{contactid}&amp;".
-                                        "backtoreferer=1';",
+                                        "btr=1';",
                     show       => $lang{new_item},
                     fieldstyle => 'margin:0px',
                     style      => 'margin:0px;font-size:10px; height:15px' ).
@@ -950,11 +954,21 @@ sub findexec
    { $query = "offers.npa ~* '$in{keytofind}'"; }
   elsif ($on{method} eq 'date')
    {
-    $in{keytofind} = CkDate($in{keytofind});
-    $query = "offers.issue = '$in{keytofind}'";
+    if ( $in{keytofind} = CkDate($in{keytofind}) )
+     { $query = "offers.issue = '$in{keytofind}'"; }
+    else
+     {
+      $query = '1=0';
+      push @IG::errmsg, $lang{Err_issue};
+     }
    }
   elsif ($on{method} eq 'notes')
    { $query = "offers.note1 ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'comments')
+   {
+     $query = "comments.comment ~* '$in{keytofind}'";
+     $join  = "LEFT JOIN comments ON comments.referenceid = offers.id ";
+   }
 
   TaskListMenu(	[$lang{number}],
 		[$on{ajax_request} ? '' : $lang{receiver}],
@@ -966,12 +980,13 @@ sub findexec
 		[$lang{notes}],
               );
 
-  DbQuery( "SELECT offers.id, offers.issue, offers.contactname,".
+  DbQuery( "SELECT DISTINCT offers.id, offers.issue, offers.contactname,".
            " offers.owner, offers.note1, offers.note, offers.category,".
            " offers.expire, offers.flag1, offers.flag2, offers.flag3,".
            " expire-current_date, users.initial ".
            "FROM offers ".
            "LEFT JOIN users ON offers.owner=users.login ".
+           $join.
            "WHERE $query ".
            "ORDER BY offers.issue desc, offers.id desc" );
 

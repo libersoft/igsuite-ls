@@ -1,6 +1,6 @@
 ## IGSuite 4.0.0
 ## Procedure: TextReform.pm
-## Last update: 25/05/2009
+## Last update: 26/05/2009
 #############################################################################
 # IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
 # Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
@@ -24,7 +24,8 @@ package Text::Reform;
 
 use strict; use vars qw($VERSION @ISA @EXPORT @EXPORT_OK); use Carp;
 use 5.005;
-use version; $VERSION = qv('1.12.2');
+#XXXIG use version; $VERSION = qv('1.12.2');
+$VERSION = '1.12.2';
 
 require Exporter;
 

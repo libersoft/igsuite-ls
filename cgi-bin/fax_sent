@@ -113,9 +113,10 @@ sub docview
   Header();
 
   IG::ShowProtocolInfo
-   ( id     => $row[0],
-     title  => $lang{fax_sent_protocol},
-     fields => [( [ $lang{contact_name},
+   ( id        => $row[0],
+     contactid => $row[6],
+     title     => $lang{fax_sent_protocol},
+     fields    => [( [ $lang{contact_name},
                     "<a href=\"contacts?".
                     "action=showrecord&amp;".
                     "contactid=$row[6]\">".
@@ -332,11 +333,13 @@ sub findshow
 
 	    Input (	type      => 'select',
 			name      => 'method',
-			data      => [(['header',$lang{with_header}],
-				       ['id',	 $lang{with_protocol}],
-				       ['date',  $lang{with_date}],
-				       ['npa',   $lang{with_npa}],
-				       ['note',  $lang{with_notes}])]),
+			data      => [(['header',   $lang{with_header}],
+				       ['id',	    $lang{with_protocol}],
+				       ['date',     $lang{with_date}],
+				       ['npa',      $lang{with_npa}],
+				       ['note',     $lang{with_notes}],
+                                       ['comments', $lang{with_comments}],
+				      )]),
 
 	    Input (	type      => 'text',
 			name      => 'keytofind',
@@ -362,6 +365,7 @@ sub findshow
 sub findexec
  {
   my $query;
+  my $join;
 
   if ( $on{ajax_request} )
    {
@@ -373,7 +377,7 @@ sub findexec
                                  "fax_sent?".
                                         "action=proto&amp;".
                                         "contactid=$on{contactid}&amp;".
-                                        "backtoreferer=1';",
+                                        "btr=1';",
                     show      => $lang{new_item},
                     fieldstyle=> 'margin:0px',
                     style     => 'margin:0px;font-size:10px; height:15px' ).
@@ -434,6 +438,11 @@ sub findexec
    {
     $query = "fax_sent.contactname ~* '".DbQuote($on{keytofind})."'";
    }
+  elsif ($on{method} eq 'comments')
+   {
+     $query = "comments.comment ~* '$in{keytofind}'";
+     $join  = "LEFT JOIN comments ON comments.referenceid = fax_sent.id ";
+   }
 
   my $counter = 0;
   TaskListMenu (
@@ -446,7 +455,10 @@ sub findexec
 	[]
 		);
 
-  DbQuery("SELECT * FROM fax_sent ".
+  DbQuery("SELECT DISTINCT".
+          " fax_sent.id, fax_sent.issue, fax_sent.contactname,".
+          " fax_sent.owner, fax_sent.note FROM fax_sent ".
+          $join.
           "WHERE $query ".
           "ORDER BY fax_sent.issue desc");
 

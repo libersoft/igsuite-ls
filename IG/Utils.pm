@@ -28,6 +28,81 @@ use IG;
 ##############################################################################
 ##############################################################################
 
+=head3 CleanWhiteSpaces()
+
+Clean white spaces from a multi-lines string
+
+=cut
+
+sub CleanWhiteSpaces
+ {
+  my %data = @_;
+
+  return if ! $data{text};
+  my @arr = split /\n/, $data{text};
+
+  ## Leading/Trailing space cleanup
+  @arr = _leadtrailclean(@arr) if $data{leadclean} || $data{clean_all};
+  @arr = reverse _leadtrailclean(reverse @arr) if $data{trailclean} || $data{clean_all};
+
+  ## Indentation cleanup
+  @arr = _indentclean(@arr) if $data{indentclean} || $data{clean_all};
+
+  ## EOL Space cleanup
+  @arr = _eolclean(@arr) if $data{eolclean} || $data{clean_all};
+
+  return join "\n", @arr;
+ }
+
+## Internal functions
+sub _leadtrailclean
+ {
+  my $first = 1;
+  my @ret = ();
+  foreach (@_)
+   {
+    if ( $first )
+     {
+      if (! /^\s*$/)
+       {
+       	$first = 0;
+	push @ret, $_;
+       }
+     }
+    else
+     {
+      $first = 0;
+      push @ret, $_;
+     }
+   }
+  return @ret;
+ }
+
+sub _indentclean
+ {
+  my @ret = ();
+  foreach (@_)
+   {
+    1 while s/^[ \t]//g;
+    push @ret, $_;
+   }
+  return @ret;
+ }
+
+sub _eolclean
+ {
+  my @ret = ();
+  foreach (@_)
+   {
+    $_ =~ s/[ \t]*(\r*)$/$1/g;
+    push @ret, $_;
+   }
+  return @ret;
+ }
+
+##############################################################################
+##############################################################################
+
 =head3 TextElide()
 
 Inspired by Text::Elide
@@ -611,8 +686,9 @@ sub MkComments
                 "<div id=\"comments_add\" style=\"padding:5px 5px 0px 5px\">".
 		"<a onclick=\"new Effect.SwitchOff('comments_add');".
 		             "new Effect.BlindDown('comments_form');".
-		             "document.body.scrollTop = document.body.offsetHeight;\"".
-		             " style=\"cursor:pointer;\">".
+		             "setTimeout('\$(\\'commenttext\\').focus()',1500);".
+		             "setTimeout('window.location.hash=\\'add_comment_anchor\\'',1000);\"".
+                  " style=\"cursor:pointer;\">".
                 Img( src => "$IG::img_url/add.gif", title => 'Add' ).
 		" $lang{new_comment}</a>".
                 "</div>".
@@ -683,7 +759,8 @@ sub MkComments
                         method=>'html').
 
 	   FormFoot().
-	   "</div></div></div>\n";
+	   "</div></div></div>\n".
+	   "<a name=\"add_comment_anchor\"></a>\n";
 
   ## Check external plugins
   $html = CkExtPlugins( 'MkComments', \$html, \%data ) if %IG::plugins;
@@ -1601,10 +1678,16 @@ sub HtmlUntag
   1 while  $html =~ s/ {2,}/ /g;
 
   ## Decode Entities
-  require IG::HTMLEntities;
-  $html = HTML::Entities->can( 'decode_entities' )   
-        ? HTML::Entities::decode_entities( $html )   
-        : HTML::Entities::decode_entities_old( $html ); 
+  my $html_ori = $html;
+  eval {
+        local $SIG{'__DIE__'};
+        local $SIG{'__WARN__'};
+        require IG::HTMLEntities;
+        $html = HTML::Entities->can( 'decode_entities' )   
+              ? HTML::Entities::decode_entities( $html )   
+              : HTML::Entities::decode_entities_old( $html );
+       };
+  $html = $html_ori if $@;
 
   return $html || '';
  }

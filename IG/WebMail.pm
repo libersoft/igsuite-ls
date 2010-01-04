@@ -1,6 +1,6 @@
 ## IGSuite 4.0.0
 ## Procedure: WebMail.pm
-## Last update: 25/05/2009
+## Last update: 26/05/2009
 #############################################################################
 # IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
 # Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
@@ -75,9 +75,9 @@ sub SendMsg
     $mail{To} = $mail{From} if !$mail{To}; ##XXX2TEST
 
     my $sendmail_cmd = "$IG::ext_app{sendmail} ".
-                       "-oem ".
-                       "-oi ".
-                       "-t 1>&2";
+                       '-f '. (IG::UsrInf('email') || "$auth_user\@localhost").' '.
+                       '-oi '.
+                       '-t 1>&2';
 
     open (SENDMAIL, "|$sendmail_cmd")
       or die("Can't execute '$sendmail_cmd'.\n");
@@ -171,14 +171,15 @@ sub SendMsg
      }
 
     ## start mail message
-    $smtp->mail( ( IG::UsrInf('email') || "$auth_user\@localhost" ) . "\n" );
+    #XXX2TEST $smtp->mail( ( IG::UsrInf('email') || "$auth_user\@localhost" ) . "\n" );
+    $smtp->mail( IG::UsrInf('email') || "$auth_user\@localhost" );
     $smtp->recipient( @addresses, { SkipBad => 1 } );
     $smtp->data();
 
     ## send header part
     foreach ( keys %mail )
      {
-      next if $_ eq 'Message';
+      next if $_ eq 'Message' || $_ eq 'Bcc';
       $smtp->datasend( "$_: $mail{$_}\n" );
      }
 
@@ -556,6 +557,10 @@ sub AddMimeHeader
 
   ## Find a valid content type
   $data{type} ||= (IG::FileStat($data{contents}, 'content'))[0];
+  
+  ##XXX2TEST: FileMMagic returns 'application/msword' for Office 97-2003 Excel files
+  $data{type} = 'application/excel' if $data{type} eq 'application/msword' && $data{name} =~ /\.(xls|xlt)$/i;
+  
   $data{type} ||= 'application/octet-stream';
 
   $data{name} = 'Email Message' if $data{type} eq 'message/rfc822';
@@ -717,7 +722,6 @@ sub ParseHtmlBodyPart
   $urlbase   = $2 || "$IG::cgi_url/";
   $urlbase   =~ s!/[^/]+$!/!;
   ($srvbase) = $urlbase =~ /^([^\/]+\:\/\/[^\/]+)/;
-  return $contents if !$urlbase || !$srvbase;
     
   ## Only absolute path can be transformed
   ## find image url to be attached

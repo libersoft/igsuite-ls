@@ -22,7 +22,7 @@
 
 package Config::Simple;
 
-# $Id: Simple.pm,v 3.57 2006/09/12 19:15:04 sherzodr Exp $
+# $Id: ConfigSimple.pm,v 1.387 2009/12/30 15:43:59 lucas73 Exp $
 
 use strict;
 # uncomment the following line while debugging. Otherwise,

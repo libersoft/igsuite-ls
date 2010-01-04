@@ -331,6 +331,7 @@ sub docview
 
   IG::ShowProtocolInfo
    ( id        => $row[0],
+     contactid => $row[7],
      title     => $lang{binders_protocol},
      can_email => 'true',
      can_zip   => 'false',
@@ -614,7 +615,8 @@ sub findshow
 		
 	    Input(    type       => 'select',
 		      name       =>'fieldtofind',
-		      data       =>[(['from',	$lang{with_header}],
+		      data       =>[(['name',   $lang{with_title}],
+		                     ['from',	$lang{with_header}],
 				     ['id',	$lang{with_protocol}],
 			             ['date',	$lang{with_date}],
 			             ['note',   $lang{with_notes}])]),
@@ -654,7 +656,7 @@ sub findexec
                                  "binders?".
                                         "action=proto&amp;".
                                         "contactid=$on{contactid}&amp;".
-                                        "backtoreferer=1';",
+                                        "btr=1';",
                     show      => $lang{new_item},
                     fieldstyle=> 'margin:0px',
                     style     => 'margin:0px;font-size:10px; height:15px' ).
@@ -684,6 +686,8 @@ sub findexec
      $query = "1=0";
      push @IG::errmsg, $lang{Err_find};
    }
+  elsif ($on{fieldtofind} eq 'name')
+   { $query = "binders.name~*'$in{keytofind}'"; }
   elsif ( $on{fieldtofind} eq 'id' || $on{keytofind} =~ /F\d\d\d\d\d\.\d\d/ )
    { $query = "binders.id~*'$in{keytofind}'"; }
   elsif ( $on{fieldtofind} eq 'from' )

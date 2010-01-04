@@ -22,7 +22,7 @@
 
 
 #******************************************************************************
-# $Id: POP3Client.pm,v 2.18 2008/02/27 03:03:21 ssd Exp $
+# $Id: MailPOP3Client.pm,v 1.436 2009/12/30 15:43:59 lucas73 Exp $
 #
 # Description:  POP3Client module - acts as interface to POP3 server
 # Author:       Sean Dowd <pop3client@dowds.net>
@@ -52,8 +52,8 @@ require Exporter;
 
 );
 
-my $ID =q( $Id: POP3Client.pm,v 2.18 2008/02/27 03:03:21 ssd Exp $ );
-$VERSION = substr q$Revision: 2.18 $, 10;
+my $ID =q( $Id: MailPOP3Client.pm,v 1.436 2009/12/30 15:43:59 lucas73 Exp $ );
+$VERSION = substr q$Revision: 1.436 $, 10;
 
 
 # Preloaded methods go here.

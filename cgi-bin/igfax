@@ -99,7 +99,7 @@ sub logs
   my ($limit, $offset, $counter);
   while (<DAT>)
    {
-    next if /\tCALL\t/;
+    next if /\t(CALL|SUBMIT)\t/; # SUBMIT needs to Hylafax+
     next if $on{filter_key} && ! /\Q$on{filter_key}\E/;
     $counter++;
    }
@@ -167,7 +167,7 @@ sub logs
   $counter = 0;
   while (<DAT>)
    {
-    next if /\tCALL\t/;
+    next if /\t(CALL|SUBMIT)\t/; # SUBMIT needs to Hylafax+
     next if $on{filter_key} && ! /\Q$on{filter_key}\E/;
     next if ++$counter < ( $offset + 1 );
     last if $counter   > ( $offset + $limit );
@@ -451,7 +451,10 @@ sub faxstat
 			      "&amp;contactid=$faxinfo[7]".
 			      "&amp;builddoc_choice=4".
 			      "&amp;builddoc_source4=$faxinfo[0]'",
-	      data     => \%item )],
+	      data     =>    CheckPrivilege('igfax_edit')
+	                  || $faxinfo[6] eq $lang{copyed_document}
+	                  ? \%item
+	                  : undef )],
      );
    }
   TaskListFoot();
@@ -545,7 +548,7 @@ sub outgoings
 	["$fx{tottries}:$fx{maxtries}"],
 	[$fx{status}],
 	[ Img( src=>"$IG::img_url/delete.gif" ),
-	  "igfax?action=delfaxjob&amp;backtoreferer=1&amp;job=$job" ]
+	  "igfax?action=delfaxjob&amp;btr=1&amp;job=$job" ]
 		   );
      }
    }
@@ -591,7 +594,7 @@ sub faxsent
 	       title => $lang{delete},
 	       href  => "igfax?action=delfaxjob&amp;".
 	                      "job=$job&amp;".
-	                      "backtoreferer=1").
+	                      "btr=1").
           Img( src   => "$IG::img_url/mime_mini_word.png",
                title => $lang{fax_report},
                href  => "igfax?action=logs&amp;filter_key=$fx{jobtag}") ]

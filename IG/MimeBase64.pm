@@ -40,8 +40,10 @@ sub encode_base64 ($;$)
 	if (bytes::length($_[0]) > length($_[0]) ||
 	    ($] >= 5.008 && $_[0] =~ /[^\0-\xFF]/))
 	{
-	    require Carp;
-	    Carp::croak("The Base64 encoding is only defined for bytes");
+	    # require Carp; #XXXIG
+	    # Carp::croak("The Base64 encoding is only defined for bytes");
+            die( "Exception 20090626: ".
+                 "The Base64 encoding is only defined for bytes" );
 	}
     }
 
@@ -75,8 +77,10 @@ sub decode_base64 ($)
     my $str = shift;
     $str =~ tr|A-Za-z0-9+=/||cd;            # remove non-base64 chars
     if (length($str) % 4) {
-	require Carp;
-	Carp::carp("Length of base64 data not a multiple of 4")
+	# require Carp; #XXXIG
+	# Carp::carp("Length of base64 data not a multiple of 4")
+        return "Invalid Base64 Part: ".
+               "Length of base64 data not a multiple of 4";
     }
     $str =~ s/=+$//;                        # remove padding
     $str =~ tr|A-Za-z0-9+/| -_|;            # convert to uuencoded format

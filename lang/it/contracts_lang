@@ -4,6 +4,7 @@
 
 %lang = (%lang,
    (
+Err_contract_but_contact=>'Attenzione: Nonostante il contratto sia attivo, il contatto risulta non classificato come cliente',
 days_to_expire          =>'Giorni alla scadenza',
 in_revision_contract    =>'Contratto in revisione',
 contract_status		=>'Stato del contratto in questa fase',

@@ -1,6 +1,6 @@
 #! /usr/bin/perl
 # Procedure: equipments
-# Last update: 25/05/2009
+# Last update: 30/05/2009
 #############################################################################
 # IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
 # Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
@@ -110,15 +110,14 @@ sub proto
   my $resource_status = IG::CheckResourcePrivileges
                           ( id               => $on{id},
                             mode             => 'r',
-                            resource_cgi     => 'equipments',
-                            resource_dbtable => 'equipments' );
+                            resource_cgi     => 'equipments' );
   return if !$resource_status;
 
   my %ajax_req;
   require IG::Utils;
   
-  ## Set Ajax requests
-  if ( $on{id} && CheckPrivilege('igforms_view') )
+  ## Set Ajax requests for igforms
+  if ( $on{id} )
    {
     $ajax_req{getpersonalizedfieldslist} = "igforms?".
                                            "action=build_form_mask&amp;".
@@ -142,7 +141,6 @@ sub proto
                     link      => "javascript:winPopUp(".
                                  "'igsuite?".
                                           "action=resourcemode&amp;".
-                                          "resource_dbtable=equipments&amp;".
                                           "resource_cgi=equipments&amp;".
                                           "id=$on{id}".
                                           "',620,550,'resourcemode')" ),
@@ -238,7 +236,7 @@ sub proto
                      data     => { 1 => $lang{available},
 		                   0 => $lang{unavailable}} ).
 
-              ( CheckPrivilege('services_show')
+              ( CheckPrivilege('services_view')
                 ? Input( type     => 'select',
                          style    => 'width:240px',
                          name     => 'services',
@@ -246,7 +244,9 @@ sub proto
  		         data     => { 1 => $lang{no},
                                        2 => $lang{yes}},
                          show     => 'Includi nei servizi') #XXX2TRANSLATE
-                : '').
+                : Input( type     => 'hidden',
+                         value    => 1,
+                         name     => 'services') ).
 
               Input( show     => $lang{last_maintenance_date},
                      style    => 'width:220px',
@@ -430,7 +430,7 @@ sub proto
 		    data     => $groupquery,
 		    name     => 'booking_approve_group' );
 
-  my $pan6 = $on{id} && CheckPrivilege('igforms_view') ? '&nbsp;' : '';
+  my $pan6 = $on{id} ? '&nbsp;' : '';
 
 
   ## File Repository ############################################
@@ -486,8 +486,7 @@ sub protoagg
   my $resource_status = IG::CheckResourcePrivileges
                           ( id               => $on{id},
                             mode             => 'w',
-                            resource_cgi     => 'equipments',
-                            resource_dbtable => 'equipments' );
+                            resource_cgi     => 'equipments' );
   return if !$resource_status;
 
   ## Store photo
@@ -647,7 +646,7 @@ sub findexec
                                   "equipments?".
                                           "action=proto&amp;".
                                           "contactid=$on{contactid}&amp;".
-                                          "backtoreferer=1';",
+                                          "btr=1';",
                     show      => $lang{new_item},
                     fieldstyle=> 'margin:0px',
                     style     => 'margin:0px;font-size:10px; height:15px' ).
@@ -775,8 +774,7 @@ sub delexec
   my $resource_status = IG::CheckResourcePrivileges
                           ( id               => $on{id},
                             mode             => 'w',
-                            resource_cgi     => 'equipments',
-                            resource_dbtable => 'equipments' );
+                            resource_cgi     => 'equipments' );
   return if !$resource_status;
 
   DbQuery("delete from equipments where id='".DbQuote($on{id})."'");

@@ -28,10 +28,9 @@ IG::DTable( proto_field         => sub { CheckPrivilege('igforms_edit') },
 	    insert_field        => sub { CheckPrivilege('igforms_edit') },
 	    edit_field	        => sub { CheckPrivilege('igforms_edit') },
 	    change_field_status => sub { CheckPrivilege('igforms_edit') },
-	    build_form_mask     => sub { CheckPrivilege('igforms_view') },
+	    build_form_mask     => sub { CheckPrivilege()               },
 	    show_form_fields    => sub { CheckPrivilege('igforms_view') },
 	    default_action      => sub { CheckPrivilege('igforms_view') } );
-
 
 #############################################################################
 #############################################################################
@@ -112,7 +111,7 @@ sub proto_field
          type  => 'text' );
 
   Input( name  => 'defaultvalues',
-         readonly => $field_rmode,
+         #XXX2TEST readonly => $field_rmode,
          show  => $lang{field_values},
          style => 'width:300px; height:120px',
          type  => 'textarea' );
@@ -199,20 +198,32 @@ sub change_field_status
 #############################################################################
 sub build_form_mask
  {
+  die("You don't have right privileges!")
+    if ! IG::CheckResourcePrivileges( id           => $on{recordid},
+                                      resource_cgi => $on{igformid},
+                                      mode         => 'r' );
+
+  my $_can_edit
+       = IG::CheckResourcePrivileges( id           => $on{recordid},
+                                      resource_cgi => $on{igformid},
+                                      mode         => 'w' );
+
+     $_can_edit = 0 if $on{readonly};
+
   HttpHead( expires => 'now' );
 
-  TaskMsg( Input( type=>'button',
-                  float=>'right',
-                  onclick=>"document.location = '".
-                             "igforms?".
+  TaskMsg( Input( type       => 'button',
+                  float      => 'right',
+                  onclick    => "document.location = '".
+                                "igforms?".
                                       "action=show_form_fields&amp;".
                                       "igformid=$on{igformid}';",
-                  show=>$lang{edit_form},
-                  fieldstyle=>'margin:0px',
-                  style=>'margin:0px;font-size:10px; height:15px' ).
+                  show       => $lang{edit_form},
+                  fieldstyle => 'margin:0px',
+                  style      => 'margin:0px;font-size:10px; height:15px' ).
 
-           Img(src=>"$IG::img_url/mime_mini_offer.png",
-               align=>'absmiddle').
+           Img(   src        => "$IG::img_url/mime_mini_offer.png",
+                  align      => 'absmiddle').
            'IGForms'
            ,7);
 
@@ -261,7 +272,7 @@ sub build_form_mask
                  name      => $on{fieldid},
                  show      => $on{fieldlabel},
                  float     => $on{fieldfloat},
-                 readonly  => CheckPrivilege('igforms_edit') ? 0 : 1,
+                 readonly  => $_can_edit ? 0 : 1,
                  quickhelp => $on{description},
                  value     => $on{value},
                  zerovalue => 'true',
@@ -269,7 +280,7 @@ sub build_form_mask
                               ? 1 : '',
                  data      => \@data,
                  override  => 1,
-                 onblur    => CheckPrivilege('igforms_edit')
+                 onblur    => $_can_edit
                               ? ( $on{fieldtype} eq 'date'
 	                          ? "ajaxrequest(['NO_CACHE',".
 	                            "'ajaxaction__ckdate',".
@@ -280,6 +291,7 @@ sub build_form_mask
 	                          "'$on{fieldid}',".
 	                          "'ajaxaction__update_igforms_field',".
                                   "'recordid__$on{recordid}',".
+                                  "'igformid__$on{igformid}',".
                                   "'fieldid__$on{fieldid}'],".
 	                        "['fake_div'],'GET');".
 	                        "return true;"

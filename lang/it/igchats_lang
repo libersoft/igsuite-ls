@@ -8,11 +8,11 @@ chat_invite		=> 'Invita in chat',
 disconnect              => 'Disconnetti',
 clean_msgs              => 'Pulisci',
 close_session_alert     => 'Vuoi chiudere la sessione?',
-connection_lost		=>'Connesione persa! Selezionare il tasto ok per stabilire una nuova connesione',
+connection_lost		=> 'Connesione persa! Selezionare il tasto ok per stabilire una nuova connesione',
 welcome_to		=> 'Benvenuti nella stanza',
 connected_users 	=> 'Utenti connessi',
 available_rooms 	=> 'Stanze disponibili',
-nousers_alert           => 'Attenzione! nessun utente in linea. Il sistema sta provvedendo ad inoltrare degli inviti agli utenti disponibili. Se possibile attendere qualche minuto',
+nousers_alert           => 'Non ci sono utenti in questo canale. Il sistema sta provvedendo ad inoltrare degli inviti ad utenti disponibili. Se possibile attendere qualche minuto',
    ));
 
 1;

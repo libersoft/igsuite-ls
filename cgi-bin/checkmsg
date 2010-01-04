@@ -63,7 +63,7 @@ sub checkmsg
     $icon         = $lang{alert_timeout};
     my $link      = "igsuite?".
                     "action=summary&amp;".
-                    "errmsg=". MkUrl( $lang{alert_timeout} );
+                    "errmsg=". IG::Crypt( $lang{alert_timeout} );
     $page_timeout = 60;
     $update_url   = $link;
     $onload       = "window.top.location = '$link';";
@@ -78,7 +78,7 @@ sub checkmsg
     $icon         = $lang{alert_timeout};
     my $link      = "igsuite?".
                     "action=summary&amp;".
-                    "errmsg=". MkUrl( $lang{alert_timeout} );
+                    "errmsg=". IG::Crypt( $lang{alert_timeout} );
     $page_timeout = 60;
     $update_url   = $link;
     $onload       = "window.top.location = '$link';";

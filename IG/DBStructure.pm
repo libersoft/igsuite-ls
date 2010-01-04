@@ -56,7 +56,7 @@ require Exporter;
 	postit			=> [ 9,	''],
 	prices			=> [ 16,''],
 	articles		=> [ 1,	''],
-	documentation		=> [ 8,	''],
+	documentation		=> [ 9,	''],
 	services		=> [ 18,'id;opendate,enddate'],
 	services_stats		=> [ 4,	''],
 	services_notes		=> [ 7,	''],
@@ -1840,15 +1840,26 @@ equipments_maintenance=>[
 	  type=>'date',},
 	],
 documentation=>[
-	{ name=>'id',		type=>'varchar(15)',}, #numero
-	{ name=>'description',	type=>'varchar(100)',},#descrizione
-	{ name=>'function',	type=>'varchar(32)',},  #ente
-	{ name=>'pages',	type=>'int',},         #pagine 
-	{ name=>'issueid',	type=>'int',},         #emissione
-	{ name=>'revisionid',	type=>'int',},         #revisione
-	{ name=>'issue',	type=>'date',},        #data
-	{ name=>'publishstatus',type=>'varchar(5)',},  #pubblica
-	{ name=>'approvalstatus',type=>'varchar(5)',}, #stato
+	{ name=>'id',
+	  type=>'varchar(15)',}, #numero
+	{ name=>'description',
+	  type=>'varchar(100)',},#descrizione
+	{ name=>'function',
+	  type=>'varchar(32)',}, #ente
+	{ name=>'pages',
+	  type=>'int',},         #pagine 
+	{ name=>'issueid',
+	  type=>'int',},         #emissione
+	{ name=>'revisionid',
+	  type=>'int',},         #revisione
+	{ name=>'issue',
+	  type=>'date',},        #data
+	{ name=>'publishstatus',
+	  type=>'varchar(5)',},  #pubblica
+	{ name=>'approvalstatus',
+	  type=>'varchar(5)',},  #stato
+	{ name=>'managementsystem',
+	  type=>'varchar(25)',},
 	]
   );
 

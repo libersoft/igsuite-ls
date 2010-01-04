@@ -128,7 +128,7 @@ sub default_action
                title => $lang{delete},
                href  => "reports?action=deletereport&amp;".
                                 "id=$row[0]&amp;".
-                                "backtoreferer=1" ).
+                                "btr=1" ).
           Img( src   => "$IG::img_url/report_go.png",
 	       width => 16,
                title => $lang{make_report},

@@ -417,7 +417,7 @@ sub isms_arrived
      {
       my $_exit_link = "<a href=\"offers?action=markasnotaccepted&amp;".
                                         "id=$row[0]&amp;".
-                                        "backtoreferer=1\"> [ ".
+                                        "btr=1\"> [ ".
                        $lang{mark_as_not_accepted}.
                        ' ]</a>';
 
@@ -857,7 +857,7 @@ sub _isms_console
                       show     => $lang{receiver},
                       allvalue => 'true').
 
-               Input( type     => 'submit',
+               Input( type     => 'reset',
                       name     => 'close',
                       onclick  => 'self.close();',
                       float    => 'right',

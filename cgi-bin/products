@@ -164,7 +164,8 @@ sub revisione
                    link => "products" ),
 	);
 
-  TaskMsg(FormHead(	cgiaction=>'revisione').
+  TaskMsg(FormHead(	cgiaction=>'revisione',
+                        method=>'get' ).
 
 	  Input (	type=>'hidden',
 			name=>'contactid').
@@ -205,7 +206,7 @@ sub revisione
 			 filter_type=> '',
 			 filter_key => ''} );
 
-  TaskListMenu (
+  TaskListMenu ([''],
 		[$lang{code}],
 		[$lang{description}],
 		[$lang{rif}],
@@ -222,6 +223,7 @@ sub revisione
 
   while (my @row = FetchRow())
    {
+    my $checkbox  = $on{print} ? '' : Input (type=>"checkbox", name=>$row[0]);
     my $edit_link = "products?".
 			"action=modiproto&amp;".
 			"id=$row[0]&amp;".
@@ -233,7 +235,7 @@ sub revisione
     $row[5] = CheckPrivilege("products_edit")
 	    ? "<a href=\"$edit_link\">$row[5]</a>"
 	    : $row[5];
-    $row[5] = Input (type=>"checkbox", name=>$row[0]). $row[5] if !$on{print};
+
    
     $row[9] &&="<div style=\"border-top: 1px black solid; color: gray; font-size: 80%\">$lang{result}: ",MkLink($row[9]),"</div>\n";
  
@@ -241,9 +243,8 @@ sub revisione
      { $row[9].="<div style=\"width: 100%; border-top: 1px black solid; color: gray; font-size: 80%\">$lang{notes}: $row[11]</div>\n" }
 
     TaskListItem (
-	[$row[5],
-	 '',
-	 "nowrap align=right"],
+        [$checkbox],
+	[$row[5]],
 	["$row[1]<br>$row[9]"],
 	[MkLink($row[8])],
 	["$row[2] $row[10]",

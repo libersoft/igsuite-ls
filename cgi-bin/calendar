@@ -1610,7 +1610,7 @@ sub _event_type_icon
                                               ? 'car.gif'
                                               : 'building.gif' ],
                      [ $lang{telephone_call}, 'telephone.png'  ],
-                     [ $lang{email},          'email-png'      ],
+                     [ $lang{email},          'email.png'      ],
                      [ $lang{meeting},        'group.gif'      ],
                      [ $lang{memorandum},     'note.png'       ]
                    )[$event_type];
@@ -1729,8 +1729,8 @@ sub proto
     $on{calendaryear}   ) = IG::GetValuesByDate( $on{eventdate} || $tv{today} )
                               if !$on{calendarday};
 
-  ## Set Ajax requests
-  if ( $on{eventid} && CheckPrivilege('igforms_view') )
+  ## Set Ajax requests for igforms
+  if ( $on{eventid} )
    {
     $ajax_req{getpersonalizedfieldslist} = "igforms?".
                                            "action=build_form_mask&amp;".
@@ -1759,7 +1759,7 @@ sub proto
   FormHead( labelstyle  => 'width: 110px',
             target      => $on{backto} =~ /^contacts/
                          ? 'mainf'
-                         : $on{onaction} eq 'close'
+                         : $on{backto} eq 'none'
                            ? '_self'
                            : '',
 		ckchanges  => 'true',
@@ -1772,8 +1772,8 @@ sub proto
   Input( type    => 'hiddens',
          data    => { user	  => '',
                       fromuser	  => '',
-                      onaction    => '',
                       backto	  => '',
+                      backtopane  => '',
 		      parent      => '',
 		      equipmentid => '',
 		      havetoclaim => '',
@@ -2232,7 +2232,7 @@ END
 
   ## Personalized Fields ######################################## PAN 6
   my $pan6 = [ $lang{personalized_fields},
-               $on{eventid} && CheckPrivilege('igforms_view') ? '&nbsp;' : '',
+               $on{eventid} ? '&nbsp;' : '',
                "getpersonalizedfieldslist".
                "(['NO_CACHE'],['layer_content5'])" ];
 
@@ -2600,7 +2600,8 @@ sub protoagg
 		   && !$on{add_attendee}
 		   && !$on{del_bookings}
                  ? 'contacts?action=showrecord&amp;'.
-                             "contactid=$on{contactid}"
+                            "default_pane=$on{backtopane}&amp;".
+                            "contactid=$on{contactid}"
                  : 'calendar?'.
                    'action=' . ( $on{apply} 
 		                 || $on{del_attendee} 
@@ -3022,7 +3023,7 @@ sub protoagg
 
  _recheck_claimed_bookings() if $have_to_recheck_claimed_bookings;
 
- if ( $on{onaction} eq 'close' )
+ if ( $on{backto} eq 'none' )
   {
    IG::AutoCloseTask();
   }
@@ -3815,6 +3816,7 @@ sub findexec
                                        "action=proto&amp;".
                                        "contactid=$on{contactid}&amp;".
                                        "backto=contacts&amp;".
+                                       "backtopane=$on{backtopane}&amp;".
                                        "user=$auth_user&amp;".
 	                               ($on{neweventparams} 
 					? $on{neweventparams}."&amp;"
@@ -3881,7 +3883,7 @@ sub findexec
   TaskListMenu(	[$lang{date}],
 		[$lang{sender}],
                 [$lang{receiver}],
-		[$lang{description}] );
+		[$lang{description}]);
 
   DbQuery(my $query = "SELECT calendar.startdate, calendar.starttime, calendar.endtime,".
 	  " calendar.eventtext, calendar.fromuser, calendar.eventid,".
@@ -3926,7 +3928,7 @@ sub findexec
         [IG::UsrInf('name',$row[8]),
          "",
          "nowrap"],
-        [IG::MkLink($row[3])]
+        [IG::MkLink($row[3])],
        )
    }
 

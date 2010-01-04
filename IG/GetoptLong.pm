@@ -6,7 +6,7 @@
 # Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
 #                                                                           #
 # Getopt::Long.pm -- Universal options parsing
-# RCS Status      : $Id: Long.pm,v 2.73 2007/01/27 20:00:34 jv Exp $
+# RCS Status      : $Id: GetoptLong.pm,v 1.431 2009/12/30 15:43:59 lucas73 Exp $
 # Author          : Johan Vromans
 # Created On      : Tue Sep 11 15:00:12 1990
 # Last Modified By: Johan Vromans
@@ -310,7 +310,7 @@ sub GetOptionsFromArray($@) {
 	local ($^W) = 0;
 	print STDERR
 	  ("Getopt::Long $Getopt::Long::VERSION (",
-	   '$Revision: 2.73 $', ") ",
+	   '$Revision: 1.431 $', ") ",
 	   "called from package \"$pkg\".",
 	   "\n  ",
 	   "argv: (@$argv)",

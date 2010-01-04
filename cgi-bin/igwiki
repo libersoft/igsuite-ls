@@ -91,6 +91,7 @@ else
                 summary            => sub { CheckPrivilege(); },
 		setexpiredate      => sub { CheckPrivilege('igwiki_writer'); },
                 change_wiki_status => sub { CheckPrivilege('sys_user_admin') },
+		checkmissinglinks  => 1,
 		default_action	   => 1 );
  }
 
@@ -212,6 +213,8 @@ sub summary
      }
    }
    
+  my ($totApprCat, $totDraftsCat, $totExpiredCat, $totPublicCat) = (0,0,0,0);
+  
   ## look for mandatories pages (main sitemap)
   $mandatories{main}    = $drafts{main}    || $approved{main};
   $mandatories{sitemap} = $drafts{sitemap} || $approved{sitemap};
@@ -266,6 +269,7 @@ sub summary
     next if IG::CompareDate($approved{$i}{expire}) >= 0;
     $categories_expired{$approved{$i}{category}}++;
     next if $on{category} && $approved{$i}{category} ne $on{category};
+    $totExpiredCat++;
     $html_expired .= TaskListItem
                        (
                         [$approved{$i}{name},
@@ -351,6 +355,7 @@ sub summary
     $categories{$approved{$i}{category}}++;
     $categories_appr{$approved{$i}{category}}++;
     next if $on{category} && $approved{$i}{category} ne $on{category};
+    $totApprCat++;
     $html_approved .= TaskListItem
                        (
                         [$approved{$i}{name},
@@ -391,6 +396,26 @@ sub summary
   $html_approved .= TaskListFoot( undef, undef, 1 );
   undef %approved;
 
+  $html_approved .= FormHead( name      => 'approvedmissinglink',
+                              method    => 'get',
+  			      target    => '_blank',
+                              cgiaction => 'checkmissinglinks' ).
+
+                    Input(    type  => 'hidden',
+                              name  => 'user').
+
+                    Input(    type  => 'hidden',
+                              name  => 'category').
+
+                    Input(    type  => 'hidden',
+                              name  => 'pagetype',
+		      	      value => 'approved').
+		    
+		    Input(    type  => 'submit',
+		              value => 'Check missing links' ).
+			      
+		    FormFoot();
+
   ## Render Draft pages list
   my $html_drafts  = TaskListMenu
                       ( [$lang{name},
@@ -414,6 +439,7 @@ sub summary
     $categories{$drafts{$i}{category}}++;
     $categories_drafts{$drafts{$i}{category}}++;
     next if $on{category} && $drafts{$i}{category} ne $on{category};
+    $totDraftsCat++;
     $public{$i}{revision} .= Blush( lc substr($lang{draft},0,1) )
                              if defined $public{$i};
 
@@ -457,6 +483,27 @@ sub summary
   $html_drafts   .= TaskListFoot( undef, undef, 1 );
   undef %drafts;
 
+  $html_drafts   .= FormHead( name      => 'draftmissinglink',
+                              ##mode      => 'nosession',
+                              method    => 'get',
+  			      target    => '_blank',
+                              cgiaction => 'checkmissinglinks' ).
+
+                    Input(    type  => 'hidden',
+                              name  => 'user').
+
+                    Input(    type  => 'hidden',
+                              name  => 'category').
+
+                    Input(    type  => 'hidden',
+                              name  => 'pagetype',
+		      	      value => 'draft').
+		    
+		    Input(    type  => 'submit',
+		              value => 'Check missing links' ).
+			      
+		    FormFoot();
+
   ## Render public page list
   my $html_public  = TaskListMenu
                       ( [$lang{name},
@@ -477,6 +524,7 @@ sub summary
    {
     $categories_public{$public{$i}{category}}++;
     next if $on{category} && $public{$i}{category} ne $on{category};
+    $totPublicCat++;
     $html_public   .= TaskListItem
                        (
                         [$public{$i}{name},
@@ -514,7 +562,28 @@ sub summary
    }
 
   $html_public   .= TaskListFoot( undef, undef, 1 );
+  
+  $html_public   .= FormHead( name      => 'publicmissinglink',
+                              ##mode      => 'nosession',
+                              method    => 'get',
+			      target    => '_blank',
+                              cgiaction => 'checkmissinglinks' ).
 
+                    Input(    type  => 'hidden',
+                              name  => 'user').
+
+                    Input(    type  => 'hidden',
+                              name  => 'category').
+
+                    Input(    type  => 'hidden',
+                              name  => 'pagetype',
+			      value => 'public').
+		    
+		    Input(    type  => 'submit',
+		              value => 'Check missing links' ).
+			      
+		    FormFoot();
+		    
   ## Render categories list
   my $html_categories = TaskListMenu
                          ( [$lang{category}],
@@ -562,6 +631,26 @@ sub summary
 				  );
 
   $html_categories .= TaskListFoot( 3, undef );
+
+  $html_categories.=FormHead( name      => 'allmissinglink',
+                              method    => 'get',
+  			      target    => '_blank',
+                              cgiaction => 'checkmissinglinks' ).
+
+                    Input(    type  => 'hidden',
+                              name  => 'user').
+
+                    Input(    type  => 'hidden',
+                              name  => 'category').
+
+                    Input(    type  => 'hidden',
+                              name  => 'pagetype',
+		      	      value => 'all').
+		    
+		    Input(    type  => 'submit',
+		              value => 'Check missing links' ).
+			      
+		    FormFoot();
 
   ## Render Clouds
   my $html_clouds;
@@ -811,13 +900,13 @@ sub summary
                          ( $on{category} ? " - $on{category}" : ''),
               padding => 5 );
 
-    IG::TabPane( data       => [( ["$lang{approved_pages} ($totAppr)",
+    IG::TabPane( data       => [( ["$lang{approved_pages} ($totApprCat)",
                                    $html_approved ],
-                                  ["$lang{draft_pages} ($totDrafts)",
+                                  ["$lang{draft_pages} ($totDraftsCat)",
                                    $html_drafts ],
-                                  ["$lang{expired_pages} ($totExpired)",
+                                  ["$lang{expired_pages} ($totExpiredCat)",
                                    $html_expired ],
-			          ["$lang{public_pages} ($totPublic)",
+			          ["$lang{public_pages} ($totPublicCat)",
 			           $html_public ],
                                   [$lang{categories},
                                    $html_categories ],
@@ -1311,7 +1400,7 @@ sub publish
 
       ## Replace only some wiki page elements in html layer
       my @nestblocks;
-      my $i=0;
+      my $idx_nest = 0;
 
       while ( $on{layer} =~ /\[([^\]]{1,50})\]\{(title|lastedit|lasteditor|text|date|expire|approvedby|revision)\}/)
        {
@@ -1331,11 +1420,11 @@ sub publish
 
           if ( !$corr[2] )
            {
-            $nestblocks[$i++] = "($pagename: empty element!)";
+            $nestblocks[++$idx_nest] = "($pagename: empty element!)";
            }
           elsif ( userdonthave('showperm', $corr[3], $corr[4]) )
            {
-            $nestblocks[$i++] = "($pagename: You can not view this element!)";
+            $nestblocks[++$idx_nest] = "($pagename: You can not view this element!)";
            } 
           elsif ( $field eq 'text' )
            {
@@ -1353,23 +1442,22 @@ sub publish
               next;
              }
 
-            $nestblocks[$i++] = mkhtml($corr[0]);
+            $nestblocks[++$idx_nest] = mkhtml($corr[0]);
            }
           else
            {
-            $nestblocks[$i++] = $corr[0];
+            $nestblocks[++$idx_nest] = $corr[0];
            }
 	  last;
          }
-        $on{layer} =~ s/\[([^\]]{1,50})\]\{[^\}]+\}/\%\%NESTBLOCKS\%\%/;
+        $on{layer} =~ s/\[([^\]]{1,50})\]\{[^\}]+\}/\%\%NESTEDBLOCKS$idx_nest\%\%/;
        }
 
       ## Insert wiki features into the layer
       $on{layer} = plugwikifeatures($on{layer});
 
       ## restore nested blocks
-      $i=0;
-      $i++ while $on{layer} =~ s/\%\%NESTBLOCKS\%\%/$nestblocks[$i]/smi;
+      1 while $on{layer} =~ s/\%\%NESTEDBLOCKS(\d+)\%\%/$nestblocks[$1]/smi;
      }
    }
   $on{layercontent} ||= 'wiki';
@@ -1594,7 +1682,7 @@ sub getraw
 
 #############################################################################
 #############################################################################
-sub plugwikifeatures 
+sub plugwikifeatures
  {
   my $text = shift;
 
@@ -1646,6 +1734,7 @@ sub insert_ext_plugin
                            { name       => $on{name},
                              title      => $on{title},
                              owner      => $on{owner},
+                             template   => $on{template},
                              searchkeys => $on{searchkeys},
                              id         => $on{id} } );
  }
@@ -1691,7 +1780,7 @@ sub mkpageaction
   ## %%PAGEACTION%%
 
   my $html = "<div>".
-	     "<a href=\"$igwiki_path?action=proto&amp;name=".MkUrl($on{name})."$igcontext\" style=\"font-size: x-small\">| $lang{edit_wiki} |</a>".
+	     "<a href=\"$igwiki_path?action=proto&amp;lasteditpos=".MkUrl($on{lasteditpos})."&amp;name=".MkUrl($on{name})."$igcontext\" style=\"font-size: x-small\">| $lang{edit_wiki} |</a>".
 	     ($on{template} ? "<a href=\"$igwiki_path?action=proto&amp;name=".MkUrl($on{template})."$igcontext\" style=\"font-size: x-small\"> $lang{edit_template} |</a>" : '').
 	     ($on{name} ? "<a href=\"$igwiki_path?action=showhistory&amp;name=".MkUrl($on{name})."$igcontext\" style=\"font-size: x-small\"> $lang{page_history} |</a>" : "").
 	     ($on{id}   ? "<a href=\"$igwiki_path?action=property&amp;id=$on{id}$igcontext\" style=\"font-size: x-small\"> $lang{property} |</a>" : "").
@@ -2086,7 +2175,7 @@ sub mkloginframe
 		  <img src=\"$IG::img_url/user.gif\" alt=\"Need account?\" border=0>
 		  $lang{need_account}</a>" if $on{layercontent} ne 'html';
  
-    $temphtml = Blush($on{errmsg}) if $on{errmsg};
+    $temphtml = Blush( IG::Crypt( $on{errmsg}, 'decrypt' ) ) if $on{errmsg};
 
     $temphtml.= FormHead( target=>'_top',
 			  labelstyle=>'width: 60px; font-size: 10px',
@@ -2095,9 +2184,10 @@ sub mkloginframe
 			  autofocus=>'false',
 			  cgiaction=>'login').
 
-		 Input  ( type=>'hidden',
-			  name=>'caller',
-			  value=>'igwiki').
+                 #XXX2TEST
+                 # Input  ( type=>'hidden',
+                 #          name=>'caller',
+                 #          value=>'igwiki').
 
 		 Input	( show=>'Login',
 			  name=>'login',
@@ -2334,11 +2424,15 @@ sub getrss ##XXX2TEST
  {
   my (%names, $counter);
   my $today_date = IG::GetDateExtended();
+  my $maxPages = $on{max} || 10;
 
   ## Rss header
   IG::DocHead( type       => 'application/xml',
                expires    => 'now',
                attachment => 'igsuite.rdf' );
+
+  my $title = MkEntities( $on{rsstitle} || "IGWiki $lang{last_wikies}" );
+  my $desc = MkEntities( $on{rssdescription} || "Last Wiki pages updated." );
 
   PrOut <<END;
 <?xml version="1.0" encoding="$IG::lang_charset"?>
@@ -2350,9 +2444,9 @@ sub getrss ##XXX2TEST
  xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
  >
    <channel>
-      <title>IGWiki $lang{last_wikies}</title>
+      <title>$title</title>
       <link>http://$IG::server_name/</link>
-      <description>Last Wiki pages updated.</description>
+      <description>$desc</description>
       <language>$IG::default_lang</language>
       <generator>IGWiki - IGSuite $IG::VERSION</generator>
       <managingEditor>$IG::soc_email</managingEditor>
@@ -2384,25 +2478,27 @@ END
 			            "status = 'A')";
    }
 
-  DbQuery("select name,title,id,lastedit,lasteditor,owner from pages ".
+  DbQuery("select name,title,id,lastedit,lasteditor,owner,text from pages ".
 	  "where $where order by lastedit desc limit 50");
 
   while (my @row = FetchRow())
    {
     next if $names{$row[0]}++ || $row[0] eq "sitemap";
-    last if $counter++ > 10;
+    last if $counter++ > $maxPages;
     $row[1] ||= $row[0];
     $row[1] = MkEntities( $row[1], 'all' );
     $row[0] =~ s/\s/\_/g;
+    $row[0] = MkUrl( $row[0] );
     my ($gg,$mm,$yy) = IG::GetValuesByDate( $row[3] );
     my $pubDate      = IG::GetDateExtended( $gg, $mm, $yy, 12, 0, 0 );
     my $emailaddr    = IG::UsrInf( 'email', $row[5] ); 
     my $author       = IG::UsrInf( 'name',  $row[5] );
+    my $text         = IG::TextElide( string => mktext( $row[6] ), length => 300 );
 
     PrOut "      <item>
          <title><![CDATA[$row[1]]]></title>
          <link>$igwiki_path/$row[0]</link>
-         <description>no description</description>
+         <description><![CDATA[$text]]></description>
          <author>$emailaddr</author>
          <pubDate>$pubDate</pubDate>
          <dc:creator>$author</dc:creator>
@@ -2443,14 +2539,14 @@ sub proto
     return;
    }
 
-  ## Set Ajax requests
-  if ( $on{name} && CheckPrivilege('igforms_view') )
+  ## Set Ajax requests for igforms
+  if ( $on{id} )
    {
     $ajax_req{getpersonalizedfieldslist}
                                   = "igforms?".
                                     "action=build_form_mask&amp;".
 				    "igformid=igwiki&amp;".
-				    "recordid=". MkUrl( $on{name} );
+				    "recordid=". MkUrl( $on{id} );
    }
 
   HtmlHead( ajax_req  => \%ajax_req,
@@ -2543,7 +2639,7 @@ sub proto
               " src=\"\" id=\"files\" name=\"myframe\"></iframe>";
 
    my $pan3 = [ $lang{personalized_fields},
-                $on{name} && CheckPrivilege('igforms_view') ? '&nbsp;' : '',
+                $on{name} ? '&nbsp;' : '',
                 "getpersonalizedfieldslist".
                 "(['NO_CACHE'],['layer_content3'])" ];
 
@@ -2655,11 +2751,17 @@ function IGWikiRestoreLastEditPos() {
 	            splitted[0]+', '+splitted[1]+')', 200 );
     } else {
 	var splitted = lastEditPos.split(",");
-	document.$_form.$_textarea.selectionStart = splitted[0];
-	document.$_form.$_textarea.selectionEnd = splitted[1];
-	document.$_form.$_textarea.scrollTop = splitted[2];
-	setTimeout('document.$_form.$_textarea.focus()',200);
+	setTimeout( 'setCursorPosition( document.$_form.$_textarea, '+
+	            splitted[0]+', '+splitted[1]+', '+splitted[2]+')', 200 );
+
     }
+}
+
+function setCursorPosition(textArea, start, end, offset) {
+    textArea.selectionStart = start;
+    textArea.selectionEnd = end;
+    textArea.scrollTop = offset;
+    textArea.focus()
 }
      
 function ie_countTextAreaChars(text) {
@@ -3189,22 +3291,27 @@ sub userdonthave
   $privilege ||= $on{$action};
 
   ## check user privileges
-  if (
-       (
-	(!$privilege        && $auth_user eq 'guest'			 ) ||
-	( $privilege eq 'P' && $owner ne $auth_user			 ) ||
-	( $privilege eq 'S' && $auth_user eq 'guest'			 ) ||
-	( $privilege eq 'F' && !IG::CheckSameMembership($owner, $auth_user) )
-       ) && !CheckPrivilege('sys_user_admin')
-     )
-   { return 1 }
-  return 0;
+  return ( (!$privilege        && $auth_user eq 'guest'			 ) ||
+           ( $privilege eq 'P' && $owner ne $auth_user			 ) ||
+           ( $privilege eq 'S' && $auth_user eq 'guest'			 ) ||
+           ( $privilege eq 'F' && !IG::CheckSameMembership($owner, $auth_user) )
+         ) && !CheckPrivilege('sys_user_admin')
+         ? 1
+         : 0;
  }
 
 #############################################################################
 #############################################################################
 sub protoagg
  {
+  ## Clean white and usefull spaces
+  require IG::Utils;
+  $on{text} = IG::CleanWhiteSpaces( text        => $on{text},
+                                    leadclean   => 1,
+                                    trailclean  => 1,
+                                    eolclean    => 1,
+                                    indentclean => 0 );  
+
   if (!$on{save} && !$on{saveandcontinue} && !$on{cancel})
    {
     ## This is a preview request
@@ -3633,24 +3740,86 @@ sub mkhtml
   my $text = shift || return '&nbsp;';
   my @nowiki;
   my @nestblocks;
-  my $i = 0;
+  my $idx_nested = 0;
+  my $idx_nowiki = 0;
   my $isNested = (caller(1))[3] =~ /\:\:mkhtml$/; ## because mod_perl don't
                                                   ## work with main::
+
+  ## FIRST OF ALL finds nowiki blocks and store them.
+  ## Inside <nowiki> block nothing will be touched
+  $nowiki[$idx_nowiki++] = MkEntities($1)
+    while $text=~ s/<nowiki>(.+?)<\/nowiki>/\%\%NOWIKI$idx_nowiki\%\%/smi;
 
   ## Plug external features
   $text =~ s/\%\%EXTPLUGIN\(([\w\d\_]+)\)\%\%/insert_ext_plugin($1)/eg;
 
-  ## Finds nowiki blocks and store them
-  $nowiki[$i++] = MkEntities($1) while $text=~ s/<nowiki>(.+?)<\/nowiki>/\%\%NOWIKI$i\%\%/smi;
+  ## Link to a wiki page element
+  WIKIPAGEELEMENTS: while ($text=~ /\[\[*([^\]]{1,50})\]\]*\{(title|lastedit|lasteditor|text|date|expire|approvedby|revision)\}/)
+   {
+    my $pagename   = $1;
+    my $field      = $2;
+    my $noautolang = $on{disableautolang};
+    
+    while( 1 )
+     {
+      my $conn = DbQuery( query => "select $field, revision,".
+                                   " name, owner, showperm ".
+                                   "from pages ".
+                                   "where name='".DbQuote($pagename)."' ".
+                                   "order by $order limit 1",
+			  type  => 'UNNESTED' );
+      my @corr = FetchRow($conn);
+
+      if ( !$corr[2] )
+       {
+        $nestblocks[++$idx_nested] = "($pagename: empty element!)";
+       }
+      elsif ( userdonthave('showperm', $corr[3], $corr[4]) )
+       {
+        $nestblocks[++$idx_nested] = "($pagename: You can not view this element!)";
+       }
+      elsif ( $field eq 'text' )
+       {
+        ## Find translations for this page
+        my %transl;
+        $transl{$1} = $2
+          while $corr[0] =~ s/\[\[*(\w\w)\:([^\]]+)\]\]*(\n|\r)*//sm;
+
+        ## Try to redirect to the right page according to browser language
+        my $tpagename = $transl{lc(substr($ENV{HTTP_ACCEPT_LANGUAGE},0,2))};
+        if ( $tpagename && !$noautolang )
+         {
+          $pagename = $tpagename;
+          $noautolang = 1;
+          next;
+         }
+
+        ##XXX2TEST why not $corr[0] = mkhtml($corr[0]) ?
+        $corr[0] =~ s/\%\%(FLOAT)?TOC\%\%//smig;
+	$corr[0] = plugwikifeatures( $corr[0] );
+	$text =~ s/\[\[*([^\]]{1,50})\]\]*\{[^\}]+\}/$corr[0]/;
+	next WIKIPAGEELEMENTS;
+       }
+      else
+       {
+        $nestblocks[++$idx_nested] = $corr[0];
+       }
+      last;
+     }
+    $text =~ s/\[\[*([^\]]{1,50})\]\]*\{[^\}]+\}/\%\%NESTEDBLOCKS$idx_nested\%\%/;
+   }
 
   ## Finds "code" blocks and store them
-  $nowiki[$i++] = MkEntities($1) while $text=~ s/<code>(.+?)<\/code>/\t\%\%NOWIKI$i\%\%/smi;
+  $nowiki[$idx_nowiki++] = MkEntities($1)
+    while $text=~ s/<code>(.+?)<\/code>/\t\%\%NOWIKI$idx_nowiki\%\%/smi;
 
   ## Finds noparse blocks and store them without parse
-  $nowiki[$i++] = $2 while $text=~ s/<(noparse|html)>(.+?)<\/\1>/\%\%NOWIKI$i\%\%/smi;
+  $nowiki[$idx_nowiki++] = $2
+    while $text=~ s/<(noparse|html)>(.+?)<\/\1>/\%\%NOWIKI$idx_nowiki\%\%/smi;
 
   ## Finds 4 spaces at line start and use it as a code block
-  $nowiki[$i++] = MkEntities($1) while $text=~ s/^    (.+)$/\t\%\%NOWIKI$i\%\%/m;
+  $nowiki[$idx_nowiki++] = MkEntities($1)
+    while $text=~ s/^    (.+)$/\t\%\%NOWIKI$idx_nowiki\%\%/m;
 
   ## Parse Expandible blocks
   while ( $text =~ s/<expandible(.+?)<\/expandible>/\%\%EXPANDIBLE\%\%/smi )
@@ -3671,16 +3840,18 @@ sub mkhtml
       my $id_2 = $id . '_2';
 
       ## Closed label
-      $html = "%%NOWIKI$i%% $closed_label";
-      $nowiki[$i++] = "<div><div id=\"$id_1\" style=\"$closed_style\">". 
+      $html = "%%NOWIKI$idx_nowiki%% $closed_label";
+      $nowiki[$idx_nowiki++]
+                    = "<div><div id=\"$id_1\" style=\"$closed_style\">". 
                       "<a onclick=\"$id_1.style.display = 'none';".
                                    "$id_2.style.display = 'block';\"".
                         " style=\"cursor:pointer;\">".
                       IG::Img( src => "$IG::img_url/add.gif" );
       
       ## Opened label
-      $html .= "%%NOWIKI$i%% $opened_label";
-      $nowiki[$i++] = "</a></div>".
+      $html .= "%%NOWIKI$idx_nowiki%% $opened_label";
+      $nowiki[$idx_nowiki++]
+                    = "</a></div>".
                       "<div id=\"$id_2\" style=\"$opened_style\">".
                       "<a onclick=\"$id_2.style.display = 'none';".
                                    "$id_1.style.display = 'block';\"".
@@ -3688,10 +3859,10 @@ sub mkhtml
                       IG::Img( src => "$IG::img_url/sub.gif" );
 
       ## Content
-      $html .= "%%NOWIKI$i%%\n$expanded_content";
-      $nowiki[$i++] = "</a><br/>";
-      $html .= "%%NOWIKI$i%%";
-      $nowiki[$i++] = "</div></div>\n";
+      $html .= "%%NOWIKI$idx_nowiki%%\n$expanded_content";
+      $nowiki[$idx_nowiki++] = "</a><br/>";
+      $html .= "%%NOWIKI$idx_nowiki%%";
+      $nowiki[$idx_nowiki++] = "</div></div>\n";
      }
     else
      {
@@ -3702,67 +3873,14 @@ sub mkhtml
    }
      
   ## Also store html tags
-  $nowiki[$i++] = $1 while $text=~ s/(<[^>]+>)/\%\%NOWIKI$i\%\%/smi;
+  $nowiki[$idx_nowiki++] = $1
+    while $text=~ s/(<[^>]+>)/\%\%NOWIKI$idx_nowiki\%\%/smi;
 
   ## Owner signature
   $text =~ s/\-\-\~\~\~\~/IG::UsrInf('name',$on{owner})/esmg;
 
   ## remove unwanted TOC (if page is nested)
   $text =~ s/\%\%(FLOAT)?TOC\%\%//smi if $isNested;
-
-  ## Link to a wiki page element
-  $i=0;
-  while ($text=~ /\[\[*([^\]]{1,50})\]\]*\{(title|lastedit|lasteditor|text|date|expire|approvedby|revision)\}/)
-   {
-    my $pagename = $1;
-    my $field = $2;
-    my $noautolang = $on{disableautolang};
-    
-    while( 1 )
-     {
-      my $conn = DbQuery( query => "select $field, revision,".
-                                   " name, owner, showperm ".
-                                   "from pages ".
-                                   "where name='".DbQuote($pagename)."' ".
-                                   "order by $order limit 1",
-			  type  => 'UNNESTED' );
-      my @corr = FetchRow($conn);
-
-      if ( !$corr[2] )
-       {
-        $nestblocks[$i++] = "($pagename: empty element!)";
-       }
-      elsif ( userdonthave('showperm', $corr[3], $corr[4]) )
-       {
-        $nestblocks[$i++] = "($pagename: You can not view this element!)";
-       }
-      elsif ( $field eq 'text' )
-       {
-        ## Find translations for this page
-        my %transl;
-        $transl{$1} = $2
-          while $corr[0] =~ s/\[\[*(\w\w)\:([^\]]+)\]\]*(\n|\r)*//sm;
-
-        ## Try to redirect to the right page according to browser language
-        my $tpagename = $transl{lc(substr($ENV{HTTP_ACCEPT_LANGUAGE},0,2))};
-        if ( $tpagename && !$noautolang )
-         {
-          $pagename = $tpagename;
-          $noautolang = 1;
-          next;
-         }
-
-        $nestblocks[$i++] = mkhtml($corr[0]);
-       }
-      else
-       {
-        $nestblocks[$i++] = $corr[0];
-       }
-      last;
-     }
-    $text =~ s/\[\[*([^\]]{1,50})\]\]*\{[^\}]+\}/\%\%NESTBLOCKS\%\%/;
-   }
-
 
   ## Change 'indent' type to make lists tags compatible acros formats.
   $text =~ s/^( +)(.+)$/("\t" x length($1)).$2/mge;
@@ -3774,16 +3892,14 @@ sub mkhtml
   $text = ParseLink($text);
   $text = WikiFormat::format( $text, {}, { implicit_links => 0} );
 
-  ## restore nest blocks
-  $i=0;
-  $i++ while $text =~ s/\%\%NESTBLOCKS\%\%/$nestblocks[$i]/smi;
+  ## restore nested blocks
+  1 while $text =~ s/\%\%NESTEDBLOCKS(\d+)\%\%/$nestblocks[$1]/smi;
 
   ## Insert wiki features
-  $text = plugwikifeatures($text);
+  $text = plugwikifeatures( $text );
 
   ## restore nowiki blocks
-  $i = 0;
-  $i++ while $text =~ s/\%\%NOWIKI$i\%\%/$nowiki[$i]/smi;
+  1 while $text =~ s/\%\%NOWIKI(\d+)\%\%/$nowiki[$1]/smi;
 
   return ($text);
  }
@@ -3880,12 +3996,16 @@ sub mktext
   my @nestblocks;
   my @nowiki;
   my @levels;
-  my $i=0;
+  my $idx_nested = 0;
+  my $idx_nowiki = 0;
 
   ## Finds nowiki blocks and store them
-  $nowiki[$i++] = $1 while $text=~ s/<nowiki>(.+?)<\/nowiki>/\%\%NOWIKI$i\%\%/smi;
+  $nowiki[$idx_nowiki++] = $1
+     while $text=~ s/<nowiki>(.+?)<\/nowiki>/\%\%NOWIKI$idx_nowiki\%\%/smi;
+
   ## Finds "Code" block store them
-  $nowiki[$i++] = $1 while $text=~ s/<code>(.+?)<\/code>/ \%\%NOWIKI$i\%\%/smi;
+  $nowiki[$idx_nowiki++] = $1
+     while $text=~ s/<code>(.+?)<\/code>/ \%\%NOWIKI$idx_nowiki\%\%/smi;
 
   ## Owner signature
   $text =~ s/\-\-\~\~\~\~/IG::UsrInf('name',$on{owner})/esmg;
@@ -3908,10 +4028,6 @@ sub mktext
 	emphasized_tag	=> qr/''(.+?)''/,
 	underline	=> sub { "$_[0]" },
 	underline_tag	=> qr/\,\,(.+?)\,\,/,
-	center		=> sub { "$_[0]" },
-	center_tag	=> qr/\(\(\((.+?)\)\)\)/,
-        right		=> sub { "$_[0]" }, 
-        right_tag	=> qr/\)\)\)(.+?)\)\)\)/, 
  
 	code	 => [ "\n", "\n", '',	"\n" ],
 	line	 => [ '',   "",	  ("-"x77),"" ],
@@ -3935,6 +4051,8 @@ sub mktext
 						 WikiFormat::format_line($_[3],
 						 @_[-2, -1]),"\n"
 				      } ],
+        center   => [ '',             "\n",                   sub { return "<p style=\"text-align:center\">\n".WikiFormat::format_line($_[2],@_[-2, -1])."</p>\n"; } ],
+        right    => [ '',             "\n",                   sub { return "<p style=\"text-align:right\">\n".WikiFormat::format_line($_[2],@_[-2, -1])."</p>\n"; } ],
 	blocks	 => {
 			table		=> qr/^(<\/*(?:td|tr|th|table)[^>]*>)/,
 			ordered		=> qr/^([\dA-Za-z]+\.)\s*/,
@@ -3944,16 +4062,21 @@ sub mktext
 			header		=> qr/^(=+) (.+) \1/,
 			paragraph	=> qr/^/,
 			line		=> qr/^-{4,}/,
+			center          => qr/^\(\(\((.+?)\)\)\)/,
+			right           => qr/^\)\)\)(.+?)\)\)\)/,
 	   	    },
 	indented => { map { $_ => 1 } qw( defs ordered unordered code )},
 	nests	 => { map { $_ => 1 } qw( ordered unordered ) },
 
-	blockorder => [qw( table header line defs ordered unordered code paragraph )],
+	blockorder => [qw( table header line defs ordered unordered code center right paragraph )],
 	extended_link_delimiters => [qw( [ ] )],
   );
 
   ## Delete links to images
-  $text =~ s/\[\[*img\:\/\/([^\]]+)\]\]*//mg; 
+  $text =~ s/\[\[*img\:\/\/([^\]]+)\]\]*//mg;
+
+  ## Delete translation links
+  $text =~ s/\[\[*\w\w\:([^\]]+)\]\]*//mg;
 
   ## Delete Table tags
   $text =~ s/\{\|(.*)$//mg;			 ## <TABLE>
@@ -3970,7 +4093,6 @@ sub mktext
   $text=~ s/(\+{2,5})(.+)\1/$2/g;
  
   ## Insert another wiki page element
-  $i=0;
   while ($text=~ /\[\[*([^\]]{1,50})\]\]*\{(title|lastedit|lasteditor|text|date|expire|approvedby|revision)\}/)
    {
     ## remember to check privilege
@@ -3981,11 +4103,11 @@ sub mktext
 
     my @corr = FetchRow($cid);
 
-    $nestblocks[$i++] = !$corr[2]	? "(empty element!)"
-		      : $2 eq "text"	? mktext($corr[0])
-		      : 		  $corr[0];
+    $nestblocks[$idx_nested++] = !$corr[2]	? "(empty element!)"
+                               : $2 eq "text"	? mktext($corr[0])
+                               : 		  $corr[0];
   
-    $text=~ s/\[\[*([^\]]{1,50})\]\]*\{[^\}]+\}/\%\%NESTBLOCKS\%\%/;
+    $text=~ s/\[\[*([^\]]{1,50})\]\]*\{[^\}]+\}/\%\%NESTEDBLOCKS$idx_nested\%\%/;
    }
 
   ## Link to a wiki page tag
@@ -4007,15 +4129,13 @@ sub mktext
   $text = _cleanfeaturetags($text);
 
   ## restore nest blocks
-  $i=0;
-  $i++ while $text=~ s/\%\%NESTBLOCKS\%\%/$nestblocks[$i]/smi;
+  1 while $text =~ s/\%\%NESTEDBLOCKS(\d+)\%\%/$nestblocks[$1]/smi;
 
   ## Insert wiki features
   $text = plugwikifeatures($text);
 
   ## restore nowiki blocks
-  $i=0;
-  $i++ while $text=~ s/\%\%NOWIKI$i\%\%/$nowiki[$i]/smi;
+  1 while $text =~ s/\%\%NOWIKI(\d+)\%\%/$nowiki[$1]/smi;
 
   ## Clean html tags
   $text = IG::HtmlUntag($text);
@@ -4039,7 +4159,7 @@ sub delexec
    }
   else
    {
-    $errmsg = MkUrl($lang{cant_edit_page});
+    $errmsg = IG::Crypt( $lang{cant_edit_page} );
    }
 
   IG::Redirect( "$igwiki_path?".
@@ -4565,6 +4685,130 @@ sub _cleanfeaturetags
   return $text;
  }
 
+#############################################################################
+#############################################################################
+sub checkmissinglinks
+ {
+  my $user = DbQuote( $on{user} || $auth_user );
+  my $pagetype = $on{pagetype} || 'public';
+  
+  ## compile existing page hash (name => show permission)
+  my %existing;
+  DbQuery( "select name, showperm ".
+           "from pages ".
+	   "order by name, revision desc" );
+  while( my ($name, $showperm) = FetchRow() )
+   {
+    next if defined $existing{lc $name};
+    ## vedere se ignorare pagine in bozza quando ci sono pagine approvate
+    $existing{lc $name} = $showperm;
+   }
+
+  my ($checkedPage, $text); ## used by _check_link()
+  my %missingPages; ## non-existent pages (name => { ref_page1_name=>1, ...})
+  my %unaccessiblePages; ## unaccessible pages from public pages 
+                         ## (name => { ref_page1_name=>1, ...})
+
+  ## local sub used in regex
+  local *_check_link = sub
+   {
+    local $_ = shift;
+    return '' if /^([1-9EF]\d\d\d\d\d)\.(\d\d)\|(.+)$/
+              || /^([1-9EF]\d\d\d\d\d)\.(\d\d)$/
+	      || /^(wikipedia|http|https|img|ftp)\:(.+)$/;
+    
+    s/_/ /g;
+	      
+    return unless /^(?:\w\w\:)?([^\|\#]+)(?:\#.*?)?(?:\|(.+))?$/;
+    my $linkedPage = $1;
+    return '' unless $linkedPage;
+    
+    ($missingPages{$linkedPage}{$checkedPage} = 1) && return '' 
+       if !defined $existing{lc $linkedPage};
+    
+    ($unaccessiblePages{$linkedPage}{$checkedPage} = 1) && return ''
+       if $pagetype eq 'public' && $existing{lc $linkedPage} ne 'A';
+       
+    return '';
+   };
+  
+  ## local function used for speed: ParseLink checks for page existence, 
+  ## but we already know that
+  local *_quick_wiki_link = sub 
+   {
+    my $pagename = shift;
+    my $exist = shift;
+    my $target = $on{ig} == 1 ? 'mainf' : $on{ig} == 2 ? '_self' : '_top';
+    my $slink = $pagename;
+    $slink =~ s/\s/\_/g;
+    $slink = MkUrl($slink);
+    my $href = "$IG::cgi_url/igwiki?name=$slink&disableautolang=1";
+    my $wiki_class = $exist ? 'wiki' : 'wikimiss';
+    return "<a href=\"$href\" class=\"$wiki_class\" target=\"$target\">".
+           "$pagename<\/a>";
+    
+   };
+  
+  ## check page links
+  my $filter;
+  $filter = "showperm='A'" if $pagetype eq 'public';
+  $filter = "status='B'" if $pagetype eq 'draft';
+  $filter = "status='A'" if $pagetype eq 'approved';
+  $filter = "1=1" if $pagetype eq 'all';
+  die "Invalid pagetype: $pagetype" unless $filter;
+  
+  $filter .= " and category='".DbQuote( $on{category} )."'" if $on{category};
+  
+  DbQuery( "select name, text ".
+           "from pages ".
+	   "where owner='$user' and $filter ".
+	   "order by name, revision desc" );
+  my $lastChecked;
+  while( ($checkedPage, $text) = FetchRow() )
+   {
+    next if $checkedPage eq $lastChecked; ## check only last revisions
+    
+    ## remove the text not to be parsed
+    $text =~ s/<(noparse|html|code|nowiki)>.+?<\/\1>//sgi; 
+    
+    $text =~ s/\[\[*([^\]]{1,300})\]\]*/_check_link($1)/eg;
+    $lastChecked = $checkedPage;
+   }
+   
+  ## show results  
+ 
+  my $title = "Wiki link check in $pagetype";
+  $title .= " '$on{category}'" if $on{category};
+  $title .= ' pages';
+  
+  HtmlHead( title => $title );
+  TaskHead( title => $title );
+  
+  TaskListMenu( ['Missing page name'], ['Referred from'] );
+  for my $missing ( sort {uc($a) cmp uc($b)} keys %missingPages ) {
+    my @referredFrom;
+    push @referredFrom, _quick_wiki_link( $_, 1 ) for( sort {uc($a) cmp uc($b)} keys %{$missingPages{$missing}} );
+    
+    TaskListItem( _quick_wiki_link( $missing, 0 ), [join( ', ', @referredFrom )] );
+  }
+  TaskListFoot(1,0,1);
+  
+  if( $pagetype eq 'public' ) 
+   {
+    TaskListMenu( ['Inaccessible page name'], ['Inaccessible from'] );
+    for my $unaccessible ( sort {uc($a) cmp uc($b)} keys %unaccessiblePages ) {
+      my @referredFrom;
+      push @referredFrom, _quick_wiki_link( $_, 1 ) for( sort {uc($a) cmp uc($b)} keys %{$unaccessiblePages{$unaccessible}} );
+    
+      TaskListItem( _quick_wiki_link( $unaccessible, 1 ),
+                    [join( ', ', @referredFrom )] );
+    }
+    TaskListFoot(1,0,1);
+   }
+  
+  TaskFoot();
+  HtmlFoot();
+ }
 ###############################################
 ## $lang{explain_main_page}
 ## $lang{explain_sitemap_page}

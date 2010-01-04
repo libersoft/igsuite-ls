@@ -21,7 +21,7 @@
 #############################################################################
 
 # Term::ANSIColor -- Color screen output using ANSI escape sequences.
-# $Id: ANSIColor.pm 58 2006-07-12 22:30:55Z eagle $
+# $Id: TermANSIColor.pm,v 1.384 2009/12/30 15:43:59 lucas73 Exp $
 #
 # Copyright 1996, 1997, 1998, 2000, 2001, 2002, 2005, 2006
 #   by Russ Allbery <rra@stanford.edu> and Zenin

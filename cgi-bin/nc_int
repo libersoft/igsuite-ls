@@ -106,9 +106,10 @@ sub docview
   Header();
 
   IG::ShowProtocolInfo
-   ( id     => $row[0],
-     title  => $lang{nc_int_protocol},
-     fields => [( [ $lang{contact_name},
+   ( id        => $row[0],
+     contactid => $row[6],
+     title     => $lang{nc_int_protocol},
+     fields    => [( [ $lang{contact_name},
                     "<a href=\"contacts?".
 			      "action=showrecord&amp;".
 			      "contactid=$row[6]\">".
@@ -317,11 +318,13 @@ sub findshow
 
 	      Input (	type      => 'select',
 			name      => 'method',
-			data      => [(['from',	 $lang{with_header}],
-			               ['id',	 $lang{with_protocol}],
-			               ['date',	 $lang{with_date}],
-			               ['npa',	 $lang{with_npa}],
-			               ['notes', $lang{with_notes}])]),
+			data      => [(['from',	    $lang{with_header}],
+			               ['id',	    $lang{with_protocol}],
+			               ['date',	    $lang{with_date}],
+			               ['npa',	    $lang{with_npa}],
+			               ['notes',    $lang{with_notes}],
+			               ['comments', $lang{with_comments}],
+			              )]),
 
 	      Input (	type      => 'text',
 			name      => 'keytofind',
@@ -347,6 +350,7 @@ sub findshow
 sub findexec
  {
   my $query;
+  my $join;
   $IG::set_cookie{lastsearch} = $on{keytofind};
 
   Header();
@@ -374,6 +378,11 @@ sub findexec
    }
   elsif ($on{method} eq 'notes')
    { $query = "nc_int.note ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'comments')
+   {
+    $query = "comments.comment ~* '$in{keytofind}'";
+    $join  = "LEFT JOIN comments ON comments.referenceid = nc_int.id ";
+   }
 
   TaskListMenu
    (
@@ -386,11 +395,13 @@ sub findexec
 
   my $counter = 0;
 
-  DbQuery( "SELECT nc_int.id, nc_int.issue, nc_int.contactname,".
-           " nc_int.owner, nc_int.note, nc_int.priority, nc_int.contactid,".
-           " nc_int.duedate, nc_int.npa, nc_int.docref, users.initial ".
+  DbQuery( "SELECT DISTINCT".
+           " nc_int.id, nc_int.issue, nc_int.contactname,".
+           " nc_int.owner, nc_int.note, nc_int.priority,".
+           " nc_int.contactid, nc_int.duedate, nc_int.npa,".
+           " nc_int.docref, users.initial ".
            "FROM nc_int ".
-           "LEFT JOIN users ON nc_int.owner=users.login ".
+           "LEFT JOIN users ON nc_int.owner=users.login $join".
            "WHERE $query ".
            "ORDER BY nc_int.issue desc, nc_int.id desc");
 

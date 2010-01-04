@@ -148,9 +148,10 @@ sub docview
   Header();
 
   IG::ShowProtocolInfo
-   ( id     => $row[0],
-     title  => $lang{orders_protocol},
-     fields => [( [ $lang{contact_name},
+   ( id        => $row[0],
+     contactid => $row[9],
+     title     => $lang{orders_protocol},
+     fields    => [( [ $lang{contact_name},
                     "<a href=\"contacts?".
                     "action=showrecord&amp;".
                     "contactid=$row[9]\">".
@@ -471,7 +472,9 @@ sub findshow
 				    ['id',	 $lang{with_protocol}],
 				    ['date', 	 $lang{with_date}],
 				    ['npa', 	 $lang{with_npa}],
-				    ['notes',    $lang{with_notes}])]),
+				    ['notes',    $lang{with_notes}],
+                                    ['comments', $lang{with_comments}],
+                                   )]),
 
 	    Input(    type      => 'text',
 		      name      => 'keytofind',
@@ -497,6 +500,7 @@ sub findshow
 sub findexec
  {
   my $query;
+  my $join;
   my $counter = 0;
 
   if ( $on{ajax_request} )
@@ -509,7 +513,7 @@ sub findexec
                                   "orders?".
                                         "action=proto&amp;".
                                         "contactid=$on{contactid}&amp;".
-                                        "backtoreferer=1';",
+                                        "btr=1';",
                     show      => $lang{new_item},
                     fieldstyle=> 'margin:0px',
                     style     =>'margin:0px;font-size:10px; height:15px' ).
@@ -562,6 +566,11 @@ sub findexec
    }
   elsif ($on{method} eq 'notes')
    { $query = "orders.note ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'comments')
+   {
+     $query = "comments.comment ~* '$in{keytofind}'";
+     $join  = "LEFT JOIN comments ON comments.referenceid = orders.id ";
+   }
 
   TaskListMenu (
 	[$lang{number}],
@@ -574,12 +583,13 @@ sub findexec
 	[]
 		);
 
-  DbQuery( "SELECT orders.id, orders.issue, orders.docref, orders.contactname,".
+  DbQuery( "SELECT DISTINCT".
+           " orders.id, orders.issue, orders.docref, orders.contactname,".
            " orders.note, orders.owner, orders.expire, orders.flag,".
            " orders.duedate, orders.contactid, orders.npa,".
            " orders.expire-current_date, users.initial ".
            "FROM orders ".
-           "LEFT JOIN users ON orders.owner=users.login ".
+           "LEFT JOIN users ON orders.owner=users.login $join".
            "WHERE $query ".
            "ORDER BY orders.issue desc, orders.id desc" );
 

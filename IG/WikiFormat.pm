@@ -48,10 +48,6 @@ emphasized	=> sub { "<em>$_[0]</em>" },
 emphasized_tag	=> qr/''(.+?)''/,
 underline	=> sub { "<u>$_[0]</u>" },
 underline_tag	=> qr/\,\,(.+?)\,\,/,
-center		=> sub { "<center>$_[0]</center>" },
-center_tag	=> qr/\(\(\((.+?)\)\)\)/,
-right           => sub { "<div style=\"width:100%; text-align:right\">$_[0]</div>" },
-right_tag       => qr/\)\)\)(.+?)\)\)\)/,
  
 code	 => [ "<pre>\n",	"</pre>\n",		'',	"\n" ],
 line	 => [ '',		"\n",			'<hr />',"\n" ],
@@ -71,10 +67,12 @@ header	 => [ '',		"\n",			sub {   my $name;
 								$name .= $levels[$_] ? "$levels[$_]." : "" for 1..$level;
 								my $name2 = $_[3];
 								$name2 =~ s/[^A-Za-z0-9_\-\.]/_/g;
-								return "<h$level><a name=\"$name\"></a><a name=\"$name2\">",
+								return "<h$level><a name=\"$name\"></a><a name=\"$name2\"></a>",
 									format_line($_[3],@_[-2, -1]),
-									"</a></h$level>\n"
+									"</h$level>\n"
 							    } ],
+center     => [ '',             "\n",                   sub { return "<p style=\"text-align:center\">\n".format_line($_[2],@_[-2, -1])."</p>\n"; } ],
+right      => [ '',             "\n",                   sub { return "<p style=\"text-align:right\">\n".format_line($_[2],@_[-2, -1])."</p>\n"; } ],
 blocks		=> {
 			table		=> qr/^(<\/*(?:td|tr|th|table)[^>]*>)/,
 			ordered		=> qr/^([\dA-Za-z]{1,3}\.)\s/,
@@ -84,11 +82,13 @@ blocks		=> {
 			header		=> qr/^(=+) (.+) \1/,
 			paragraph	=> qr/^/,
 			line		=> qr/^-{4,}/,
+			center          => qr/^\(\(\((.+?)\)\)\)/,
+			right           => qr/^\)\)\)(.+?)\)\)\)/,
 	   	   },
 indented	=> { map { $_ => 1 } qw( defs ordered unordered code)},
 nests		=> { map { $_ => 1 } qw( ordered unordered ) },
 
-blockorder		 => [qw( table header line defs ordered unordered code paragraph )],
+blockorder		 => [qw( table header line defs ordered unordered code center right paragraph )],
 extended_link_delimiters => [qw( [ ] )],
 );
  
@@ -184,8 +184,7 @@ sub format
   check_blocks( \%tags ) if exists $newtags->{blockorder} or exists $newtags->{blocks};
 
   my @blocks =  find_blocks( $text,     \%tags, $opts );
-  @blocks    = merge_blocks( \@blocks,  \%tags, $opts );
-  @blocks    =  nest_blocks( \@blocks,  \%tags, $opts );
+  @blocks    = nest_and_merge_blocks( \@blocks,  \%tags, $opts );
   return     process_blocks( \@blocks,  \%tags, $opts );
  }
 
@@ -219,10 +218,12 @@ sub start_block
   my ($text, $tags, $opts) = @_;
   return { type => 'end', level => 0 } unless $text;
 
+  my $i = -1;
   ## sfoglia uno a uno i blocchi che conosce per vedere se li puo'
   ## applicare al testo. Procede quindi per esclusione
   for my $block (@{ $tags->{blockorder} })
    {
+    $i++;
     my ($line, $level, $indentation)  = ( $text, 0, '' );
 
     ## Se e' un tipo di blocco indentato ne controlla il livello di indentazione
@@ -258,50 +259,111 @@ sub start_block
  }
 
 
-sub merge_blocks
+sub nest_and_merge_blocks 
  {
-  ## Unisce blocchi contigui dello stesso tipo e livello
+  my ($blocks0, $tags, $opts) = @_;
+  
+  my @blocks = @$blocks0; ##copy
+  my $flag;
 
-  my ($blocks, $tags, $opts) = @_;
-  my @merged;
-
-  for my $block (@$blocks)
+  for my $i (0 .. $#blocks) 
    {
-    if (@merged and $block->{type} eq $merged[-1]{type}	and $block->{level} == $merged[-1]{level})
-     {
-	push @{ $merged[-1]{text} }, $block->{text};
-	push @{ $merged[-1]{args} }, $block->{args};
-	next;
-     }
-
-    push @merged, {	text  => [ $block->{text} ],
-			type  => $block->{type},
-			level => $block->{level},
-			args  => [ $block->{args} ],
-		  };
+    $blocks[$i]{text} = [ $blocks[$i]{text} ];
+    $blocks[$i]{args} = [ $blocks[$i]{args} ];
    }
-  return @merged;
- }
-
-
-sub nest_blocks
- {
-  ## Unisce i blocchi innestati facenti parte dello stesso tipo e livello
-  my ($blocks, $tags, $opts) = @_;
-  my @merged;
-
-  for my $block (@$blocks)
+  
+  ## merge and nest blocks to be nested
+  do 
    {
-    if ( @merged and $tags->{nests}{ $block->{type} }
-		 and $tags->{nests}{ $merged[-1]{type} }
-		 and $block->{level} > $merged[-1]{level} )
+    $flag = 0;      ## become 1 when a merge or a nest is done
+    my $start = -1; ## starting index of the current level
+    my $level = -1; ## level at [$start .. ($i|$i-1)]
+    my $prevLevel = -1; ## level at [$start - 1]
+    for my $i (0 .. $#blocks+1)
      {
-	push @{ $merged[-1]{text} }, $block;
-	next;
+      my $currLevel = $i <= $#blocks
+                      ? ($tags->{nests}{ $blocks[$i]{type} }
+                         ? $blocks[$i]{level}
+		         : -1)
+		      :  0;
+      if( $currLevel < $level ) ## level is decreasing
+       {
+        if( $level > 0 && $i-1 > $start )
+	 {
+	  ## merge [$start] with [$start+1 .. $i-1]
+	  for my $j ($start+1 .. $i-1 ) 
+	   {
+	    push @{ $blocks[$start]{text} }, @{$blocks[$j]{text}};
+	    push @{ $blocks[$start]{args} }, @{$blocks[$j]{args}};
+	   }
+	  splice @blocks, $start+1, $i-1 - $start; ## remove merged blocks
+	  $flag = 1; ## merge done
+	 }
+	 
+        if( $prevLevel > 0 )
+	 {
+	  ## nest [$start] in [$start-1]
+	  push @{ $blocks[$start-1]{text} }, $blocks[$start];
+	  splice @blocks, $start, 1; ## removed nested block
+	  $flag = 1; ## nest done
+	 }
+	 
+	last if $flag; ## exit for and run do again
+	$prevLevel = $level = $currLevel;
+       }
+      elsif( $currLevel > $level ) ## level is increasing
+       {
+	$prevLevel = $level;
+	$level = $currLevel;
+        $start = $i; 
+       }
+      else ## same level 
+       {
+        ## nothing 
+       }
      }
-    push @merged, $block;
-   }
-  return @merged;
+   } while( $flag );
+
+  ## merge blocks with {level} == 0
+  do {
+    $flag = 0;      ## become 1 to mean the merge is neaded
+    my $start = -1; ## the starting index of the current block type
+       
+    for my $i (0 .. $#blocks+1)
+     {
+      ## skip blocks with {level} != 0
+      next if $start < 0 && ( $i <= $#blocks && $blocks[$i]{level} );
+       
+      ## detect if a merge is neaded
+      if( $i > $#blocks     ## we are at the end of the blocks
+      || $blocks[$i]{level} ## current block has {level} != 0
+      || ($start >= 0 && $blocks[$i]{type} ne $blocks[$start]{type}) ) ## block type changed
+       {
+	$flag = 1 if( $start >= 0 && $i-1 > $start ); ## more than a block => merge
+       }
+	
+      if( $flag ) 
+       {
+	## merge [$start] with [$start+1 .. $i-1]
+	for my $j ($start+1 .. $i-1 ) 
+	 {
+	  push @{ $blocks[$start]{text} }, @{$blocks[$j]{text}};
+	  push @{ $blocks[$start]{args} }, @{$blocks[$j]{args}};
+	 }
+        splice @blocks, $start+1, $i-1 - $start; ## remove merged blocks
+	last; ## exit for
+       }
+       
+      last if $i > $#blocks;
+      
+      $start = $i if ($start < 0 && !$blocks[$i]{level}) 
+                  || ($start >= 0 && $blocks[$i]{type} ne $blocks[$start]{type});
+      $start = -1 if $blocks[$i]{level};
+     }
+    
+   } while( $flag );
+   
+   return @blocks;
  }
 
 
@@ -370,8 +432,6 @@ sub format_line
   $text =~ s!$tags->{exponent_tag}!$tags->{exponent}->($1, $opts)!eg;
   $text =~ s!$tags->{strike_tag}!$tags->{strike}->($1, $opts)!eg;
   $text =~ s!$tags->{emphasized_tag}!$tags->{emphasized}->($1, $opts)!eg;
-  $text =~ s!$tags->{center_tag}!$tags->{center}->($1, $opts)!eg;
-  $text =~ s!$tags->{right_tag}!$tags->{right}->($1, $opts)!eg; 
   $text =~ s!$tags->{evidence_tag}!$tags->{evidence}->($1, $opts)!eg;
   $text =~ s!$tags->{underline_tag}!$tags->{underline}->($1, $opts)!eg;
   $text =~ s!$tags->{colored_tag}!$tags->{colored}->($1, $2, $opts)!eg;

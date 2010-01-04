@@ -330,7 +330,7 @@ sub phaseslist
   while ( my @row = FetchRow() )
    {
     $row[5] &&= "style=\"background: $row[5]\"";
-    my $owners  = IG::UsrInf('name',$row[2]);
+    my $owners  = $row[2] ? IG::UsrInf('name',$row[2]) : $lang{none};
        $owners .= ' - ' . IG::UsrInf('name',$row[6]) if $row[6];
 
     TaskListItem(
@@ -465,14 +465,21 @@ sub docview
 	  " contracts.expire-current_date, contracts_phases.name,".
 	  " contracts_phases.owner, contracts.dayalert,". #dayalert=free
 	  " contracts_phases.contractstatus, contracts_phases.owner1, ".
-	  " contracts.npa, contracts.amount ".
-	  "FROM contracts LEFT JOIN contracts_phases ".
+	  " contracts.npa, contracts.amount, contacts.contacttype ".
+	  "FROM contracts ".
+	  "LEFT JOIN contracts_phases ".
 	  "ON contracts.phase = contracts_phases.id ".
+	  "LEFT JOIN contacts ".
+	  "ON contacts.contactid = contracts.contactid ".
 	  "WHERE contracts.id='".DbQuote($on{id})."'");
   my @row = FetchRow();
 
   IG::Warn( $lang{Err_nodocument} ) && return if !$row[0];
-  
+
+  ## check contact type
+  push @IG::errmsg, $lang{Err_contract_but_contact}
+    if $row[19] == 1 && $row[23] !~ /^(3|4|9|10)$/;
+
   ## adjust some values
   $row[4]  = MkLink($row[4]);
   $row[9]  = MkLink($row[9]);
@@ -490,16 +497,18 @@ sub docview
           $on{id} );
 
   IG::ShowProtocolInfo
-   ( id     => $row[0],
-     title  => $row[19] == 1
-            ? "$lang{active_contract} ".
-              Img( src=>"$IG::img_url/green.gif", align=>'absmiddle' )
-            : $row[19] == 2
-              ? "$lang{in_revision_contract} ".
-                Img( src=>"$IG::img_url/orange.gif", align=>'absmiddle' )
-              :  "$lang{inactive_contract} ".
-                Img( src=>"$IG::img_url/red.gif", align=>'absmiddle' ),
-     fields => [( [ $lang{contact_name},
+   ( id        => $row[0],
+     contactid => $row[14],
+     title     => $row[19] == 1
+               ?  "$lang{active_contract} ".
+                  Img( src=>"$IG::img_url/green.gif", align=>'absmiddle' )
+               :  $row[19] == 2
+               ?  "$lang{in_revision_contract} ".
+                  Img( src=>"$IG::img_url/orange.gif", align=>'absmiddle' )
+               :  "$lang{inactive_contract} ".
+                  Img( src=>"$IG::img_url/red.gif", align=>'absmiddle' ),
+     fields    =>
+               [( [ $lang{contact_name},
                     "<a href=\"contacts?".
                               "action=showrecord&amp;".
                               "contactid=$row[14]\">$row[14] $row[2]</a>" ],
@@ -535,10 +544,10 @@ sub docview
                      "[$lang{close_phase}]</a>"
                    : '' ) ],
                [ $lang{phase_manager},
-                 ( IG::UsrInf('name',$row[17])
+                 ( $row[17]
 		   ? IG::UsrInf('name',$row[17])
 		   : $lang{none} ).
-		 ( IG::UsrInf('name',$row[20])
+		 ( $row[20]
                    ? '<br>' . IG::UsrInf('name',$row[20])
                    : '') ],
                [ $lang{notes},
@@ -1124,7 +1133,7 @@ sub findexec
                                  "contracts?".
                                         "action=proto&amp;".
                                         "contactid=$on{contactid}&amp;".
-                                        "backtoreferer=1';",
+                                        "btr=1';",
                     show      => $lang{new_contract},
                     fieldstyle=> 'margin:0px',
                     style     => 'margin:0px;font-size:10px; height:15px' ).
@@ -1162,22 +1171,28 @@ sub findexec
      { $query = " and contracts.type='$in{type}'".
                 " and contracts.phase='$in{phase}'"; }
 
-    DbQuery("SELECT contracts.id, contracts.contactname, contracts.issue,".
+    DbQuery("SELECT DISTINCT".
+            " contracts.id, contracts.contactname, contracts.issue,".
 	    " contracts.expire, contracts.docref, contracts.type,".
 	    " contracts.owner, contracts.note, contracts.contactid,".
 	    " contracts.expire-current_date, contracts_phases.name,".
-	    " contracts_phases.bgcolor, users.initial ".
+	    " contracts_phases.bgcolor, users.initial, contracts_phases.priority ".
 	    "FROM contracts ".
 	    "LEFT JOIN contracts_phases ".
 	    "ON contracts.phase = contracts_phases.id ".
             "LEFT JOIN users ".
             "ON contracts.owner = users.login ".
-	    "WHERE (contracts_phases.name~*'$in{keytofind}'".
+            "LEFT JOIN comments ".
+            "ON comments.referenceid = contracts.id ".
+	    "WHERE ".
+	    "(contracts_phases.name~*'$in{keytofind}'".
 	    " or contracts.id~*'$in{keytofind}'".
 	    " or contracts.contactname~*'$in{keytofind}'".
 	    " or contracts.note~*'$in{keytofind}'".
 	    " or contracts.npa~*'$in{keytofind}'".
-	    " or contracts.docref~*'$in{keytofind}')$query ".
+	    " or contracts.docref~*'$in{keytofind}'".
+	    " or comments.comment~*'$in{keytofind}'".
+	    ")$query ".
 	    "ORDER BY contracts_phases.priority, contracts.issue desc");
    }
   else

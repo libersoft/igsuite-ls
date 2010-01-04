@@ -108,9 +108,10 @@ sub docview
   Header();
 
   IG::ShowProtocolInfo
-   ( id     => $row[0],
-     title  => $lang{nc_ext_protocol},
-     fields => [( [ $lang{contact_name},
+   ( id        => $row[0],
+     contactid => $row[6],
+     title     => $lang{nc_ext_protocol},
+     fields    => [( [ $lang{contact_name},
                     "<a href=\"contacts?".
 			      "action=showrecord&amp;".
 			      "contactid=$row[6]\">".
@@ -127,7 +128,7 @@ sub docview
                     $row[9] ],
                   [ $lang{closing},
                     $row[7] ],
-                 [ '&nbsp;','&nbsp;'],
+                  [ '&nbsp;','&nbsp;'],
                   [ $lang{notes},
                     $row[4] ],
                 )] );
@@ -322,11 +323,13 @@ sub findshow
 
 	    Input (	type       => 'select',
 			name       => 'method',
-			data       => [(['from',  $lang{with_header}],
-				        ['id',    $lang{with_protocol}],
-				        ['date',  $lang{with_date}],
-				        ['npa',   $lang{with_npa}],
-				        ['notes', $lang{with_notes}])]),
+			data       => [(['from',     $lang{with_header}],
+				        ['id',       $lang{with_protocol}],
+				        ['date',     $lang{with_date}],
+				        ['npa',      $lang{with_npa}],
+				        ['notes',    $lang{with_notes}],
+				        ['comments', $lang{with_comments}],
+                                       )]),
 
 	    Input (	type       => 'text',
 			name       => 'keytofind',
@@ -352,6 +355,7 @@ sub findshow
 sub findexec
  {
   my $query;
+  my $join;
   $IG::set_cookie{lastsearch} = $on{keytofind};
 
   Header();
@@ -379,6 +383,11 @@ sub findexec
    }
   elsif ($on{method} eq 'notes')
    { $query = "nc_ext.note ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'comments')
+   {
+     $query = "comments.comment ~* '$in{keytofind}'";
+     $join  = "LEFT JOIN comments ON comments.referenceid = nc_ext.id ";
+   }
 
   my $counter = 0;
   TaskListMenu
@@ -390,11 +399,13 @@ sub findexec
     [$lang{notes}],
    );
 
-  DbQuery( "SELECT nc_ext.id, nc_ext.issue, nc_ext.contactname,".
-           " nc_ext.owner, nc_ext.note, nc_ext.priority, nc_ext.contactid,".
-           " nc_ext.duedate, nc_ext.npa, nc_ext.docref, users.initial ".
+  DbQuery( "SELECT DISTINCT".
+           " nc_ext.id, nc_ext.issue, nc_ext.contactname,".
+           " nc_ext.owner, nc_ext.note, nc_ext.priority,".
+           " nc_ext.contactid, nc_ext.duedate, nc_ext.npa,".
+           " nc_ext.docref, users.initial ".
            "FROM nc_ext ".
-           "LEFT JOIN users ON nc_ext.owner=users.login ".
+           "LEFT JOIN users ON nc_ext.owner=users.login $join".
            "WHERE $query ".
            "ORDER BY nc_ext.issue desc, nc_ext.id desc" );
 

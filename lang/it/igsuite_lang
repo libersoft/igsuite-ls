@@ -4,6 +4,7 @@
 
 %lang = (%lang,
    (
+stock_quotes            =>'Quotazione Azioni',
 first_connection        =>'Complimenti! Questo è il tuo primo accesso a IGSuite. Aggiorna subito il tuo %1$s oppure vai sulla voce Impostazioni e Globali per cambiare l\'aspetto grafico della suite',
 file_zip_ok             =>'Il file è stato compresso correttamente',
 file_unzip_ok           =>'Il file è stato decompresso correttamente',

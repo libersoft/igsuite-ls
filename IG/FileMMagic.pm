@@ -7,7 +7,7 @@
 #                                                                           #
 # File::MMagic
 #
-# $Id: MMagic.pm 259 2006-05-23 05:55:32Z knok $
+# $Id: FileMMagic.pm,v 1.436 2009/12/30 15:43:59 lucas73 Exp $
 #
 # This program is originated from file.kulp that is a production of The
 # Unix Reconstruction Projct.

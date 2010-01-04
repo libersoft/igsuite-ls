@@ -40,7 +40,8 @@ my @tasks = ( $lang{personal_calendar},
 	      $lang{weather},
 	      $lang{opportunities},
 	      $lang{opportunities},
-	      $lang{create_quickly}  );
+	      $lang{create_quickly},
+	      $lang{stock_quotes}  );
 
 
 IG::DTable( login          => 1,
@@ -118,7 +119,9 @@ sub resourcemode
  {
   ## Find or set document type
   my $resource_cgi     = DbQuote( $on{resource_cgi} );
-  my $resource_dbtable = DbQuote( $on{resource_dbtable} );
+  my $resource_dbtable = $resource_cgi eq 'equipments' ? 'equipments'
+                       : $resource_cgi eq 'webmail'    ? 'email_msgs'
+                       : '';
 
   ## Try to find missed arguments ( works only if $on{id} is a protocol )
   ( $resource_cgi,
@@ -126,11 +129,11 @@ sub resourcemode
                         if    ! $resource_cgi
                            || ! $resource_dbtable;
 
-  die("Any 'resource_dbtable' specified.\n") if !$resource_dbtable;
   die("Any 'resource_cgi' specified.\n")     if !$resource_cgi;
 
   ## Find document owner
-  DbQuery("select owner from $resource_dbtable where id='".DbQuote($on{id})."'");
+  DbQuery( "select owner from $resource_dbtable ".
+           "where id='".DbQuote($on{id})."'");
   my $doc_owner = FetchRow();
 
   IG::CheckResourcePrivileges( id               => $on{id},
@@ -221,8 +224,7 @@ sub resourcemodeagg
 
   IG::CheckResourcePrivileges( id               => $on{id},
                                mode             => 'w',
-                               resource_cgi     => $on{resource_cgi},
-                               resource_dbtable => $on{resource_dbtable}
+                               resource_cgi     => $on{resource_cgi}
                              ) || return;
 
   QuoteParams();
@@ -289,10 +291,10 @@ END
              Input( type => 'hidden', name => 'caller').
              Input( type => 'hidden', name => 'caller_action').
 
-             ( $on{errmsg} eq $lang{Err_session}
-               ? Input( type=>'hidden',
-		        name=>'warn',
-		        value=>'true')
+             ( $on{errmsg}
+               ? Input( type  => 'hidden',
+		        name  => 'warn',
+		        value => 'true' )
                : '').
 
              Input( show    => $lang{user},
@@ -429,7 +431,7 @@ sub binder
 
   ## Check text2link to bind
   my $document_link;
-  $document_link = "$1.$3" if $on{text2link} =~ /(\d\d\d\d\d\d)(\.|\_)(\d\d)/;
+  $document_link = "$1$2.$3" if $on{text2link} =~ /\b([EF123456789])(\d{5})(?:\.|\_)(\d\d)\b/;
 
   if ($document_link)
    {
@@ -511,7 +513,10 @@ sub update_field_value
 sub update_igforms_field
  {
   HttpHead( expires => 'now' );
-  if ( ! CheckPrivilege('igforms_edit') )
+  if ( ! IG::CheckResourcePrivileges( id           => $on{recordid},
+                                      resource_cgi => $on{igformid},
+                                      mode         => 'w' )
+     )
    {
     PrOut 1;
     return;
@@ -580,7 +585,7 @@ END
   
   TaskMsg( "<div style=\"text-align:center\"><strong>Upload Meter</strong>".
            "<div style=\"border:0px; margin-bottom:10px;\" id=\"meter_info_div\">".
-           "&nbsp;</div>".
+           "&nbsp;<br></div>".
            "<div style=\"padding:1px; margin: 0 auto; width:200px; border:1px solid #000000\">".
            "<div style=\"text-align:left; width:1px; background:#333399\" id=\"meter_bar_div\">".
            "&nbsp;</div></div>".
@@ -756,6 +761,7 @@ sub documentupload
   my $idcode = $1;
   my $idnum  = $1.$2;
   my $idyear = $4;
+  my $errmsg;
 
   die("No ID number specified.\n") if !$idnum;
 
@@ -769,7 +775,7 @@ sub documentupload
     my ($ext) = $on{upfile} =~ /^.+(\.[^\.]+)$/;
     die("You have to specify an extension in your file.\n") if !$ext;
 
-    if (CheckPrivilege($doc_type.'_edit'))
+    if ( CheckPrivilege($doc_type.'_edit') ) #XXX2FIX and CheckResourcePrivilege?
      {
       ## Check document protocol directory
       IG::CkProtocolDir($doc_type, $idyear);
@@ -777,7 +783,7 @@ sub documentupload
       ## Trash old document
       IG::TrashDoc($on{id});
 
-      my $status = IG::FileUpload
+      $errmsg = IG::FileUpload
                     ( param_name   => 'upfile',
 		      target_dir   => $IG::htdocs_dir . $IG::S .
 				      $IG::default_lang{$doc_type} . $IG::S .
@@ -786,18 +792,17 @@ sub documentupload
 		      can_overwrite=> 'true' );
 
       LogD('upload a file into protocol', 'upload', $doc_type, $on{id});
-      $on{errmsg} = MkUrl( $status );
      }
     else
      {
-      $on{errmsg} = MkUrl($lang{Err_privileges});
+      $errmsg = $lang{Err_privileges};
      }
    }
 
   IG::Redirect( "$doc_type?".
 		"action=docview&amp;".
 		"id=$on{id}&amp;".
-		"errmsg=$on{errmsg}" );  
+		"errmsg=". IG::Crypt( $errmsg ) );  
  }
 
 ############################################################################
@@ -866,7 +871,7 @@ sub zipdocument
   IG::Redirect( "$doc_type?".
 		"action=docview&amp;".
 		"id=$on{id}&amp;".
-		"errmsg=" . MkUrl($errmsg) );  
+		"errmsg=" . IG::Crypt( $errmsg ) );  
  }
 
 ############################################################################
@@ -954,7 +959,7 @@ sub unzipdocument
   IG::Redirect( "$doc_type?".
 		"action=docview&amp;".
 		"id=$on{id}&amp;".
-		"errmsg=" . MkUrl($errmsg) );  
+		"errmsg=" . IG::Crypt( $errmsg ) );  
  }
 
 #############################################################################
@@ -978,35 +983,26 @@ sub docinfo
                                      "',500,220,'composemessage');");
 
   ## Find resource info
-  my $resource_cgi;
-  my $resource_dbtable;
-  my $resource_id = $on{id};
+  my $resource_cgi = '';
+  my $resource_id  = $on{id};
   
   if ( $on{id} =~ /^E\d\d\d\d\d\.\d\d/i )
    {
-    ## it's an email protocol pid we need a id
+    ## it's an email protocol pid we need an id
     require IG::WebMail;
     ($resource_id, undef) = IG::WebMail::PidToId( pid => $on{id} );
     $resource_cgi     = 'webmail';
-    $resource_dbtable = 'email_msgs';
    }
-
-  ( $resource_cgi,
-    $resource_dbtable ) = ( IG::ProtocolToDocType( $on{id} ) )[1,2]
-                        if     ! $resource_cgi
-                            || ! $resource_dbtable;
 
   ## Check document accessibility
   my $_w =  ( IG::CheckResourcePrivileges( id               => $resource_id,
                                            mode             => 'w',
-                                           resource_cgi     => $resource_cgi,
-                                           resource_dbtable => $resource_dbtable )
+                                           resource_cgi     => $resource_cgi )
             )[0]; ## we need splice to force ! wantarray
   my $_r =  $_w
          || ( IG::CheckResourcePrivileges( id               => $resource_id,
                                            mode             => 'r',
-                                           resource_cgi     => $resource_cgi,
-                                           resource_dbtable => $resource_dbtable )
+                                           resource_cgi     => $resource_cgi )
             )[0]; ## we need splice to force ! wantarray
 
   my $privileges = $_w
@@ -1220,8 +1216,9 @@ sub showsessions
 		[$row[3]],
 		[IG::UsrInf('name',$row[3])],
 		[$row[7], $who_is_link],
-		[lc $browser->browser_string()],
-		[lc $browser->os_string()],
+		[    $browser->browser_string()
+		  || ($browser->robot() ? 'robot' : $lang{unknown})],
+		[$browser->os_string() || $lang{unknown} ],
 		["$row[4] - $row[5]","","nowrap"],
 		[int((-M "$IG::logs_dir${S}$_")*24*60) . ' min',
 		 '', 'align="right"'],
@@ -1271,7 +1268,7 @@ sub writecomments
     if (length($on{commenttext}) > 1000)
      {
       IG::Redirect("$on{commentproc}$on{commentbackurl}&amp;errmsg=".
-		   MkUrl("Comment too long, please rewrite it!") );
+		   IG::Crypt("Comment too long, please rewrite it!") );
       return;
      }
 
@@ -1376,7 +1373,7 @@ sub summary
   $IG::set_cookie{tasks}{expires} = '+1M';
   if ($IG::cookie{tasks})
    {
-    for (0..12)
+    for ( 0 .. 13 )
      {
       $taskstatus[$_] = substr($IG::cookie{tasks},$_,1);
       $taskstatus[$_] = not($taskstatus[$_]) if $on{$_};
@@ -1384,8 +1381,8 @@ sub summary
      }
    }
   else
-   { @taskstatus = (1,1,1,1,1,1,1,1,1,1,1,1,1);}
-  $IG::set_cookie{tasks}{value} ||= 1111111111111;
+   { @taskstatus = (1,1,1,1,1,1,1,1,1,1,1,1,1,1);}
+  $IG::set_cookie{tasks}{value} ||= 11111111111111;
 
   if (!$auth_user || $auth_user eq 'guest' || $on{errmsg})
    { $IG::clr{bg} = $IG::clr{bg_barra}; }
@@ -1512,6 +1509,7 @@ sub summary
       show_polls();
       show_news(); 
       show_weather();
+      show_quotes();
       personal_documents();
      }
     else
@@ -1535,6 +1533,7 @@ sub summary
       internal_news();
       show_news();
       show_weather();
+      show_quotes();
       personal_documents();
       PrOut "</table>\n\n\n</td></tr>\n";
      }
@@ -1543,7 +1542,7 @@ sub summary
     PrOut "<td colspan=2 align=center $IG::imgbgbarra>".
 	  "<table width=\"99%\" cellspacing=0 cellpadding=0 bgcolor=\"$IG::clr{bg_menu}\"><td $IG::imgbgbarra>\n";
 
-    for (0..12)
+    for ( 0 .. 13 )
      {
       if (!$taskstatus[$_]) 
        {
@@ -2291,10 +2290,7 @@ sub show_news
 ############################################################################
 sub show_weather
  {
-  return if !$taskstatus[9] || !$IG::plugin_conf{weather}{code};
-
-  ## Update weather info
-  update_weather();
+  return if !$taskstatus[9];
 
   my $weather;
   my @panels;
@@ -2308,6 +2304,9 @@ sub show_weather
    }
   else
    {   
+    ## Update weather info
+    update_weather();
+
     my $_flag;
     my @codes = ref($IG::plugin_conf{weather}{code}) eq 'ARRAY'
                 ? @{$IG::plugin_conf{weather}{code}}
@@ -2349,13 +2348,49 @@ sub show_weather
   return(1);
  }
 
+############################################################################
+############################################################################
+sub show_quotes
+ {
+  return if !$taskstatus[13] || !$IG::plugin_conf{quotes}{exchange};
+  my $quotes;
+
+  ## Update quotes info
+  update_quotes();
+
+  if (open (DET, '<', "$IG::temp_dir${S}finance_quotes.txt") )
+   { 
+    $quotes .= $_ while <DET>;
+    close (DET);
+   }
+  else
+   {
+    $quotes = "Can't retrieve all quotes info! Try again later or check ".
+              "the installation of Perl module 'Finance::Quote'.";
+   }
+
+  PrOut "<td>\n";
+  TaskHead(	width => '100%',
+		title => $lang{stock_quotes},
+		icons => Img( href=>"igsuite?action=summary&amp;13=1",
+			      src=>"$IG::img_url/close_inline.gif"),
+		icon  => 2);
+
+  PrOut "<div style=\"padding:3px; overflow:auto;\">$quotes</div>\n";
+   
+  TaskFoot();
+  PrOut "</td></tr>\n";
+  return(1);
+ }
+
 #############################################################################
 #############################################################################
 sub update_weather
  {
   ## this sub is a clone of update_weather() in igsuited
   eval ('require LWP::UserAgent;');
-  return if $@ || !$IG::plugin_conf{weather}{code};
+  return if $@ || !$IG::plugin_conf{weather}{code}
+               ||  $IG::plugin_conf{weather}{code} eq 'none';
   require IG::Utils;
   my $ua = LWP::UserAgent->new;
   $ua->agent("IGSuite/$IG::VERSION");
@@ -2380,7 +2415,7 @@ sub update_weather
                                       $city_code.
                                       "?from=search_current");
     my $r = $ua->request($req);
-    if ( ! $r->is_success )
+    if ( ! $r->is_success || ! $r->content )
      {
       ## we will try again in 1 hour
       IG::FileUnlink( $weather_filename );
@@ -2438,6 +2473,63 @@ sub update_weather
       chmod 0664, $icon_filename;
      }
    }
+ }
+
+#############################################################################
+#############################################################################
+sub update_quotes
+ {
+  ## this sub is a clone of update_quotes() in igsuited
+
+  ## we don't want overcharge yahoo.com
+  my $quotes_filename = "$IG::temp_dir${S}finance_quotes.txt";
+  return if -e $quotes_filename && -M $quotes_filename < 0.5/24; ## 30 min
+
+  eval("require Finance::Quote;");
+  return if $@; 
+
+  my $exchange = $IG::plugin_conf{quotes}{exchange} || 'yahoo_europe';
+  my $symbols  = $IG::plugin_conf{quotes}{symbols}  || 'TIS.MI ENEL.MI';
+
+  my @quotes;
+  my $q = Finance::Quote->new;
+  $q->timeout(60);
+  $q->failover(1); # Set failover support (on by default).
+  $q->require_labels(qw/name date volume open last/);
+
+  push @quotes, [( 'Name',
+                   'Date',
+                   'Volume',
+                   'Open',
+                   'Last' )];
+
+  for my $symbol ( split / /, $symbols )
+   {
+    my %info = $q->fetch( $exchange, $symbol );
+    next if !$info{$symbol, 'name'};
+
+    push @quotes, [( $info{$symbol, 'name'},
+                     $info{$symbol, 'date'},
+                     $info{$symbol, 'volume'},
+                     $info{$symbol, 'open'},
+                     $info{$symbol, 'last'} )];
+   }
+
+  open( DET, '>', $quotes_filename)
+    or die("Can't write on '$quotes_filename'.\n");
+
+  print DET IG::MkTable( values     => \@quotes,
+                         style      => 'width:100%; text-align:right;',
+                         style_c_r  => 'font-size:10px',
+                         style_c_r1 => 'font-weight:bold;'.
+                                       'background-color:#FFFFFF;'.
+                                       'text-align:left;'.
+                                       'border-bottom:1px solid #FFFFFF;',
+                         style_c1_r => 'background-color:#DDDDDD;'.
+                                       'text-align:left',
+                         style_c3_r => 'background-color:#DDDDDD',
+                         style_c5_r => 'background-color:#DDDDDD' );
+  close(DET);
  }
 
 ###########################################################################
@@ -2596,30 +2688,51 @@ sub setsessionyear
 sub login
  {
   IG::CleanSessions();
-  my $login = DbQuote( $on{login} );
-     $login = 'Wrong_Login' if $login !~ /^[A-Za-z\_][A-Za-z0-9\_\.\-]{1,31}$/;
 
-  ## Retrieve some user informations
-  DbQuery("select current_date-lastpwdchange, lastpwdchange,".
-          " statusdate, hostsallow, status, passwd ".
-          "from users where login='$login'");
+  my $errmsg;
+  my $_is_a_valid_account;
+  my $login = $on{login};
+  my $pwd = $on{pwd};
+  my $pwdexpire;
+  my $lastpwdchange;
+  my $accountexpirationdate;
+  my $accounthostsallow;
+  my $accountstatus;
+  my $accountpwd;
+  my $accountlogin;
 
-  my ( $pwdexpire,
-       $lastpwdchange,
-       $accountexpirationdate,
-       $accounthostsallow,
-       $accountstatus,
-       $accountpwd ) = FetchRow();
+  ## Validate login and password params
+  if (    $login =~ /^[A-Za-z\_][A-Za-z0-9\_\.\-]{1,31}$/
+       && $pwd   =~ /^.{4,72}$/ )
+   {
+    ## Try to retrieve some user informations from database
+    DbQuery("select current_date-lastpwdchange, lastpwdchange,".
+            " statusdate, hostsallow, status, passwd, login ".
+            "from users where login='".DbQuote($login)."'");
 
-  ## check user login and password
-  if ( _ck_user_login( $login, $accountpwd, $accountstatus ) )
+    ( $pwdexpire,
+      $lastpwdchange,
+      $accountexpirationdate,
+      $accounthostsallow,
+      $accountstatus,
+      $accountpwd,
+      $accountlogin ) = FetchRow();
+
+    ## check user login and password
+    $_is_a_valid_account = _ck_user_login( $accountlogin, $login,
+                                           $accountpwd,   $pwd,
+                                           $accountstatus );
+   }
+
+
+  if ( $_is_a_valid_account )
    {
     ## check if the user is disabled and inform him (admin can't be disabled)
     if ( $accountstatus == 2 && $login ne $IG::login_admin )
      {
       ## it's a disabled user
       LogD('Disabled User', 'badlogin', 'users', $login);
-      $on{errmsg} = $lang{Err_disabled_user};
+      $errmsg = $lang{Err_disabled_user};
      }
     else
      {
@@ -2646,7 +2759,7 @@ sub login
          )
        {
         ## alert user about other active sessions
-        $on{errmsg} = $lang{Err_session};
+        $errmsg = $lang{Err_session};
        }
       else
        {
@@ -2658,7 +2771,7 @@ sub login
         if ( _user_host_deny( $accounthostsallow || $IG::hosts_allow ) )
          {
           ## we can't login him!
-          $on{errmsg} = $lang{Err_host_deny};
+          $errmsg = $lang{Err_host_deny};
          }
         else
          {
@@ -2726,7 +2839,7 @@ sub login
    {
     ## wrong login or password - can't login
     LogD('Wrong Password', 'badlogin', 'users', $login);
-    $on{errmsg} = $lang{Err_password};
+    $errmsg = $lang{Err_password};
     sleep(3); ## to prevent multirequest to guess password
    }
 
@@ -2734,7 +2847,7 @@ sub login
    {
     IG::Redirect( "$on{caller}?".
                   "action=$on{caller_action}&amp;".
-		  "errmsg=" . MkUrl($on{errmsg}) .
+		  "errmsg=" . IG::Crypt( $errmsg ) .
 		  "&amp;igsuiteid=" . MkUrl($IG::set_cookie{igsuiteid}) );
     return;
    }
@@ -2761,6 +2874,11 @@ sub login
            IG::UserDir($auth_user) . "${S}$auth_user.cf" )
        { require $_ && last if -e $_; }
      }
+    else
+     {
+      ## User not logged in we have to go back to login form
+      $on{errmsg} = IG::Crypt( $errmsg );
+     }
    }
 
   ## let's go to IG
@@ -2771,13 +2889,14 @@ sub login
 ############################################################################
 sub _ck_user_login
  {
-  my ( $login, $pwd, $status ) = @_;
+  my ( $_db_login, $_param_login, $_db_pwd, $_param_pwd, $_db_status ) = @_;
 
-  ## First try to authenticate user admin
-  return 1 if    $IG::login_admin && $login   eq $IG::login_admin
-              && $IG::pwd_admin   && $on{pwd} eq $IG::pwd_admin;
+  ## First try to authenticate user admin. We will use params because
+  ## user admin could not be inserted into database (first connection)
+  return 1 if    $IG::login_admin && $_param_login eq $IG::login_admin
+              && $IG::pwd_admin   && $_param_pwd   eq $IG::pwd_admin;
 
-  ## Then try to authenticate user by LDAP if is active
+  ## Then try to authenticate user by LDAP if is active and configured
   if ( $IG::ldap_conf{active} )
    {
     require IG::AuthLDAP;
@@ -2791,11 +2910,12 @@ sub _ck_user_login
                  search_base => $IG::ldap_conf{search_base},
                  user_dn     => $IG::ldap_conf{user_dn} );  
     
-    my ( $result, %user_info ) = $ldap->login( $login, $on{pwd} );
+    my ( $result, %user_info ) = $ldap->login( $_param_login, $_param_pwd );
+
     if ( $result )
      {
       ## User is Logged IN
-      if ( ! defined( $status ) )
+      if ( ! defined( $_db_status ) )
        {
         ## user doesn't exist in IGSuite DB
         if ( $IG::ldap_conf{auto_create_user} )
@@ -2805,7 +2925,7 @@ sub _ck_user_login
           for my $val ( qw( name login passwd ) )
            {
             die("Your LDAP server don't give me this information:$val. ".
-                "I need it to create user '$login' account"
+                "I need it to create user '$_param_login' account"
                ) if !$user_info{$val}; 
            }
 
@@ -2837,8 +2957,9 @@ sub _ck_user_login
    }
   else
    {
-    ## Check if the password is correct
-    return 1 if $on{pwd} && $on{pwd} eq $pwd;
+    ## As last step check if the login and password are correct
+    return 1 if     $_db_pwd   && $_db_pwd   eq $_param_pwd
+                 && $_db_login && $_db_login eq $_param_login;
    }
 
   return 0;
@@ -2931,7 +3052,7 @@ sub default_action
      $default_application = ( "igsuite?".
                               "action=summary&amp;".
                               "login=$on{login}&amp;".
-                              "errmsg=" . MkUrl($on{errmsg})
+                              "errmsg=$on{errmsg}"
                             ) if    !$default_application
                                  || $default_application eq 'igsuite';
 

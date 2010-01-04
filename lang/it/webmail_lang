@@ -4,6 +4,7 @@
 
 %lang = (%lang,
    (
+get_all_attachments     => 'Preleva tutti gli allegati',
 imported_messages       => 'Messaggi importati',
 assign_tag              => 'Assegna un tag',
 remove_selected_tags    => 'Rimuovi i Tag selezionati',

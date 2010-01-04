@@ -51,6 +51,7 @@ use IG::MailPOP3Client;
 use IG::MimeBase64;
 use IG::MimeWords;
 use IG::QuotedPrint;
+use IG::DateParse;
 
 IG::MkEnv(__PACKAGE__);
 
@@ -78,7 +79,10 @@ IG::DTable(	ckmessages        => sub { CheckPrivilege() },
 		ajax_headers	  => sub { CheckPrivilege('webmail_view')  },
 		getnewmessages	  => sub { CheckPrivilege('webmail_view')  },
 		viewattachment	  => sub { CheckPrivilege('webmail_view')  },
+		getattachmentaszip=> sub { CheckPrivilege('webmail_view')  },
 		archiveattach	  => sub { CheckPrivilege('webmail_view')  },
+		deleteattachment  => sub { CheckPrivilege('webmail_edit')  },
+		attachmentmd5     => sub { CheckPrivilege('webmail_view')  },
 		composemessage	  => sub { CheckPrivilege('webmail_new')   },
 		sendmessage	  => sub { CheckPrivilege('webmail_new')   },
 		messageaction	  => sub { CheckPrivilege('webmail_edit')  },
@@ -320,7 +324,7 @@ sub addtocontact
      {
       IG::Redirect("contacts?".
 			"action=protosub&amp;".
-			"backtoreferer=".IG::MkUrl($on{backtoreferer}).'&amp;'.
+			"btr=".IG::MkUrl($on{btr}).'&amp;'.
 			"master=$on{contactid}&amp;".
 			"contactname=$name&amp;".
 			"email=$address" );
@@ -329,7 +333,7 @@ sub addtocontact
      {
       IG::Redirect("contacts?".
 			"action=proto&amp;".
-			"backtoreferer=".IG::MkUrl($on{backtoreferer}).'&amp;'.
+			"btr=".IG::MkUrl($on{btr}).'&amp;'.
 			"contactname=$name&amp;".
 			"email=$address" );
      }
@@ -888,7 +892,7 @@ sub composemessage
 	 $on{composetype} eq 'forwardasattach'
        )
      {
-      %msg = parse_message( owner   => $auth_user,
+      %msg = parse_message( owner   => $on{owner} || $auth_user,
                             html_ok => 1,
 			    id      => $on{message_id} );
       if ( ! %msg )
@@ -980,7 +984,18 @@ sub composemessage
 
       ## quote replied text
       $body = _quote_and_reformat( $body );
+      
+      my $to = $msg{to};
+      $to =~ s/(\t|\s\s+)/ /g;
+      $to =~ s/,\s*/\n    /g;
+      $body = "\n\n".
+	      "Subject: $msg{subject}\n".
+	      "Date: $msg{date} $msg{time}\n".
+	      "From: $msg{from}\n".
+	      "To: $to\n".
+	      $body;
      }
+
     elsif ($on{composetype} eq 'draftresume')
      {
       $to = $msg{to} if defined($msg{to});
@@ -1023,17 +1038,20 @@ sub composemessage
       if ($on{composetype} ne 'draftresume' && $on{composetype} ne 'reuse')
        {
         $subject = "Fw: " . $subject unless ($subject =~ /^fw:/i);
-        $body = "\n------ Forwarded message follows ------\n\n".
+	my $to = $msg{to};
+	$to =~ s/(\t|\s\s+)/ /g;
+	$to =~ s/,\s*/\n    /g;
+        $body = "\n\n------ Forwarded message follows ------\n\n".
 		"Subject: $msg{subject}\n".
-		"Date: $msg{date}\n".
+		"Date: $msg{date} $msg{time}\n".
 		"From: $msg{from}\n".
-		"To: $msg{to}\n\n".
+		"To: $to\n\n".
 		$body;
        }
      }
     elsif ($on{composetype} eq 'forwardasattach')
      {
-      IG::WebMail::AddAttachment( attachment_path => $IG::user_dir . $IG::S.
+      IG::WebMail::AddAttachment( attachment_path => IG::UserDir($on{owner}) . $IG::S.
                                                      'MailBox'     . $IG::S.
                                                      $msg{folder}  . $IG::S.
                                                      $msg{messageid},
@@ -1054,7 +1072,10 @@ sub composemessage
                                 $IG::soc_name,
                                 IG::UsrInf('name'),
                                 IG::UsrInf('function') );
-    $body .= "\n\n" . $signature;
+    
+    $body = $on{composetype} eq 'reply' || $on{composetype} eq 'replyall'
+          ? $body . "\n\n\n" . $signature
+	  : "\n\n\n" . $signature . $body;
    }
 
   $on{sharemode} ||= IG::ConfigParam('webmail.share_mode') || 0;
@@ -1546,7 +1567,7 @@ sub _quote_and_reformat
   ## Reformat
   $body = _text_msg_autoformat( $body ? "> $body" : '' );
 
-  ## Trim blank line
+  ## Trim excessive blank line in the middle of text
   1 while $body =~ s/(\>\n){3}/\>\n\>\n/mg;
 
   return $body;
@@ -1572,7 +1593,7 @@ sub _text_msg_autoformat
                                           lists    => 'roman, bullet, alpha',
                                           all      => 1 } );
 
-  ## Trim excessive blank line
+  ## Trim excessive blank line in the middle of text
   1 while $body =~ s/[\n]{4,}/\n\n\n/mg;
 
   return $body;
@@ -1779,6 +1800,7 @@ sub sendmessage
   my $date = IG::GetDateExtended();
 
   ## Make a from and realname fields
+  ##XXX2FIX from and to encoding
   my $realname = IG::UsrInf('name');
      $realname =~ s/[\&|;|\`|\'|\\|\""|\*|\?|~|<|>|^|\(|\)|\[|\]|\{|\}|\$|\n|\r]/ /g;
      $realname = '"'. $realname .'"';
@@ -2080,7 +2102,7 @@ sub _decode
     foreach ( MIME::Words::decode_mimewords( $text ) )
      {
       my ( $data, $code ) = @$_;
-      $decoded .= $code
+      $decoded .= $code && uc($code) ne uc($IG::lang_charset)
                 ? IG::TextConvert( fromcode     => $code,
                                    tocode       => $IG::lang_charset,
                                    text         => $data )
@@ -2163,8 +2185,7 @@ sub readmessage
    ## Check document accessibility
    IG::CheckResourcePrivileges( id               => $on{message_id},
                                 mode             => 'r',
-                                resource_cgi     => 'webmail',
-                                resource_dbtable => 'email_msgs'
+                                resource_cgi     => 'webmail'
                               ) || return;
  
    if ( %msg )
@@ -2184,11 +2205,17 @@ sub readmessage
       }
 
      if (    $msg{status} !~ /o/i
+          && $on{action} eq 'readmessage' ## not viewing attached email
+	  && $auth_user eq $on{owner}
           && $msg{notificationto} 
           && IG::WebMail::_emailInLists( IG::UsrInf('email'),
                                            $msg{to},
                                            $msg{cc}
                                        )
+          && !IG::WebMail::_emailInLists( IG::UsrInf('email'),
+                                           $msg{from}
+                                       )
+
         )
       {
        ## send a receipt to the sender
@@ -2293,7 +2320,7 @@ sub readmessage
 
          $from   .= Img( href   => "$base_url&amp;".
                                    "contactid=$msg{contactid}&amp;".
-                                   "backtoreferer=1&amp;".
+                                   "btr=1&amp;".
                                    "action=addtocontact",
                          src    => "$IG::img_url/email_add.png",
                          width  => 16,
@@ -2393,7 +2420,6 @@ sub readmessage
                                         "igsuite?".
                                                 "action=resourcemode&amp;".
                                                 "resource_cgi=webmail&amp;".
-                                                "resource_dbtable=email_msgs&amp;".
                                                 "id=$escapedmessageid".
                                         "',620,550,'SetPrivileges');",
                           quick_help =>	$lang{privileges_mng} ),
@@ -2501,6 +2527,59 @@ sub readmessage
 
         PrOut '</td></tr>';
        }
+      elsif( !$on{print} )
+       {
+        PrOut '<td>';
+        HLayer( intra_space  => 3,
+		bottom_space => 1,
+		layers       => [(
+ 
+		MkButton( icon_src   => "$IG::img_url/mail_folder.png",
+                          icon_width => 26,
+		          link       => "$base_url&amp;action=displayheaders",
+                          quick_help =>	"$lang{backto} $folderinfo{$folder}{name}" ),
+
+		MkButton( icon_src   => "$IG::img_url/mail_reply.png",
+                          icon_width => 26,
+                          link       =>	"$base_url&amp;".
+                                        "action=composemessage&amp;".
+                                        "composetype=reply",
+                          quick_help =>	$lang{reply} ),
+
+		MkButton( icon_src   => "$IG::img_url/mail_replyall.png",
+                          icon_width => 26,
+                          link       =>	"$base_url&amp;".
+                                      	"action=composemessage&amp;".
+                                      	"composetype=replyall",
+                          quick_help =>	$lang{replyall} ),
+
+		MkButton( icon_src   => "$IG::img_url/mail_forward.png",
+                          icon_width => 26,
+                          link       => "$base_url&amp;".
+                   			"action=composemessage&amp;".
+		             		"composetype=forward",
+                          quick_help => $lang{forward} ),
+
+                $on{action} ne 'viewattachment' ?
+		MkButton( icon_src   => "$IG::img_url/mail_forward_att.png",
+                          icon_width => 26,
+			  link       => "$base_url&amp;".
+        				"action=composemessage&amp;".
+	        			"composetype=forwardasattach",
+		          quick_help =>	$lang{forward_as_attach} )
+		: '',
+
+		MkButton( icon_src   => "$IG::img_url/mail_reuse.png",
+                          icon_width => 26,
+                          link       => "$base_url&amp;".
+                   			"action=composemessage&amp;".
+		             		"composetype=reuse",
+                          quick_help => $lang{reuse_message} ),
+
+		)]
+	      );
+        PrOut "</td>";       
+       }
       else
        {
         ## In case of printable version
@@ -2579,6 +2658,18 @@ sub readmessage
 		                            "fastfind=1&amp;".
 		                            "keytofind=$msg{protocolid}" )
                             : '' ).
+                          Img( title => $lang{new_event},
+			       align => 'absmiddle',
+                               width => 16,
+                               class => 'noprint',
+                               src   => "$IG::img_url/calendar.gif",
+                               href  => "javascript:winPopUp(".
+                                        "'calendar?".
+                                        "action=proto&amp;".
+                                        "contactid=$msg{contactid}&amp;".
+                                        "backto=none&amp;".
+                                        "eventtext=$msg{protocolid}'".
+                                        ",600,550,'calendar');" ).
 			  "</td></tr>".
 			  "<td class=\"list\" width=130>".
 			  "<strong>$lang{contact}:</strong>".
@@ -2658,6 +2749,21 @@ sub readmessage
       my $msgBodyOverflowXStyle = $on{print}
                                   ? ''
                                   : 'overflow-x:auto; overflow-y:visible;';
+
+      $msg{atthtml} .= "<div class=\"fileicon\">".
+                       IG::QuickHelp
+                        ( alt    => $lang{get_all_attachments},
+                          id     => 'attaszipfile',
+                          width  => '250px',
+                          anchor => Img( src   => "$IG::img_url/mime_zip.gif",
+                                         width => 32 ).
+                                    IG::TextElide( string => "<br>$lang{get_all_attachments}",
+                                                   length => 40 ),
+                          href   => "webmail/attachment.zip?".
+                                    "action=getattachmentaszip&amp;".
+                                    "message_id=$escapedmessageid&amp;".
+                                    "owner=$on{owner}" ).
+                       '</div>' if $msg{atthtml};
 
       PrOut <<HTMLEND;
 <div style="width:670px; background-color:$IG::clr{bg_link}; 
@@ -3045,6 +3151,9 @@ sub parse_message
   ## If message is stored inside database we want retrieve other values
   if ($messageid)
    {
+    my $userName = DbQuote( $username );
+    my $msgId = DbQuote( $messageid );
+    $msgId = $1 if $msgId =~ /^([^\-]+)-[0-9]+$/;
     ## Retrieve some other needed values from database
     ## we want override *email_msgs.status* with database stored value
     DbQuery("select email_msgs.status, email_msgs.sharemode, email_msgs.contactid,".
@@ -3052,7 +3161,7 @@ sub parse_message
 	    " email_msgs.threadid ".
 	    "from email_msgs left join contacts ".
 	    "on email_msgs.contactid = contacts.contactid ".
-	    "where email_msgs.id='$messageid' and email_msgs.owner='$username'");
+	    "where email_msgs.id='$msgId' and email_msgs.owner='$userName'");
  
     (	$msg{status},
 	$msg{sharemode},
@@ -3109,6 +3218,7 @@ sub parse_message
     (	$msg{html},
 	$msg{atthtml},
 	$msg{rawtext},
+	$msg{boundary},
 	@attachment ) = _parse_multipart( $msg{body},
 					  $msg{contenttype},
 					  0,
@@ -3164,6 +3274,7 @@ sub parse_message
 		encoding    => $temphash{encoding},
 		size	    => IG::MkByte(length($temphash{contents})),
 		attnum      => 0,
+		header      => $msg{header},
 		messageid   => $messageid );
    }
   else
@@ -3249,6 +3360,7 @@ sub _parse_multipart
     $att{header}	  = _decode($att_header, 'mimewords');
     $att{contents}	  = $att_body;
     $att{attnum}	  = $msg_attnum++;
+    $att{boundary}        = $boundary;
 
     push @msg_attachments, \%att;
    }
@@ -3270,6 +3382,7 @@ sub _parse_multipart
         my ( $in_html,
 	     $in_atthtml,
 	     $in_rawtext,
+	     $in_boundary,
 	     @in_attachments
            ) = _parse_multipart( $msg_attachments[$attnumber]{contents},
                                  $msg_attachments[$attnumber]{contenttype},
@@ -3292,6 +3405,7 @@ sub _parse_multipart
 		encoding    => $msg_attachments[$attnumber]{encoding},
 		size	    => IG::MkByte(length($msg_attachments[$attnumber]{contents})),
 		attnum      => $msg_attachments[$attnumber]{attnum},
+		header      => $msg_attachments[$attnumber]{header},
 		messageid   => $on{message_id} );
         next;
        }
@@ -3378,6 +3492,7 @@ sub _parse_multipart
         my ( $in_html,
 	     $in_atthtml,
 	     $in_rawtext,
+	     $in_boundary,
 	     @in_attachments
            ) = _parse_multipart( $msg_attachments[$attnumber]{contents},
                                  $msg_attachments[$attnumber]{contenttype},
@@ -3386,6 +3501,19 @@ sub _parse_multipart
         $msg_html    .= $in_html;
 	$msg_atthtml .= $in_atthtml;
 	$msg_rawtext .= $in_rawtext;
+	
+	for( @in_attachments ) 
+	 {
+	  if( defined $$_{parent_num} )
+	   {
+	    $$_{parent_num} += $#msg_attachments+1;
+	   }
+	  else
+	   {
+	    $$_{parent_num} = 0;
+	   }
+	 }
+	
         push @msg_attachments, @in_attachments;
        }
       elsif (    $msg_attachments[$attnumber]{contenttype} =~ /text\/html/i
@@ -3443,6 +3571,7 @@ sub _parse_multipart
 		encoding    => $msg_attachments[$attnumber]{encoding},
 		size	    => IG::MkByte(length($msg_attachments[$attnumber]{contents})),
 		attnum      => $msg_attachments[$attnumber]{attnum},
+		header      => $msg_attachments[$attnumber]{header},
 		messageid   => $on{message_id} );
        }
      }
@@ -3454,7 +3583,7 @@ sub _parse_multipart
 	"IGSuite staff.\n[$msg_type]\n");
    }
 
-  return ($msg_html, $msg_atthtml, $msg_rawtext, @msg_attachments);
+  return ($msg_html, $msg_atthtml, $msg_rawtext, $boundary, @msg_attachments);
  }
 
 ######################################################################
@@ -3496,6 +3625,8 @@ sub _mk_attach_icon
   my $escapedmessageid = MkUrl ( $data{messageid} );
 
   ## adjust filename value
+  $data{filename}   =~ s/^\s+|\s+$//g;
+  $data{filename} ||= 'Unknown';
   my $escapedfilename = $data{filename};
   $escapedfilename =~ s/[^\(\)\^\[\]\#\@\:\;\°\,\.\s\+\=\-\_\'a-zA-Z0-9]/\_/g;
   1 while $escapedfilename =~ s/\_{2,}/\_/g;
@@ -3505,53 +3636,125 @@ sub _mk_attach_icon
    {
     $data{filename} .= Blush(" (Probable Virus, check it before open!!!)");
    }
-  $data{filename} = IG::WrapText( text=>$data{filename}, columns=>25 );
+  $data{caption} ||= IG::WrapText( text=>$data{filename}, columns=>25 );
 
   $data{contenttype} =~ /^([^;]+)/g;
   $data{contenttype} = lc($1) || 'text/plain';
 
-  my $alt = MkTable( style_c1_r  => 'vertical-align:top; font-weight:bolder; white-space:nowrap',
-                     values      => [( ["$lang{filename} : ",
-                                        $data{filename}],
-                                       ["$lang{type} : ",
-                                        $data{contenttype}],
-                                       #["$lang{encoding} : ",
-                                       # ( $data{encoding} || 'none' )],
-                                       ["$lang{size} : ",
-                                        $data{size}] )] );
-
-  my $html .= "<div class=\"fileicon\">".
-
-	      IG::QuickHelp
-              ( alt    => $alt,
-		id     => "att$data{attnum}",
-		width  => '250px',
-		anchor => Img( src   => "$IG::img_url/mime_attach.gif",
-		               width => 32 ).
-		          IG::TextElide( string => "<br>$data{filename}",
-		                         length => 40 ), 
-		href   => "webmail/$escapedfilename?".
-		                "action=viewattachment&amp;".
-				"message_id=$escapedmessageid&amp;".
-				"attnum=$data{attnum}&amp;".
-				"igsuiteid=$IG::cookie{igsuiteid}&amp;".
-				"owner=$on{owner}").
-
+  if( $data{header} !~ /X\-Deleted\: true/i )
+   {
+    my $alt = MkTable( style_c1_r=> 'vertical-align:top; font-weight:bolder; white-space:nowrap',
+                       style_c_r3=> "border-bottom:1px solid $IG::clr{border_low}",
+                       values    => [( [$lang{filename},
+                                        " : $data{caption}"],
+                                       [$lang{type},
+                                        " : $data{contenttype}"],
+                                       [$lang{size},
+                                        " : $data{size}"] )]).
               ( CheckPrivilege('archive_edit') && $data{filename} =~ /\.\w+$/
 		? "<a href=\"webmail?".
 				"action=archiveattach&amp;".
 				"message_id=$escapedmessageid&amp;".
 				"attnum=$data{attnum}&amp;".
 				"owner=$on{owner}".
-	          "\" style=\"display:block;margin-top:4px;color:gray;\">".
-	          Img( src   => "$IG::img_url/plus.gif",
+	          "\" style=\"margin-top:4px;color:#666666;\">".
+	          Img( src   => "$IG::img_url/wizard.png",
 	               style => 'width:9px; margin-right:2px;' ).
 	          "$lang{archive}</a>"
 		: '' ).
 
+              ( CheckPrivilege('webmail_edit') && $on{action} =~ /^(readmessage|messageaction)$/
+		? "<a href=\"webmail?".
+		                "action=deleteattachment&amp;".
+				"message_id=$escapedmessageid&amp;".
+				"attnum=$data{attnum}&amp;".
+				"owner=$on{owner}".
+	          "\" style=\"margin-top:2px;color:#666666;\" ".
+	          "onclick=\"".IG::JsConfirm( "THIS IS AN EXPERIMENTAL FEATURES - ".
+		                                 $lang{are_you_sure} )."\">".
+		  Img( src     => "$IG::img_url/delete.gif",
+	               style   => 'width:9px; margin: 0 2px 0 4px;',
+		       title   => $lang{delete} ).
+                  "$lang{delete}</a>"
+		: '' ).
+	      " &nbsp; <a href=\"javascript:winPopUp(".
+	                        "'webmail?".
+		                "action=attachmentmd5&amp;".
+		   		"message_id=$escapedmessageid&amp;".
+			     	"attnum=$data{attnum}&amp;".
+		   	 	"owner=$on{owner}".
+				"',550,200,'webmailmd5')".
+	          "\" style=\"margin-top:2px; color:#666666\">".
+                  "MD5</a>"
+                                        ;
+
+    my $html .= "<div class=\"fileicon\">".
+
+             IG::QuickHelp
+              ( alt    => $alt,
+		id     => "att$data{attnum}",
+		width  => '250px',
+		anchor => Img( src   => "$IG::img_url/mime_attach.gif",
+		               width => 32 ).
+		          IG::TextElide( string => "<br>$data{caption}",
+		                         length => 40 ), 
+		href   => "webmail/$escapedfilename?".
+		                "action=viewattachment&amp;".
+			   	"message_id=$escapedmessageid&amp;".
+				"attnum=$data{attnum}&amp;".
+				"igsuiteid=$IG::cookie{igsuiteid}&amp;".
+				"owner=$on{owner}").
+
+
+
 	      '</div>';
 
-  return $html;
+    return $html;
+   }
+  else
+   {
+    my $original_filename = $data{filename};
+    $original_filename = $1 if $data{header} =~ /X-Original-filename: \"([^\"]+)\"/i;
+    
+    my $original_length = "unknown";
+    $original_length = $1 if $data{header} =~ /X-Original-length: ([0-9]+)/;
+    
+    my $original_content_type = "unknown";
+    $original_content_type = $1 if $data{header} =~ /X-Original-Content-Type: (.+)/;
+    
+    my $original_md5 = "unknown";
+    $original_md5 = $1 if $data{header} =~ /X-Original-MD5: (.+)/;
+    
+    
+    my $alt = MkTable( style_c1_r=> 'vertical-align:top; font-weight:bolder; white-space:nowrap',
+                       values    => [( ["$lang{filename}: ",
+                                        $original_filename],
+                                       ["$lang{size}: ",
+                                        ($original_length ne 'unknown' 
+					 ? IG::MkByte($original_length).
+					   " ($original_length bytes)"
+					 : 'unknown')],
+                                       ["Content-Type: ",
+                                        $original_content_type],
+				       ["MD5: ", 
+				        $original_md5],
+				       ["Status: ",
+                                        "Deleted"] )] );
+
+    my $html .= "<div class=\"fileicon\">".
+	      IG::QuickHelp
+              ( alt    => $alt,
+		id     => "att$data{attnum}",
+		width  => '250px',
+		anchor => Img( src   => "$IG::img_url/trashcan.gif",
+		               width => 32 ).
+		          IG::TextElide( string => "<br>$original_filename",
+		                         length => 40 ) ).
+              '<br>(deleted)'.	    
+	      '</div>';
+
+    return $html;
+   }
  }
 
 ###############################################################################
@@ -3712,34 +3915,25 @@ sub _parse_headpart
   $hval{boundary} =~ s/.*boundary=\"?([^\"\;]+)\"?.*$/$1/si;
   chomp( $hval{boundary} );
 
-  ## Find date and time values
-  my @datearray = split(/\s+/, $hval{date});
-  if ($datearray[0] =~ /[A-Za-z,]/)
-   {
-    ## Get rid of the day of the week
-    shift @datearray;
-   }
-
-  if ($datearray[0] =~ /[A-Za-z]/ )
-   {
-    ## looks like we have a nonstandard date
-    @datearray = (    $datearray[1],
-                      $datearray[0],
-                      $datearray[3],
-                      $datearray[2],
-                      $tv{time_offset}
-                 );
-   }
-
-  $hval{date} = IG::GetDateByFormat(	$datearray[0],
-					$month{$datearray[1]},
-					$datearray[2]);
-  $hval{date} = $tv{today} if !CkDate($hval{date});
-
-  $hval{time} = ($datearray[3] || $datearray[4])
-                ? substr("$datearray[3] $datearray[4]",0,20)
-                : "$tv{time} $tv{time_offset}";
-
+  ## Parse local date and time values
+  my ($ss,$mm,$hh,$day,$month,$year,$wday,$y,$i) = localtime( Date::Parse::str2time( $hval{date} ) );
+  $hval{ldate} = IG::GetDateByFormat( $day, ++$month, ( $year + 1900 ) );
+  $hval{ldate} = $tv{today} if !CkDate( $hval{ldate} );
+  $hval{ltime} = $hh || $mm
+               ? sprintf("%02d:%02d:%02d",$hh,$mm,$ss)
+               : $IG::tv{time};
+        
+  ## Parse remote date and time values
+  my ($zone) = $hval{date} =~ / ([\+\-]\d\d\d\d)/;
+  ($ss,$mm,$hh,$day,$month,$year) = Date::Parse::strptime( $hval{date} );
+  $year += 1900 if $year < 1900;
+  $month++;
+  $hval{date} = IG::GetDateByFormat( $day, $month, $year );
+  $hval{date} = $tv{today} if !CkDate( $hval{date} );
+  $hval{time} = $hh || $mm
+              ? sprintf("%02d:%02d:%02d",$hh,$mm,$ss) . " $zone"
+              : "$IG::tv{time} $IG::tv{time_offset}";
+                 
   return %hval;
  }
 
@@ -4933,7 +5127,7 @@ sub ajax_headers
                                "action=composemessage&amp;".
                                "to=".MkUrl($on{to})."&amp;".
                                "contactid=$on{contactid}&amp;".
-                              "backtoreferer=1';",
+                              "btr=1';",
                   show      => $lang{composenew},
                   fieldstyle=> 'margin:0px',
                   style     => 'margin:0px;font-size:10px; height:15px' ).
@@ -5335,7 +5529,7 @@ sub importmessages
                                            "id=$row[0]") ] );
    }
    
-  my $pan3 = $html ? $html . TaskListFoot(14) : '';
+  my $pan3 = $html ? $html . TaskListFoot(13) : '';
 
   IG::TabPane( data   =>[([$lang{import_from_previous},    $pan3],
                           [$lang{import_from_pop3_server}, $pan1],
@@ -5637,6 +5831,12 @@ sub viewattachment
    {
     ${$msg{attachment}[$on{attnum}]}{contenttype}
        = (IG::FileStat($attachment, 'content'))[0];
+       
+    ##XXX2TEST: FileMMagic returns 'application/msword' for Office 97-2003 Excel files
+    ${$msg{attachment}[$on{attnum}]}{contenttype} = 'application/excel'
+       if ${$msg{attachment}[$on{attnum}]}{contenttype} eq 'application/msword'
+       && ${$msg{attachment}[$on{attnum}]}{filename} =~ /\.(xls|xlt)$/i;
+
     ${$msg{attachment}[$on{attnum}]}{contenttype}
      ||= 'application/octet-stream';
    }
@@ -5706,6 +5906,248 @@ sub archiveattach
   chmod 0664, $file_path;
 
   IG::Redirect("archive?action=protomodi&amp;id=$archive_id");
+ }
+
+###############################################################################
+###############################################################################
+sub deleteattachment
+ {
+  if( $on{owner} ne $auth_user ) 
+   {
+    IG::Warn( "$lang{Err_nodocument}. Message-Id: ".
+              ( $on{message_id} || 'none' ) );
+    return;
+   
+   }
+  
+  my %msg = parse_message( owner   => $on{owner},
+                           html_ok => 1,
+			   id      => $on{message_id} );
+
+  if (!%msg)
+   {
+    IG::Warn( "$lang{Err_no_email_msg}. Message-Id: ".
+              ( $on{message_id} || 'none' ) );
+    return;
+   }
+
+  my $attachment = _decode( ${$msg{attachment}[$on{attnum}]}{contents},
+                            ${$msg{attachment}[$on{attnum}]}{encoding},
+                            ${$msg{attachment}[$on{attnum}]}{contenttype} );
+
+  QuoteParams();
+  DbQuery("select folder from email_msgs ".
+	  "where id='$in{message_id}' and owner='$in{owner}'");
+  my $message_folder = FetchRow();
+  my $msg_path = IG::UserDir($on{owner}) . $S.
+                 "MailBox${S}$message_folder" .  $S.
+                 $on{message_id};
+
+  if( !$message_folder || ! -e $msg_path )
+   {
+    IG::Warn( "$lang{Err_no_email_msg}. Message-Id: ".
+              ( $on{message_id} || 'none' ) );
+    return;
+   }
+
+
+  my $filename = "unknown";
+  $filename = $1 if ${$msg{attachment}[$on{attnum}]}{header} =~ /filename=\"([^\"]+)\"/;
+  my $original_filename = $filename;
+  $filename = "(deleted) $filename.txt";
+
+  ${$msg{attachment}[$on{attnum}]}{contents} = <<ENDCONTENT;
+The attachment was deleted, original header follows:
+
+${$msg{attachment}[$on{attnum}]}{header}
+
+ENDCONTENT
+
+  my $original_length = length( $attachment );
+  my $original_md5 = IG::Md5Digest( $attachment );
+
+  ${$msg{attachment}[$on{attnum}]}{header} = <<ENDHEADER;
+Content-Type: text/plain; charset="iso-8859-1"; name="$filename"
+Content-disposition: attachment; filename="$filename"
+X-Deleted: true
+X-Original-filename: "$original_filename"
+X-Original-length: $original_length
+X-Original-Content-Type: ${$msg{attachment}[$on{attnum}]}{contenttype}
+X-Original-MD5: $original_md5
+ENDHEADER
+
+  ${$msg{attachment}[$on{attnum}]}{contenttype} = "text/plain;";
+  
+  open(EMAIL, ">", $msg_path) 
+     || die "Can't rewrite email message file: $msg_path";
+  
+  print EMAIL $msg{header};
+  print EMAIL "\n\n";
+  print EMAIL "This is a multi-part message in MIME format.\n\n";
+  
+  local *_rewrite_part = sub 
+   {
+    my $attnum = shift;
+    
+    print EMAIL  ${$msg{attachment}[$attnum]}{header};
+    print EMAIL "\n\n";
+    
+    if( $attnum != $on{attnum} && 
+        ${$msg{attachment}[$attnum]}{contenttype} =~ /^multipart/i ) 
+     {
+      print EMAIL "\n";
+      ## find all child
+      ##print EMAIL "B: 0 .. $#{$msg{attachment}}\n";
+      my $last_boundary;
+      foreach my $attnum2 ( 0 .. $#{$msg{attachment}} ) {
+	##print EMAIL "B1: msg{attachment}[$attnum2]{parent_num} == ${$msg{attachment}[$attnum2]}{parent_num} ??== $attnum\n";
+        next unless ${$msg{attachment}[$attnum2]}{parent_num} eq $attnum;
+	##print EMAIL "B2: $attnum2\n";
+	$last_boundary = "--${$msg{attachment}[$attnum2]}{boundary}";
+	print EMAIL "$last_boundary\n";
+	_rewrite_part( $attnum2 );
+      }
+      print EMAIL "$last_boundary--\n\n" if $last_boundary;
+     }
+    else
+     {
+      print EMAIL ${$msg{attachment}[$attnum]}{contents};
+     }
+     
+   };
+
+  ##print EMAIL "A: 0 .. $#{$msg{attachment}}\n";
+  my $last_boundary;
+  foreach my $attnum ( 0 .. $#{$msg{attachment}} )
+   {
+    ##print EMAIL "A: $attnum\n";
+    next if defined ${$msg{attachment}[$attnum]}{parent_num};
+    $last_boundary = "--${$msg{attachment}[$attnum]}{boundary}"; 
+    print EMAIL "$last_boundary\n";
+    _rewrite_part( $attnum );
+   }
+  print EMAIL "$last_boundary--\n" if $last_boundary;
+  print EMAIL " \n";
+  close EMAIL;
+  
+  my @st = stat( $msg_path );
+  DbQuery( "update email_msgs ".
+           "set size=$st[7] ".
+	   "where id='$in{message_id}' and owner='$in{owner}'" );
+  
+  IG::Redirect( "webmail?action=readmessage&amp;".
+                        "message_id=$on{message_id}&amp;".
+			"folder=".MkUrl($message_folder) );
+ }
+
+###############################################################################
+###############################################################################
+sub getattachmentaszip
+ {
+  my %msg = parse_message( owner   => $on{owner} || $auth_user,
+                           html_ok => 1,
+			   id      => $on{message_id} );
+
+  if ( !%msg )
+   {
+    IG::Warn( "$lang{Err_no_email_msg}. Message-Id: ".
+              ( $on{message_id} || 'none' ) );
+    return;
+   }
+
+  no strict 'subs';
+  eval( "require Archive::Zip;" );
+  die("You have to install Archive::Zip module to do that!\n") if $@;
+        
+  my $zip = Archive::Zip->new();
+  my $_tmp_zip_file = $IG::temp_dir . $S . $auth_user . rand(8);
+
+  ## Compress all attachment in a zip archive
+  for my $attnum ( 1 .. $#{$msg{attachment}} )
+   {
+    next if   ! ${$msg{attachment}[$attnum]}{contents}
+           ||   ${$msg{attachment}[$attnum]}{filename} =~ /^(Unnamed|)$/;
+
+    my $attachment = _decode( ${$msg{attachment}[$attnum]}{contents},
+                              ${$msg{attachment}[$attnum]}{encoding},
+                              ${$msg{attachment}[$attnum]}{contenttype} );
+
+    ## Add file to compressed archive
+    my $string_member = $zip->addString( $attachment, ${$msg{attachment}[$attnum]}{filename} );
+       $string_member->desiredCompressionMethod( Archive::Zip::COMPRESSION_DEFLATED );
+   }
+
+  ## Save the Zip file
+  unless ( $zip->writeToFileNamed( $_tmp_zip_file ) == Archive::Zip::AZ_OK )
+   { die 'write error'; }
+
+  ## read zip archive
+  open ( FH, '<', $_tmp_zip_file) 
+    or die("Can't read zip archive '$_tmp_zip_file'");
+  binmode(FH);
+  my $_zip_content = do { local $/; <FH> };
+  close(FH);
+
+  ## return zip archive
+  IG::DocHead( type           => 'application/x-zip',
+               attachment     => 'attachment.zip',
+               expires        => 'now',
+               content_length => length( $_zip_content )
+             );
+
+  PrOut $_zip_content;
+
+  IG::FileUnlink( $_tmp_zip_file )
+    or die("Can't delete temporary file '$_tmp_zip_file'\n");
+ }
+
+###############################################################################
+###############################################################################
+sub attachmentmd5
+ {
+  if( $on{owner} ne $auth_user ) 
+   {
+    IG::Warn( "$lang{Err_nodocument}. Message-Id: ".
+              ( $on{message_id} || 'none' ) );
+    return;
+   
+   }
+  
+  my %msg = parse_message( owner   => $on{owner},
+                           html_ok => 1,
+			   id      => $on{message_id} );
+
+  if (!%msg)
+   {
+    IG::Warn( "$lang{Err_no_email_msg}. Message-Id: ".
+              ( $on{message_id} || 'none' ) );
+    return;
+   }
+
+  my $attachment = _decode( ${$msg{attachment}[$on{attnum}]}{contents},
+                            ${$msg{attachment}[$on{attnum}]}{encoding},
+                            ${$msg{attachment}[$on{attnum}]}{contenttype} );
+
+  HtmlHead();
+  TaskHead( title     => 'IGWebMail - MD5',
+            icon      => 1 );
+
+  my $msg = MkTable( style_c1_r=> 'vertical-align:top; font-weight:bolder; white-space:nowrap',
+                     style_c_r4=> 'font-weight:bolder; font-size: 140%; white-space:nowrap',
+                     values    => [( [$lang{filename},
+                                        " : ${$msg{attachment}[$on{attnum}]}{filename}"],
+                                       [$lang{type},
+                                        " : ${$msg{attachment}[$on{attnum}]}{contenttype}"],
+                                       [$lang{size},
+                                        " : ".IG::MkByte(length( $attachment ))." (".length( $attachment )." bytes)"],
+				       ["MD5",
+				        " : ".IG::Md5Digest( $attachment )]
+				   )]);
+
+  TaskMsg( $msg );
+
+  TaskFoot();
+  Footer();
  }
 
 ###############################################################################
@@ -5912,10 +6354,9 @@ sub updateheaderdb
 
   my @datearray;
   my @attachments;
-  my $messagenumber = -1;
+  my $messagenumber;
   my $spam_msgs_cnt;
   my $num_of_msgs;
-  my $lastline;
   my $line;
   my $inheader = 1;
 
@@ -6049,8 +6490,8 @@ sub updateheaderdb
         DbWrite( action => 'insert',
                  table  => 'email_msgs',
                  values => [ $db{message_id},
-                             $db{date},
-                             $db{time},
+                             $db{ldate},
+                             $db{ltime},
                              $db{from},
                              $db{contactid},
                              $db{to},
@@ -6133,6 +6574,7 @@ sub updateheaderdb
             messagesize => length($line) );
    };
 
+  ## used only when reading email from a spoolfile (or an imported file)
   local *_read_spool = sub 
    {  
     if ( $line =~ /^From / && $db{contenttype} !~ /message\/rfc822/i )
@@ -6143,7 +6585,6 @@ sub updateheaderdb
 
       $db{message} = $line;
       $inheader    = 1;
-      $lastline    = 'NONE';
      }
     else
      {
@@ -6238,6 +6679,7 @@ sub updateheaderdb
                           $forced_progress_status || 2 );
      }
 
+    $messagenumber = 0;
     for my $i (reverse 1 .. $num_of_msgs)
      {
       ## Get Uidl from server
@@ -6296,13 +6738,27 @@ sub updateheaderdb
       unshift @msg, ("From $IG::smtp_conf{host} ".
 		     scalar(localtime) ) if $msg[0] !~ /^From /;
 
+      $db{message} = '';
+      $db{messagesize} = 0;
       ## Parse and save message
+      $inheader = 1;
       for (@msg,' ')
        {
         $line = "$_\n";
-        _read_spool();
+	$db{message}     .= $line;
+	$db{messagesize} += length($line);
+        if (    $inheader 
+             && $line =~ /^\r*$/
+             && $db{contenttype} !~ /message\/rfc822/i
+           )
+         {
+          my %val = _parse_headpart( $db{message} );
+          $db{$_} = $val{$_} foreach keys %val;
+          $inheader = 0; ## from now we will read body part
+         }
        }
       $db{message_id} = $uidl;
+      _catch_message();
      }
 
     ## Remove messages from server
@@ -6313,8 +6769,6 @@ sub updateheaderdb
        )
      { $pop->Delete($_) for 1 .. $num_of_msgs; } 
 
-    ## Cacth last message
-    _catch_message() if $db{messagesize};
     $pop->Close();
    }
   else 
@@ -6372,6 +6826,7 @@ sub updateheaderdb
                         $forced_progress_status || 2 );
 
     ## Read mail box one row at time
+    $messagenumber = -1;
     _read_spool() while (defined($line = <SPOOL>));
 
     ## Catch last message
@@ -6445,13 +6900,18 @@ sub _clean_body
 ###############################################################################
 sub messageaction
  {
-  my @messageids = ref($on{message_ids}) eq 'ARRAY'
-		 ? @{$on{message_ids}}
-		 : ($on{message_ids});
+  my %data = @_;
+     $data{message_ids}  ||= $on{message_ids};
+     $data{views}        ||= $on{views};
+     $data{actiontarget} ||= $on{actiontarget};
 
-  if ( $on{views} eq 'perthread' )
+  my @messageids = ref($data{message_ids}) eq 'ARRAY'
+		 ? @{$data{message_ids}}
+		 : ($data{message_ids});
+
+  ## expand thread message ids if needed
+  if ( $data{views} eq 'perthread' )
    {
-    ## expand thread ids
     my @temp_ids;
     for ( @messageids )
      {
@@ -6461,9 +6921,9 @@ sub messageaction
     @messageids = @temp_ids;
    }
  
-  if ($on{actiontarget} && $on{actiontarget} ne '---')
+  if ($data{actiontarget} && $data{actiontarget} ne '---')
    {
-    if ($on{actiontarget} =~ /^user\:([\w]+)/)
+    if ($data{actiontarget} =~ /^user\:([\w]+)/)
      {
       ## delivery/move message to another user
       my $owner     = $1;
@@ -6500,7 +6960,7 @@ sub messageaction
       ## touch email flag
       IG::FileTouch("$IG::cgi_dir${S}data${S}users${S}$owner${S}email");
      }
-    elsif ($on{actiontarget} =~ /^folder\:([\w\s\d]+)/)
+    elsif ($data{actiontarget} =~ /^folder\:([\w\s\d]+)/)
      {
       ## move message in another folder      
       my $target_folder = $1;
@@ -6530,7 +6990,7 @@ sub messageaction
 		     1);
        }
      }
-    elsif ( $on{actiontarget} eq 'delete' )
+    elsif ( $data{actiontarget} eq 'delete' )
      {
       ## delete message(s)
       for my $id ( @messageids )
@@ -6548,7 +7008,7 @@ sub messageaction
         IG::FileUnlink( "$IG::user_dir${S}MailBox${S}$folder${S}$id" );
        }
      }
-    elsif ($on{actiontarget} =~ /^mark\_as\:(\w+)/)
+    elsif ($data{actiontarget} =~ /^mark\_as\:(\w+)/)
      {
       ## change messages status
       my $rule = $1;
@@ -6569,7 +7029,7 @@ sub messageaction
        
       $on{message_id} = $messageids[0] if $on{messageaftermove};
      }
-    elsif ($on{actiontarget} =~ /^tag\_as\:([\w\d\_\-\.]+)/)
+    elsif ($data{actiontarget} =~ /^tag\_as\:([\w\d\_\-\.]+)/)
      {
       my $tagname = DbQuote($1);
       
@@ -6586,14 +7046,14 @@ sub messageaction
        }
       $on{message_id} = $messageids[0] if $on{messageaftermove};       
      }
-    elsif ($on{actiontarget} eq 'untag' )
+    elsif ($data{actiontarget} eq 'untag' )
      {
       for my $id ( @messageids )
        {
         DbQuery( "delete from email_msgtags where msgid='".DbQuote($id)."'" );
        }
      }
-    elsif ($on{actiontarget} =~ /^sharemode\:([012])/ )
+    elsif ($data{actiontarget} =~ /^sharemode\:([012])/ )
      {
       my $sharemode = $1;
 
@@ -6605,7 +7065,7 @@ sub messageaction
        }
       $on{message_id} = $messageids[0] if $on{messageaftermove};
      }
-    elsif ($on{actiontarget} =~ /^set\_threadid\:(\w+)/ )
+    elsif ($data{actiontarget} =~ /^set\_threadid\:(\w+)/ )
      {
       my $thread_action = $1;
       my $new_thread_id = MkId(100);
@@ -6627,7 +7087,7 @@ sub messageaction
     $ids .= "&amp;message_ids=" . MkUrl($_) for @messageids;
     IG::Redirect("webmail?q=1&amp;$on{backto}$ids");
    }
-  elsif ($on{messageaftermove} && $on{actiontarget} ne 'mark_as:unread')
+  elsif ($on{messageaftermove} && $data{actiontarget} ne 'mark_as:unread')
    {
     checkfolders();
     readmessage();
@@ -7268,7 +7728,9 @@ sub findshow
 				     	['protocol',	$lang{with_protocol}],
 					['date',	$lang{with_date}],
 					['subject',	$lang{with_subject}],
-					['body',	$lang{with_body}])]),
+					['body',	$lang{with_body}],
+					['comments',    $lang{with_comments}],
+                                       )]),
 	
 		    Input (	type=>'text',
 				name=>'keytofind',
@@ -7416,13 +7878,13 @@ sub findexec
 
     $in{folder} = $in{search_folder} || 'all';
 
-    $query .= " and status~*'r'"
+    $query .= " and email_msgs.status~*'r'"
               if $on{search_readstate} eq 'read';
-    $query .= " and not (status~*'r')"
+    $query .= " and not (email_msgs.status~*'r')"
               if $on{search_readstate} eq 'unread';
-    $query .= " and status~*'e'"
+    $query .= " and email_msgs.status~*'e'"
               if $on{search_repliedstate} eq 'replied';
-    $query .= " and not (status~*'e')"
+    $query .= " and not (email_msgs.status~*'e')"
               if $on{search_repliedstate} eq 'unreplied';
     $query .= ' and email_msgs.sharemode = \''.($in{search_sharemode}-1).'\'' 
               if $in{search_sharemode};
@@ -7458,9 +7920,17 @@ sub findexec
   elsif ($on{fieldtofind} eq 'subject')
    { $query = "subject~*'$in{keytofind}'";}
   elsif ($on{fieldtofind} eq 'protocol')
-   { 
+   {
     $query = "pid~*'$in{keytofind}'"; 
     $in{folder} = 'everybody'; ## for PID search always in everybody folders
+   }
+  elsif ($on{fieldtofind} eq 'comments')
+   {
+    $query = "comments.comment ~* '$in{keytofind}'";
+    $join  = "LEFT JOIN comments ON comments.referenceid = ".
+             ( $IG::db_driver eq 'mysql'
+	       ? "concat(email_msgs.owner,'_',email_msgs.id)"
+	       : "(email_msgs.owner || '_' || email_msgs.id)" );
    }
 
   $query = "folder='$in{folder}' and ($query)" 
@@ -7490,7 +7960,8 @@ sub findexec
 	      : "(email_msgs.owner='$owner' and email_msgs.sharemode<>2)"
            ).
            " and ($query) ".
-	   "order by issue desc, timeissue desc"; #XXX2DEVELOPE user should choose a view order
+	   "order by issue desc, timeissue desc ". #XXX2DEVELOPE user should choose a view order
+	   "limit 300";
 
   my $base_url = "webmail?order=$on{order}&amp;folder=$escapedfolder";
 

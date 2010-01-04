@@ -4,6 +4,8 @@
 
 %lang = (%lang,
    (
+management_system       =>'Management System',
+with_management_system  =>'With Management System',
 drafts			=>'Documents en épreuve',
 publish_mng		=>'Gestion publications',
 new_document		=>'Nouveau document',

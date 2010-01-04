@@ -51,11 +51,18 @@ sub findshow
 
 		    Input (	type=>'select',
 				name=>'type',
+				style=>'width:100px; font-size:10px;',
 				data=>[(['offers',	$lang{offers}],
 					['orders',	$lang{orders}],
 					['contracts',	$lang{contracts}],
 					['archive',	$lang{archive}],
 					['equipments',	$lang{equipments}])]),
+					
+                    Input (     type=>'logins',
+                                name=>'user',
+                                allvalue=>1,
+                                value=>'all',
+                                style=>'width:100px; font-size:10px;' ),
 
 		    Input (	type=>'date',
 				name=>'date1', 
@@ -95,6 +102,9 @@ sub findshow
 sub findexec
  {
   my $counter;
+  my $user_clause = $on{user} eq 'all' 
+                  ? '' 
+                  : "and $on{type}.owner = '".DbQuote($on{user})."' ";
 
   if ( !( $on{date1} = CkDate($on{date1}) ) )
    { push @IG::errmsg, $lang{Err_departure_date}; }
@@ -107,16 +117,19 @@ sub findexec
   if ($on{type} eq 'equipments')
    {
     QuoteParams();
-    DbQuery("SELECT id, description, date0, date1, date2, date3, brand ".
+    DbQuery("SELECT equipments.id, equipments.description,".
+            " equipments.date0, equipments.date1, equipments.date2,".
+            " equipments.date3, equipments.brand ".
 	    "FROM equipments ".
-	    "WHERE status=0 and ".
-	    "((date0 >= '$in{date1}' and date0 <= '$in{date2}') or".
-	    " (date1 >= '$in{date1}' and date1 <= '$in{date2}') or".
-	    " (date2 >= '$in{date1}' and date2 <= '$in{date2}') or".
-	    " (date3 >= '$in{date1}' and date3 <= '$in{date2}')) ".
-            "ORDER BY id");
+	    "WHERE equipments.status=0 and ".
+	    "((equipments.date0 >= '$in{date1}' and equipments.date0 <= '$in{date2}') or".
+	    " (equipments.date1 >= '$in{date1}' and equipments.date1 <= '$in{date2}') or".
+	    " (equipments.date2 >= '$in{date1}' and equipments.date2 <= '$in{date2}') or".
+	    " (equipments.date3 >= '$in{date1}' and equipments.date3 <= '$in{date2}')) ".
+	    $user_clause.
+            "ORDER BY equipments.id");
 
-    TaskListMenu(
+    TaskListMenu( #XXX2TRANSLATE
 			['MAT.'],
 			['DESCRIZIONE'],
 			['TARGA/TELAIO'],
@@ -165,6 +178,7 @@ sub findexec
 	  " or contracts_phases.contractstatus = 1 )".
 	  " and contracts.expire >= '$in{date1}'".
 	  " and contracts.expire <= '$in{date2}' ".
+	  $user_clause.
 	  "ORDER BY $order");
 
    TaskListMenu
@@ -213,7 +227,8 @@ sub findexec
             "WHERE offers.expire>='$in{date1}'".
             " and offers.expire<='$in{date2}'".
             " and offers.note<>'' ".
-	   "ORDER BY $order");
+            $user_clause.
+	    "ORDER BY $order");
    $counter=0;
    TaskListMenu (
 		[$lang{number}],
@@ -244,10 +259,11 @@ sub findexec
   }
  elsif ($on{type} eq 'orders')
   {
-   my $order = ('id','expire','contactname')[$on{order}];
+   my $order = ('orders.id','orders.expire','orders.contactname')[$on{order}];
    QuoteParams();
    DbQuery("SELECT * FROM orders ".
-	   "where expire>='$in{date1}' and expire<='$in{date2}' ".
+	   "where orders.expire>='$in{date1}' and orders.expire<='$in{date2}' ".
+	   $user_clause.
 	   "ORDER BY $order");
    $counter=0;
    TaskListMenu (
@@ -276,13 +292,17 @@ sub findexec
   }
  elsif ($on{type} eq 'archive')
   {
-   my $order = ('id','expire','contactname')[$on{order}];
+   my $order = ('archive.id','archive.expire','archive.contactname')[$on{order}];
 
    QuoteParams();
-   my $view = $on{view} ? "and type='$in{view}'" : ''; 
+   my $view = $on{view} ? "and archive.type='$in{view}' " : ''; 
 
-   DbQuery("SELECT * FROM archive where expire >= '$in{date1}'".
-	   " and expire <= '$in{date2}' $view ORDER BY $order");
+   DbQuery("SELECT * FROM archive ".
+           "WHERE archive.expire >= '$in{date1}'".
+	   " and archive.expire <= '$in{date2}' ".
+	   $view.
+	   $user_clause.
+	   "ORDER BY $order");
    $counter=0;
    TaskListMenu (
 		[$lang{number}],

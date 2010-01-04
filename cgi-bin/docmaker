@@ -140,6 +140,9 @@ sub view_html_template
   my $_temp_html = do { local $/; <DAT> };
   close(DAT);
 
+  ## normalize newline
+  $_temp_html = IG::NormalizeNewline( $_temp_html );
+
   PrOut IG::DocHead(     type     => 'text/html',
                          expires  => 'now' ).
         IG::TextConvert( fromcode => 'auto',

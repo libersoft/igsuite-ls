@@ -12,9 +12,9 @@
 #                                                                           #
 #############################################################################
 
-package HTTP::Date;  # $Date: 2005/12/06 11:09:25 $
+package HTTP::Date;  # $Date: 2009/12/30 15:43:59 $
 
-$VERSION = sprintf("%d.%02d", q$Revision: 1.47 $ =~ /(\d+)\.(\d+)/);
+$VERSION = sprintf("%d.%02d", q$Revision: 1.428 $ =~ /(\d+)\.(\d+)/);
 
 require 5.004;
 require Exporter;

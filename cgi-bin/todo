@@ -20,6 +20,8 @@
 # Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
 #############################################################################
 
+#XXX2REWRITE
+
 use strict;
 use IG;
 IG::MkEnv(__PACKAGE__);
@@ -446,8 +448,8 @@ sub protomaster
 	$on{duration} ) = FetchRow();
    }
 
-  ## Set Ajax requests
-  if ( $on{todoid} && CheckPrivilege('igforms_view') )
+  ## Set Ajax requests for igforms
+  if ( $on{todoid} )
    {
     $ajax_req{getpersonalizedfieldslist}
                                   = "igforms?".
@@ -656,7 +658,7 @@ sub protomaster
            : [ $lang{open_repository} ];
 
   my $pan4 = [ $lang{personalized_fields},
-               $on{todoid} && CheckPrivilege('igforms_view') ? '&nbsp;' : '',
+               $on{todoid} ? '&nbsp;' : '',
                "getpersonalizedfieldslist".
                "(['NO_CACHE'],['layer_content3'])" ];
 
@@ -1063,7 +1065,7 @@ sub aggprotoslave
  IG::Redirect( $on{owner} eq $auth_user
 		? "todo?".
 			"action=protomaster&amp;".
-			"backtoreferer=$on{backtoreferer}&amp;".
+			"btr=".MkUrl($on{btr})."&amp;".
 			"default_panel=1&amp;".
 			"todoid=$on{master}"
 		: "todo?".
@@ -1239,7 +1241,7 @@ sub findexec
                                   "todo?".
                                         "action=protomaster&amp;".
                                         "contactid=$on{contactid}&amp;".
-                                        "backtoreferer=1';",
+                                        "btr=1';",
                     show       => $lang{new_task},
                     fieldstyle => 'margin:0px',
                     style      => 'margin:0px;font-size:10px; height:15px' ).
