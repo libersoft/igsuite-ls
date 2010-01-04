@@ -1404,10 +1404,12 @@ sub daily
     ## Show related contact
     if ($row[7])
      {
+     my $trimmed_ragsoc;
+     if (length($row[9])>15) { $trimmed_ragsoc= substr($row[9],0,13).'..'; }
       $row[3] = "<a href=\"contacts?".
                           "action=showrecord&amp;".
-                          "contactid=$row[7]\" target=\"mainf\">".
-                "$row[9]</a> $row[3]";
+                          "contactid=$row[7]\" target=\"mainf\" title=\"$row[9]\">".
+                ($trimmed_ragsoc ? $trimmed_ragsoc : $row[9])."</a> $row[3]";
 
       $row[3] .= " - $lang{phone_number} $row[10]" if    $on{print}
                                                       || $row[8] == 2;
