@@ -1348,6 +1348,26 @@ sub daily
 		     : "calendar.touser = '$in{user}' ".
 		       "or calendar.touser = 'all'";
 
+  DbQuery(my $query = "SELECT count(*) ".
+	  "FROM calendar ".
+	  "LEFT JOIN contacts".
+	  " ON calendar.contactid = contacts.contactid ".
+	  "LEFT JOIN bookings".
+	  " ON (calendar.parent='' and bookings.eventid=calendar.eventid)".
+	  " or (calendar.parent<>'' and bookings.eventid=calendar.parent) ".
+	  "LEFT JOIN equipments".
+	  " ON equipments.id = bookings.equipmentid ".
+	  "WHERE".
+	  " calendar.startdate<='$data' and".
+	  " (calendar.repeatend>='$data' or calendar.repeatend is null) and".
+	  " ($target_where) and".
+	  " (calendar.day=$in{calendarday} or calendar.day=0) and".
+	  " (calendar.month=$in{calendarmonth} or calendar.month=0) and".
+	  " (calendar.year=$in{calendaryear} or calendar.year=0) and".
+	  " (calendar.weekday=$day or calendar.weekday=8) ".
+	  "ORDER BY calendar.starttime");
+	  my $counter = FetchRow();
+	  
   DbQuery(my $query = "SELECT calendar.reserved, calendar.starttime, calendar.endtime,".
 	  " calendar.eventtext, calendar.eventid, calendar.fromuser,".
 	  " calendar.touser, calendar.contactid, calendar.eventtype,".
@@ -1524,7 +1544,15 @@ sub daily
 		      );
          }
        }
-      my $sp = '<br>' x ($or2-$or1);
+       
+       my $sp;
+       if ($counter>2) {
+             $sp = '<br>';
+       }
+       else {
+             $sp = '<br>' x ($or2-$or1);
+       }
+
 
       TaskListItem(
 		["$row[1]$sp",
