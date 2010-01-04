@@ -1346,6 +1346,7 @@ sub daily
   my $target_where = $on{equipmentid}
                      ? "equipmentid='$in{equipmentid}'"
 		     : "calendar.touser = '$in{user}' ".
+		       " or (calendar.fromuser = '$in{user}' and calendar.parent='') ".
 		       "or calendar.touser = 'all'";
 
   DbQuery(my $query = "SELECT count(*) ".
@@ -1415,7 +1416,7 @@ sub daily
     ## Check if the event was inserted from another user
     if ($row[5] ne $on{user} && !$on{equipmentid})
      {
-      $row[3] = "<strong>$lang{insert_from} ".
+      $row[3] = "<strong>".
                 IG::UsrInf('name',$row[5]).
                 ":</strong> $row[3]";
      }
@@ -1456,7 +1457,7 @@ sub daily
       $edit_link= "calendar?".
                            "action=protomodi&amp;".
                            "eventid=$row[4]&amp;".
-                           "user=$on{user}&amp;".
+                           "user=$row[6]&amp;".
                            "calendarday=$on{calendarday}&amp;".
                            "calendarmonth=$on{calendarmonth}&amp;".
                            "calendaryear=$on{calendaryear}".
@@ -1552,6 +1553,12 @@ sub daily
        else {
              $sp = '<br>' x ($or2-$or1);
        }
+       
+      if ($row[6] ne $on{user} && !$on{equipmentid} && !$row[15])
+      {
+        $row[3] = $row[3].' ('.IG::UsrInf('name',$row[6]).')';
+      }
+
 
 
       TaskListItem(
