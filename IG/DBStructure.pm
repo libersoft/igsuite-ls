@@ -44,7 +44,6 @@ require Exporter;
 	nc_ext			=> [ 9,	'id'],
 	nc_int			=> [ 9,	'id'],
   nc_ph			=> [ 20,'id'],
-  complains => [ 12, 'id'],
 	pages			=> [ 17,'id;name'],
 	contracts		=> [ 17,'id;issue;phase'],
 	contracts_phases	=> [ 14,'id'],
@@ -66,8 +65,8 @@ require Exporter;
 	users_groups		=> [ 3, 'groupid'],
 	users_groups_link	=> [ 2, 'groupid;userid'],
 	users_privileges	=> [ 4, 'resource_id;who'],
-	equipments		=> [ 45,''],
-        equipments_maintenance  => [ 2, ''],
+	equipments		=> [ 44,'id'],
+  equipments_maintenance  => [ 2, ''],
 	calendar		=> [ 23,'eventid;parent'],
 	todo			=> [ 15,''],
 	basic_tables		=> [ 3,	''],
@@ -936,67 +935,6 @@ nc_ph=> [
 
 ],
 
-complains=> [
-	{ name=>'id',
-	  type=>'varchar(15)',},	#numero
-	  
-	{ name=>'status',
-	  label=>'status',
-	  itype=>'text',
-	  type=>'varchar(2)',},
-	  
-	 
-	{ name=>'rif',
-	  label=>'rif',
-	  itype=>'text',
-	  type=>'varchar(255)',},
-
-	{ name=>'contact_id',
-	  label=>'contact_id',
-	  itype=>'text',
-	  type=>'varchar(255)',},
-	  
-	# Submitter
-	{ name=>'submitter_name',
-	  label=>'submitter_name',
-	  itype=>'text',
-	  type=>'varchar(255)',},
-	{ name=>'submitter_date',
-	  label=>'submitter_date',
-	  itype=>'date',
-	  type=>'date',},
-	  
-	{ name=>'verifier_to',
-	  label=>'verifier_to',
-	  itype=>'text',
-	  type=>'varchar(255)',},
-	  
-	# verifier1
-	{ name=>'verifier_name',
-	  label=>'verifier_name',
-	  itype=>'text',
-	  type=>'varchar(255)',},
-	{ name=>'verifier_date',
-	  label=>'verifier_date',
-	  itype=>'date',
-	  type=>'date',},
-	  
-  { name=>'ragione_cliente',
-    label=>'ragione_cliente',
-    itype=>'text',
-    type=>'varchar(50)',},
-
-  { name=>'note',
-    label=>'note',
-    itype=>'text',
-    type=>'varchar(255)',},
-	
-  { name=>'rif_nc',
-    label=>'rif_nc',
-    itype=>'text',
-    type=>'varchar(50)',},
-
-],
 pages=>[
 	{ name=>'id',
 	  type=>'varchar(15)',},
@@ -2027,9 +1965,6 @@ equipments=>[
 
 	{ name=>'property',
 	  type=>'varchar(1)',},
-
-	{ name=>'location',
-	  type=>'varchar(255)',},
 
 	{ name=>'classeses',
 	  type=>'varchar(255)',},
