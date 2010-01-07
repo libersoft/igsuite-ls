@@ -1429,6 +1429,13 @@ sub daily
 			        claimed       => $row[13],
 			        approvedby    => $row[14]);
  
+    # Siccome mostro nella mia agenda gli eventi inseriti nelle agende altrui,
+    # stampo anche il nome della persona a cui ho creato l'evento
+    if ($row[6] ne $on{user} && !$on{equipmentid} && !$row[15])
+    {
+      $row[3] = '(<strong>'.IG::UsrInf('name',$row[6]).'</strong>) '.$row[3];
+    }
+    
     $row[3] = _event_type_icon( $row[8], $row[11] ) . $row[3];
  
     ## Check if it's a reserved or public event
@@ -1557,13 +1564,7 @@ sub daily
        else {
              $sp = '<br>' x ($or2-$or1);
        }
-       
-      if ($row[6] ne $on{user} && !$on{equipmentid} && !$row[15])
-      {
-        $row[3] = $row[3].' ('.IG::UsrInf('name',$row[6]).')';
-      }
-
-
+      
 
       TaskListItem(
 		["$row[1]$sp",
