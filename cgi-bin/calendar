@@ -1548,6 +1548,8 @@ sub daily
          }
        }
        
+       # Espando in altezza l'evento solo se sono meno di due in un giorno
+       # altrimenti spreco un sacco di spazio per nulla 
        my $sp;
        if ($counter>2) {
              $sp = '<br>';
