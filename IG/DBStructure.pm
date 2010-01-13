@@ -52,7 +52,7 @@ require Exporter;
 	email_msgtags		=> [ 2, 'msgid', 'email_tags'],
 	email_imports		=> [ 9, ''],
 	isms			=> [ 7,	''],
-	contacts		=> [ 64,'contactid;contactname;nospace;master'],
+	contacts		=> [ 65,'contactid;contactname;nospace;master;external_reference_id'],
 	contacts_group		=> [ 2,	''],
 	postit			=> [ 9,	''],
 	prices			=> [ 16,''],
@@ -1392,6 +1392,8 @@ contacts=>[
 
 	{ name=>'operativefunction',
 	  type=>'int',},
+  { name=>'external_reference_id',
+    type=>'bigint(20)',},
 	],
 isms=>[
 	{ name=>'id',
