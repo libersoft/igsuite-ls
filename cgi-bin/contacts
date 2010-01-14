@@ -1866,7 +1866,8 @@ sub protoagg
                                  $on{country1},
                                  $on{country2},
                                  $on{country3},
-                                 $on{operativefunction}
+                                 $on{operativefunction},
+                                 $on{external_reference_id},
                                ]);
 
   if ( $on{passwd} && $IG::htaccess_contacts )
