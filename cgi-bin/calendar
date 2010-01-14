@@ -1431,7 +1431,7 @@ sub daily
  
     # Siccome mostro nella mia agenda gli eventi inseriti nelle agende altrui,
     # stampo anche il nome della persona a cui ho creato l'evento
-    if ($row[6] ne $on{user} && !$on{equipmentid} && !$row[15])
+    if ($row[6] ne $on{user} && !$on{equipmentid} && !$row[15] && $row[6] ne 'all')
     {
       $row[3] = '(<strong>'.IG::UsrInf('name',$row[6]).'</strong>) '.$row[3];
     }
