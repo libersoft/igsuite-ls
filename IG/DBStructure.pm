@@ -2007,7 +2007,7 @@ equipments_maintenance=>[
 	  type=>'date',},
 	],
 documentation=>[
-	{ name=>'id',		type=>'varchar(15)',}, #numero
+	{ name=>'id',		type=>'varchar(50)',}, #numero
 	{ name=>'description',	type=>'varchar(255)',},#descrizione
 	{ name=>'function',	type=>'varchar(32)',},  #ente
 	{ name=>'pages',	type=>'int',},         #pagine 

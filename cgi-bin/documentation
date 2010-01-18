@@ -78,7 +78,7 @@ sub proto
 		data=>'select id, id from documentation '.
 		      'group by id order by id',
 		size=>10,
-		maxlen=>10);
+		maxlen=>50);
 
   Input (	show=>$lang{function},
 		type=>'select',
