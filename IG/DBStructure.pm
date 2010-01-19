@@ -1230,7 +1230,7 @@ contacts=>[
 	  type=>'text',},		#note
 
 	{ name=>'contactid',
-	  type=>'varchar(15)',},	#univoco
+	  type=>'bigint(20)',},	#univoco
 
 	{ name=>'pricelistflag',
 	  type=>'varchar(2)',},		#prezzi
@@ -1323,7 +1323,7 @@ contacts=>[
 	  type=>'varchar(20)',},	#telcon3 Recuperato instant_msgs_value
 
 	{ name=>'master',
-	  type=>'varchar(15)',},	#master
+	  type=>'bigint(20)',},	#master
 
 	{ name=>'lastfaxowner',
 	  type=>'varchar(32)',},		#lastfaxowner
