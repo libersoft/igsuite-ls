@@ -1733,6 +1733,7 @@ sub protoagg
   $on{contacttype}		||='0';
   $on{economiczone}		||='0';
   $on{operativefunction}	||='0';
+  $on{external_reference_id} ||= '0';
 
   ## check probable duplicate contacts (by name)
   if ( !$on{contactid} && $nospace && !$on{alert_duplicate} )
