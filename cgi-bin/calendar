@@ -1827,6 +1827,7 @@ sub proto
     DbQuery( "select count(*) from calendar".
              " where parent='".DbQuote($on{eventid})."'" );
     $have_children = FetchRow() > 0;
+    $readonly_if_attendee = $on{fromuser} ne $auth_user ? 'true' : 'false';
    }
 
   ## Event ########################################################## PAN 1
