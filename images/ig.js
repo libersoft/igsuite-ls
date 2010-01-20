@@ -483,7 +483,7 @@ function winPopUp(str, Width, Height, title, option)
 
   if (!newwindow)
    {
-    alert("A popup window could not be opened. Your browser may be blocking popups for this application.");
+    //alert("A popup window could not be opened. Your browser may be blocking popups for this application.");
    }
   else
    {
