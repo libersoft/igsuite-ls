@@ -1710,6 +1710,15 @@ sub personal_events
      {
       ($memo_dejavu{$row[4]}++ && next) if $row[9] == 5;
       $row[3] = MkLink($row[3]);
+      
+      # Se l'evento è stato inserito da altri, riporto l'username
+      if ($row[5] ne $auth_user)
+      {
+        $row[3] = "<strong>".
+                IG::UsrInf('name',$row[5]).
+                ":</strong> $row[3]";
+      }
+     
       $row[3] .= " - $lang{phone_number} $row[15]" if $on{print} || $row[9]==2;
       $row[3] = _event_icons( $row[0], $row[6], $row[3] );
 
