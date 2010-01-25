@@ -620,11 +620,11 @@ sub protoagg
                      " '$in{owner}',".
 		     " '$in{booking_group}', '$in{booking_admin_group}',".
 		     " '$in{booking_approve_group}',  '$in{matriculation}',".
-                     " '$in{property}',  $in{classeses}, '$in{denomination}',".
+                     " '$in{property}',  '$in{classeses}', '$in{denomination}',".
                      " '$in{taration}',  '$in{taration_field}',".
                      "   '$in{accreditation}',".
                      " '$in{buydate}',  '$in{tarationdate}',".
-                     " '$in{taration_reparts}, $in{authorized_personnel}'".
+                     " '$in{taration_reparts}', '$in{authorized_personnel}'".
           ")" )] );
 
   LogD('','insert', 'equipments', $on{id}); 
