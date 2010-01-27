@@ -1445,7 +1445,7 @@ sub summary
                                 'color:#000000;',
                    values    => [( [ HTitle( level => 2,
                                              style => 'margin-bottom:15px',
-                                             title => "IGSuite $IG::VERSION" ).
+                                             title => "Organizza.info" ).
                                      "$lang{wellcome_message}<br><br>".
                                      "<strong>IGSuite Staff</strong><br>".
                                      "staff\@igsuite.org" ] )] );
