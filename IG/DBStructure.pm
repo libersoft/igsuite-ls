@@ -1393,7 +1393,7 @@ contacts=>[
 	{ name=>'operativefunction',
 	  type=>'int',},
   { name=>'external_reference_id',
-    type=>'bigint(20)',},
+    type=>'varchar(50)',},
 	],
 isms=>[
 	{ name=>'id',
