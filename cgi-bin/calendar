@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#! /usr/bin/perl
 # Procedure: calendar
 # Last update: 25/05/2009
 #############################################################################
@@ -1447,7 +1447,7 @@ sub daily
 			    confirmation => $row[16] );
 
     ## if user can edit this event , we will set edit and delete links
-    if ( $row[6] eq $auth_user || $auth_user eq $row[5] )
+    if ( $row[6] eq $auth_user || $auth_user eq $row[5] || CheckPrivilege('sys_calendar_master') )
      {
       $del_icon = Img( href   => "calendar?".
 				 "action=delexec&amp;".
@@ -1744,7 +1744,8 @@ sub protomodi
    }
   
   if( $on{touser} ne $auth_user && 
-      ($on{fromuser} ne $auth_user || $on{parent}) )
+      ($on{fromuser} ne $auth_user || $on{parent}) 
+      && !CheckPrivilege('sys_calendar_master') )
    {
     HtmlHead();
     TaskMsg( $lang{Err_cant_access_event} );
@@ -1829,6 +1830,8 @@ sub proto
     $have_children = FetchRow() > 0;
     $readonly_if_attendee = $on{fromuser} ne $auth_user ? 'true' : 'false';
    }
+
+  $readonly_if_attendee = CheckPrivilege('sys_calendar_master') ? 'false' : 'true';
 
   ## Event ########################################################## PAN 1
   my $pan1

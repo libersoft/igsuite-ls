@@ -374,7 +374,8 @@ my $queryid = 0;
 	'sys_delete_comments',		[16, 'igsuite'],
 	'sys_preferences_edit',		[49, 'preferences'],
 	'sys_sms_send',			[115,'igsms'],
-        'sys_limit_calendar',		[87, 'calendar'],
+  'sys_limit_calendar',		[87, 'calendar'],
+  'sys_calendar_master', [137, 'igsuite'],
 
 	'todo_view',			[73, 'todo'],
 	'todo_alert',			[78, 'todo'],
