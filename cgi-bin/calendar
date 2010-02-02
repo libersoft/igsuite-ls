@@ -2033,7 +2033,7 @@ END
   my $some_can_be_deleted = 0;
   my $parent = $on{parent} || $on{eventid};
 
-  if ( $on{user} eq $auth_user )
+  if ( $on{user} eq $auth_user || CheckPrivilege('sys_calendar_master') )
    { 
     $pan3 .= TaskListMenu( [$lang{user}], 
                            [$lang{notes}, '', 'width="70%"'], 
@@ -2365,7 +2365,7 @@ sub protoagg
    my ($touser, $parent, $eventid) = FetchRow();
 
    die "Can't add new attendee for a not owned event.\n"
-     if $eventid && $touser ne $auth_user;
+     if $eventid && $touser ne $auth_user && !CheckPrivilege('sys_calendar_master');
    die "Can't add new attendee from a child event.\n"
      if $parent;
 
