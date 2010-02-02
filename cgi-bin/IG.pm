@@ -3364,7 +3364,7 @@ sub HtmlFoot
   $html .= "// Form Autofocus\n".
            ( $form{focusthis}
              ? "Event.observe(window, \"load\", function()".
-               " { $form{focusthis}.focus(); } );\n"
+               " { if ($form{focusthis}) { $form{focusthis}.focus(); } } );\n"
              : $form{autofocus} eq 'true'
                ? "Event.observe(window, \"load\", function()".
                  " { if(document.forms[0]) ".
