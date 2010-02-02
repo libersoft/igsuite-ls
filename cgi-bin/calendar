@@ -1419,7 +1419,7 @@ sub daily
     if ($row[5] ne $on{user} && !$on{equipmentid})
      {
       $row[3] = "<strong>".
-                IG::UsrInf('name',$row[5]).
+                IG::UsrInf('initial',$row[5]).
                 ":</strong> $row[3]";
      }
 
@@ -1433,7 +1433,7 @@ sub daily
     # stampo anche il nome della persona a cui ho creato l'evento
     if ($row[6] ne $on{user} && !$on{equipmentid} && !$row[15] && $row[6] ne 'all')
     {
-      $row[3] = '(<strong>'.IG::UsrInf('name',$row[6]).'</strong>) '.$row[3];
+      $row[3] = '(<strong>'.IG::UsrInf('initial',$row[6]).'</strong>) '.$row[3];
     }
     
     $row[3] = _event_type_icon( $row[8], $row[11] ) . $row[3];
