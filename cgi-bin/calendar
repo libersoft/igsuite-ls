@@ -1829,9 +1829,10 @@ sub proto
              " where parent='".DbQuote($on{eventid})."'" );
     $have_children = FetchRow() > 0;
     $readonly_if_attendee = $on{fromuser} ne $auth_user ? 'true' : 'false';
+    if ($readonly_if_attendee eq 'true') {
+      $readonly_if_attendee = CheckPrivilege('sys_calendar_master') ? 'false' : 'true';
+    }
    }
-
-  $readonly_if_attendee = CheckPrivilege('sys_calendar_master') ? 'false' : 'true';
 
   ## Event ########################################################## PAN 1
   my $pan1
