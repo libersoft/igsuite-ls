@@ -406,6 +406,12 @@ my $queryid = 0;
      'nc_ph_new',				[134, 'nc_ph'],
      'nc_ph_confirm',			[135, 'nc_ph'],
      'nc_ph_validate',			[136, 'nc_ph'],
+     
+     'gare_view',			[138, 'gare'],
+     'gare_edit',			[139, 'gare'],
+	   'gare_template',		[140, 'docmaker'],
+	   'gare_link',			[141, 'gare'],
+	   'gare_report',		[142,'gare'],
 	);
 
 ## Time zones

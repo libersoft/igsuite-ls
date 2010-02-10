@@ -1,0 +1,1062 @@
+#! /usr/bin/perl
+# Procedure: gare
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+use IG::Utils;
+
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable(	reviewlist	  => sub { CheckPrivilege('gare_view') },
+                showreview	  => sub { CheckPrivilege('gare_view') },
+		chflag		  => 1,
+           	proto		  => sub { CheckPrivilege('gare_edit') },
+		protoagg	  => sub { CheckPrivilege('gare_edit') },
+		protomodi	  => sub { CheckPrivilege('gare_edit') },
+		stats		  => sub { CheckPrivilege('gare_view') },
+		findshow	  => sub { CheckPrivilege('gare_view') },
+		findexec	  => sub { CheckPrivilege('gare_view') },
+		delshow		  => sub { CheckPrivilege('gare_edit') },
+		delexec		  => sub { CheckPrivilege('gare_edit') },
+		markasnotaccepted => sub { CheckPrivilege('gare_edit') },
+		docview           => sub { CheckPrivilege('gare_view') },
+		sign		  => sub { CheckPrivilege('gare_view') },
+		default_action	  => sub { CheckPrivilege('gare_view') } );
+
+##############################################################################
+##############################################################################
+sub default_action
+ {
+  my (	$query,
+	$alphabet_selector,
+	$page_selector ) = IG::MkProtocolList(); 
+
+  Header( $page_selector, $alphabet_selector );
+
+  my $base_link = "&amp;alphabet=$on{alphabet}&amp;".
+		  "view=$on{view}";
+
+  TaskListMenu
+   (
+    [$lang{number},			"order=id$base_link"],
+    [$lang{receiver},			"order=contactname$base_link"],
+    [Img(src=>"$IG::img_url/user.gif"),	"order=owner$base_link"],
+    [$lang{notes},			"order=note1$base_link"],
+    [$lang{result},			"order=note$base_link"],
+    ['',				''],
+    [$lang{issue},			"order=issue$base_link"],
+    [$lang{due_date},			"order=expire$base_link"],
+    [],
+   );
+
+  DbQuery( "SELECT gare.id, gare.issue, gare.contactname,".
+           " gare.owner, gare.note1, gare.note, gare.category,".
+           " gare.expire, gare.flag1, gare.flag2, gare.flag3,".
+           " users.initial ".
+           "FROM gare ".
+           "LEFT JOIN users ON gare.owner=users.login ".
+           "WHERE $query" );
+
+  while ( my @row = FetchRow() )
+   {
+    ## Due date
+    if ( ! CkDate($row[7]) )
+     { $row[7] = $lang{new_revision}; }
+    else
+     { $row[7] = Blush($row[7]) if IG::CompareDate($row[7]) <= 0; }
+
+    ## Revision status
+    my $icon = "$row[8]$row[9]$row[10]" eq 'VVV' ? 'green'
+	     : "$row[8]$row[9]$row[10]" =~ /R/   ? 'red'
+	     : 'orange';
+
+    TaskListItem( [ ParseLink($row[0]) ],
+                  [ $row[2] ],
+                  [ $row[11] ],
+                  [ MkLink($row[4]) ],
+                  [ MkLink(lc($row[5])) ],
+                  [ $row[6] ],
+                  [ $row[1],
+                    '',
+                    'nowrap' ],
+                  [ $row[7],
+                    '',
+                    'nowrap'],
+                  [ Img( src   => "$IG::img_url/${icon}.gif",
+                         width => 16,
+                         title => $lang{review} ) ]
+                );
+   }
+
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub docview
+ {
+  ## Change id if user request next or previous ID
+  $on{id} = IG::SearchProtocolId( direction => $on{change_id_to},
+                                  id        => $on{id} ) if $on{change_id_to};
+
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'r' ) || return;
+  
+  ## Retriew document info
+  DbQuery("SELECT *,expire-current_date ".
+	  "FROM gare WHERE id='".DbQuote($on{id})."'");
+  my @row = FetchRow();
+
+  IG::Warn( $lang{Err_nodocument} ) && return if !$row[0];
+
+  ## adjust some values
+  if ( !(CkDate($row[5])) )
+   { $row[5] = $lang{new_revision}; }
+  else
+   { $row[5] = Blush($row[5]) if $row[17] < 1; }
+
+  $row[3]  = $row[3]           # accept status
+           ? MkLink( $row[3] )
+           : "<a href=\"gare?action=markasnotaccepted&amp;".
+                              "id=$row[0]&amp;".
+                              "backtoreferer=1\">[ ".
+             $lang{mark_as_not_accepted}.
+             ' ]</a>';
+
+  $row[10] = MkLink($row[10]); # notes
+
+  ## Revision status
+  my $icon = "$row[11]$row[12]$row[13]" eq 'VVV' ? 'green'
+           : "$row[11]$row[12]$row[13]" =~ /R/   ? 'red'
+           : 'orange';
+
+  ## renders the page
+  Header( undef, undef, $on{id} );
+
+  IG::ShowProtocolInfo
+   ( id     => $row[0],
+     title  => $lang{gare_protocol}.
+               Img( src   => "$IG::img_url/${icon}.gif",
+	            width => 16,
+	            style => 'margin-left:3px; vertical-align:middle',
+	            title => $lang{review} ),
+     fields => [( [ $lang{contact_name},
+		    "<a href=\"contacts?".
+			      "action=showrecord&amp;".
+			      "contactid=$row[14]\">".
+			       "$row[14] $row[2]</a>"],
+		  [ $lang{referring},
+		    IG::UsrInf('name',$row[4]) ],
+                  [ $lang{category},
+		    $IG::gare_category{$row[6]} ],
+                  [ $lang{issue},
+                    $row[1]],
+ 	          [ $lang{document_integrity},
+		    IG::CkSign( id    => $row[0],
+			        owner => $row[4])],
+                  [ $lang{due_date},
+                    $row[5] ],
+		  [ $lang{result},
+                    $row[3] ],
+                  [ $lang{days_notice},
+                    $row[7] ],
+                  [ $lang{archive_position},
+                    $row[15] ],
+                  [ $lang{amount},
+                    IG::Currency($row[16]) ],
+                  [ $lang{notes},
+		    $row[10] ],
+                )] );
+
+  ## Related Documents
+  IG::RelatedTo( $on{id}, $row[14] );
+
+  TaskFoot(	comments	=> 'yes',
+		commentid	=> $on{id},
+		commentbackurl	=> "action=docview&amp;id=$on{id}" );
+  HtmlFoot();
+  LogD($row[2], 'view', 'gare', $on{id});
+ }
+
+##############################################################################
+##############################################################################
+sub sign
+ {
+  my $sign;
+  ## find owner
+  DbQuery("select owner from gare where id='".DbQuote($on{id})."'");
+  my $owner = FetchRow();
+
+  $sign = IG::Sign(     id     => $on{id},
+                        action => 'update') if $owner eq $auth_user;
+
+  LogD('sign', 'update', 'gare', $on{id}) if $sign;
+  docview();
+ }
+
+############################################################################
+############################################################################
+sub markasnotaccepted
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  ## update db
+  DbQuery("update gare set note='$lang{offer_not_accepted}' ".
+          "where id='".DbQuote($on{id})."'");
+
+  LogD("mark offer as not accepted", 'update', 'gare', $on{id} );
+
+  IG::BackToReferer();
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+         TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
+         IG::LastDocuments().
+         TaskFoot();
+ }
+ 
+##############################################################################
+##############################################################################
+sub reviewlist
+ {
+  $on{order}	     ||= 'id';
+  $on{sortdirection} ||= $IG::list_order;
+
+  QuoteParams();
+  my $query      = " and owner='$in{flpers}' " if $on{flpers};
+  my $order      = "order by $in{order} $in{sortdirection}" if $on{order};
+
+  ## set a per page view
+  my $base_query = "SELECT COUNT(*) FROM gare ".
+		   "where issue>='$tv{start_year}'".
+		   " and issue <='$tv{end_year}' $query";
+
+  my $base_url   = "gare?".
+		   "action=reviewlist&amp;".
+		   "order=$on{order}&amp;".
+		   "sortdirection=$on{sortdirection}&amp;".
+		   "flpers=$on{flpers}&amp;".
+		   "flacc=$on{flacc}&amp;".
+		   "fltip=$on{fltip}";
+
+  my ( $limit,
+       $offset,
+       $page_selector ) = IG::MkTaskPaging($base_query, $base_url);
+
+  Header( $page_selector );
+  TaskListMenu
+   (
+    [$lang{number},
+     "action=reviewlist&amp;order=id&amp;flpers=$on{flpers}"],
+    [$lang{receiver},
+     "action=reviewlist&amp;order=contatto&amp;flpers=$on{flpers}"],
+    [$lang{issue},
+     "action=reviewlist&amp;order=issue&amp;flpers=$on{flpers}"],
+    [$lang{due_date},
+     "action=reviewlist&amp;order=expire&amp;flpers=$on{flpers}"],
+    [Img(src=>"$IG::img_url/user.gif")],
+    [$lang{commercial_review}],
+    [$lang{technical_review}],
+    [$lang{operating_review}]
+   );
+
+  DbQuery( "SELECT gare.id, gare.issue, gare.contactname,".
+           " gare.note, gare.owner, gare.expire, gare.flag1,".
+           " gare.flag2, gare.flag3, gare.expire-current_date,".
+           " users.initial ".
+           "FROM gare ".
+           "LEFT JOIN users ON gare.owner=users.login ".
+           "WHERE".
+           " gare.issue>='$tv{start_year}'".
+           " and gare.issue<='$tv{end_year}' $query $order ".
+	  "LIMIT $limit OFFSET $offset " );
+
+  while ( my @row = FetchRow() )
+   {
+    ## Due date
+    if ( !CkDate($row[5]) )
+     { $row[5] = $lang{new_revision}; }
+    else
+     { $row[5] = Blush($row[5]) if $row[9] < 1; }
+
+    ## Commercial review
+    my $ima1 = $row[6] eq 'V' ? Img( src=>"$IG::img_url/green.gif")
+             : $row[6] eq 'R' ? Img( src=>"$IG::img_url/red.gif")
+	     :                  Img( src=>"$IG::img_url/orange.gif");
+
+    ## Technical review
+    my $ima2 = $row[7] eq 'V' ? Img( src=>"$IG::img_url/green.gif")
+             : $row[7] eq 'R' ? Img( src=>"$IG::img_url/red.gif")
+	     :                  Img( src=>"$IG::img_url/orange.gif");
+
+    ## Operating review
+    my $ima3 = $row[8] eq 'V' ? Img( src=>"$IG::img_url/green.gif")
+             : $row[8] eq 'R' ? Img( src=>"$IG::img_url/red.gif")
+	     :                  Img( src=>"$IG::img_url/orange.gif");
+
+    TaskListItem(
+	[DirectLink($row[0])],
+	[$row[2]],
+	[$row[1]],
+	[$row[5]],
+	[$row[10],
+	 "gare?action=reviewlist&amp;".
+	        "order=$on{order}&amp;".
+	        "sortdirection=$on{sortdirection}&amp;".
+	        "flpers=$row[4]"],
+	[$ima1,
+	 "gare?action=chflag&amp;".
+	        "id=$row[0]&amp;".
+	        "status=$row[6]&amp;".
+	        "backtoreferer=1&amp;".
+	        "flag=1&amp;".
+	        "pos=$on{pos}",
+	 "align=center"],
+	[$ima2,
+	 "gare?action=chflag&amp;".
+	        "id=$row[0]&amp;".
+	        "status=$row[7]&amp;".
+	        "backtoreferer=1&amp;".
+	        "flag=2&amp;".
+	        "pos=$on{pos}",
+	 "align=center"],
+	[$ima3,
+	 "gare?action=chflag&amp;".
+	        "id=$row[0]&amp;".
+	        "status=$row[8]&amp;".
+	        "backtoreferer=1&amp;".
+	        "flag=3&amp;".
+	        "pos=$on{pos}",
+	 "align=center"]
+		 );
+   }
+
+  TaskListFoot();
+  Footer();
+ }
+
+##############################################################################
+##############################################################################
+sub showreview
+ {
+  HtmlHead();
+
+  DbQuery("SELECT flag1, flag2, flag3 ".
+          "FROM gare where id = '".DbQuote($on{id})."'");
+  my @row = FetchRow();
+
+  ## Commercial review
+  my $ima1 = $row[0] eq 'V' ? "$IG::img_url/green.gif"
+           : $row[0] eq 'R' ? "$IG::img_url/red.gif"
+           :                  "$IG::img_url/orange.gif";
+
+  ## Technical review
+  my $ima2 = $row[1] eq 'V' ? "$IG::img_url/green.gif"
+           : $row[1] eq 'R' ? "$IG::img_url/red.gif"
+           :                  "$IG::img_url/orange.gif";
+
+  ## Operating review
+  my $ima3 = $row[2] eq 'V' ? "$IG::img_url/green.gif"
+           : $row[2] eq 'R' ? "$IG::img_url/red.gif"
+           :                  "$IG::img_url/orange.gif";
+
+  TaskMsg( HTitle( level => 4,
+                   style => 'margin-bottom:20px',
+                   title => "$lang{review}: $on{id}" ).
+          
+           HLayer( intra_space => 15,
+                   layers
+                    => [(
+	              Img( src   => $ima1,
+	                   caption => $lang{commercial_review},
+	                   href  => "gare?action=chflag&amp;".
+	                                  "id=$on{id}&amp;".
+	                                  "status=$row[0]&amp;".
+	                                  "flag=1&amp;".
+	                                  "backtoreferer=1" ),
+
+                      Img( src   => $ima2,
+                           caption => $lang{technical_review},
+                           href  => "gare?action=chflag&amp;".
+                                          "id=$on{id}&amp;".
+                                          "status=$row[1]&amp;".
+                                          "flag=2&amp;".
+                                          "backtoreferer=1" ),
+                                          
+                      Img( src   => $ima3,
+                           caption => $lang{operating_review},
+                           href  => "gare?action=chflag&amp;".
+                                          "id=$on{id}&amp;".
+                                          "status=$row[2]&amp;".
+                                          "flag=3&amp;".
+                                          "backtoreferer=1" ),
+                    )]
+                ),4 );
+
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub proto
+ {
+  ## Check document accessibility
+  my $doc_status = IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' );
+  return if ! $doc_status;
+
+  HtmlHead();
+  TaskHead( title     => $lang{gare_protocol},
+            minwidth  => 500 );
+
+  FormHead( cgiaction => 'protoagg',
+            autofocus => 'false',
+            labelstyle=> 'width:130px',
+            name      => 'proto',
+            onsubmit  => "proto.submit.disabled = 'true';",
+          );
+
+  Input(    type      => 'text',
+            validate  => { pattern   => '^(2\d\d\d\d\d.\d\d)*$',
+                           onerror   => $lang{Err_protocol} },
+            show      => $lang{protocol_number},
+            readonly  => $doc_status == -1 ? 0 : 1,
+            name      => 'id');
+
+  Input(    type      => 'label',
+            show      => 'File',
+            data      => IG::InputDocBox
+                          ( dir => $IG::htdocs_dir . $IG::S .
+                                   $IG::default_lang{gare} . $IG::S .
+                                   $IG::default_lang{templates} . $IG::S)
+       ) if !$on{print};
+
+  ## Only to remember flags status
+  Input(    type      => 'hiddens',
+            data      => { flag  => '',
+			   flag1 => '',
+			   flag2 => '',
+			   flag3 => '' } );
+
+  Input(    type      => 'logins',
+            readonly  => $doc_status == -1 ? 0 : 1,
+            show      => $lang{rif},
+            name      => 'owner' );
+
+  Input(    type      => 'sendmode');
+
+  Input(    type      => 'contactfinder',
+            validate  => { mandatory => 'true' },
+            extraselection=>1,
+            show      => $lang{receiver} );
+
+  Input(    type      => 'select',
+            show      => $lang{category},
+            validate  => { mandatory => 'true' },
+            zerovalue => 'true',
+            name      => 'category',
+            data      => \%IG::gare_category );
+
+  Input(    type      => 'text',
+            name      => 'days',
+            size      => 3,
+            validate  => { pattern   => '^(\d+)*$' },
+            show      => $lang{days_notice},
+            value     => '0' );
+
+  Input(    type      => 'date',
+            name      => 'issue',
+            validate  => { onerror   => $lang{Err_issue},
+                           mandatory => 'true' },
+            value     => $tv{today},
+            show      => $lang{issue} );
+
+  Input(    type      => 'date',
+	    name      => 'expire',
+            validate  => { onerror   => $lang{Err_due_date},
+                           mandatory => 'false' },
+            value     => $tv{end_year},
+            show      => $lang{due_date});
+
+  Input (   show      => $lang{amount},
+            name      => 'amount',
+            size      => 20,
+            maxlen    => 30,
+            type      => 'currency');
+
+  Input(    name      => 'npa',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 50,
+            show      => $lang{archive_position});
+
+  Input(    type      => 'text',
+            show      => $lang{result},
+            style     => 'width: 350px',
+            name      => 'note',
+            size      => '50' );
+
+  Input(    type      => 'textarea',
+            show      => $lang{notes},
+            style     => 'width:350px; height:60px;',
+            name      => 'note1' );
+
+  Input(    type      => 'submit',
+            name      => 'submit',
+            show      => $lang{save_offer} );
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  ## Validate Form values
+  push @IG::errmsg, IG::FormValidate();
+  proto() && return if @IG::errmsg;
+
+  ## insert data in db
+  $on{id}     ||= IG::MkLastNum('gare');
+  $on{amount}  .= '00' if $on{amount} !~ /$IG::decimal_separator/;
+  $on{amount}  =~ s/[^\d]//g;
+
+  QuoteParams();
+  DbQuery(query =>[( "DELETE FROM gare where id = '$in{id}'",
+
+		     "INSERT INTO gare VALUES ('$in{id}', '$in{issue}',".
+		     " '$in{contactname}', '$in{note}', '$in{owner}',".
+		     " '$in{expire}', '$in{category}', '$in{days}', 'N',".
+		     " '$in{issue}', '$in{note1}','$in{flag1}','$in{flag2}',".
+		     " '$in{flag3}', $in{contactid}, '$in{npa}', '$in{amount}')",
+
+		     "UPDATE prices SET docnotes = '$in{note}' ".
+		     "where docid = '$in{id}'"
+		   )] );
+
+  LogD('', 'insert', 'gare', $on{id});
+
+  IG::BuildDoc();
+ }
+
+############################################################################
+############################################################################
+sub protomodi
+ {
+  DbQuery("SELECT * FROM gare where id='".DbQuote($on{id})."'");
+    (
+	$on{id},
+	$on{issue},
+	$on{contactname},
+	$on{note},
+	$on{owner},
+	$on{expire},
+	$on{category},
+	$on{days},
+	$on{flag},
+	$on{pricesupdate},
+	$on{note1},
+	$on{flag1},
+	$on{flag2},
+	$on{flag3},
+	$on{contactid},
+	$on{npa},
+	$on{amount}	) = FetchRow();
+
+  proto();
+ }
+
+############################################################################
+############################################################################
+sub chflag
+ {
+  if (  ( $on{flag}==1 && CheckPrivilege('contracts_revue_c') )
+      ||
+        ( $on{flag}==2 && CheckPrivilege('contracts_revue_t') )
+      ||
+        ( $on{flag}==3 && CheckPrivilege('contracts_revue_s') ) )
+   {
+    if    ($on{status} eq 'N') { $on{status}='S' }
+    elsif ($on{status} eq 'S') { $on{status}='N' }
+    elsif ($on{status} eq 'V') { $on{status}='R' }
+    elsif ($on{status} eq 'R') { $on{status}=''  }
+    else		       { $on{status}='V' }
+
+    ## insert into db
+    QuoteParams();
+    DbQuery("update gare set flag$in{flag} = '$in{status}' ".
+            "where id='$in{id}'");
+
+    LogD("set flag$on{flag} status to $on{status}",
+         'update',
+         'gare',
+         $on{id} );
+   }
+
+  IG::BackToReferer();
+ }
+
+#############################################################################
+#############################################################################
+sub stats
+ {
+  HtmlHead();
+  TaskHead( title => $lang{gare_stats} );
+
+  $on{month} ||= $tv{month};
+  $on{year}  ||= $tv{year};
+
+  ## stats per user
+  my (%risu, $accper, $nonper, $accett);
+
+  DbQuery("SELECT owner,count(*) FROM gare ".
+	  "where issue>='$tv{start_year}' and issue<='$tv{end_year}' ".
+	  "group by owner");
+  TaskListMenu
+   (
+    [ $lang{referring}    ],
+    [ $lang{total}        ],
+    [ $lang{accepted}     ],
+    [ '%'                 ],
+    [ $lang{not_accepted} ],
+    [ '%'                 ]
+   );
+
+  while ( my @row = FetchRow() )
+   {
+    $risu{$row[0]}[0] = IG::UsrInf('name',$_);
+    $risu{$row[0]}[1] = $row[1];
+   }
+
+  foreach (keys %risu)
+   {
+    DbQuery("SELECT owner, count(*) FROM gare ".
+	    "where issue>='$tv{start_year}'".
+	    " and issue<='$tv{end_year}'".
+	    " and (note='non accettata' or note='NON ACCETTATA' or note='')".
+	    " and owner='$_' group by owner");
+
+    my @row = FetchRow();
+    $accett = $risu{$_}[1] - $row[1];
+    $nonper = int( $row[1] * 100 / $risu{$_}[1] );
+    $accper = 100 - $nonper;
+
+    TaskListItem (
+	[IG::UsrInf('name',$_),	"gare?order=$on{order}&amp;flpers=$row[0]"],
+	[$risu{$_}[1],		'','align=right'],
+	[$accett,		'','align=right'],
+	["$accper %",		'','align=right'],
+	[$row[1],		'','align=right'],
+	["$nonper %",		'','align=right']
+		);
+   }
+  TaskListFoot(3);
+
+
+  ## Draw histograms
+  my ($nums, $desc, $accs, $accn, $tr, $tipo);
+  my (%off_tipo, %off_acc, %gare_by_categories_months, %total_gare_per_month);
+
+  ## Read last 12 months data from database
+  my $start= IG::GetDateByFormat( 1,
+                                  $on{month},
+                                  ($on{year}-1) );
+  my $end  = IG::GetDateByFormat( IG::GetDaysInMonth( $on{month}, $on{year} ),
+                                  $on{month},
+                                  $on{year} );
+
+  my $counter = 0;
+  DbQuery("select category, note, issue from gare ".
+	  "where issue>'$start' and issue<'$end'");
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+    ++$off_tipo{$row[0]};
+    ++$off_acc{$row[0]} if !$row[1] || $row[1]=~ /non accettat/i;
+
+    my ($_day, $_month, $_year ) = IG::GetValuesByDate( $row[2] );
+    ++$gare_by_categories_months{$row[0]}{"$_year$_month"};
+    ++$total_gare_per_month{"$_year$_month"};
+   }
+
+  ## No data to stat
+  if ( $counter < 10 )
+   {
+    push @IG::errmsg, "Error: No data to stat!. You have to protocol some gare";
+    TaskFoot();
+    HtmlFoot();
+    return;
+   }
+
+  ## Make first histogram
+  PrOut "<table><td valign=top>";
+  foreach (sort keys %off_tipo)
+   {
+    $nums .= "$off_tipo{$_},";
+    $accs .= "$off_acc{$_},";
+    $accn .= ($off_tipo{$_}-$off_acc{$_}).",";
+    $desc .= "$_,";
+   }
+
+  chop($nums);chop($desc);chop($accs);
+  IG::MkGraph( title  => $lang{stat_0},
+               width  => 280,
+               height => 200,
+               bgcolor=> $IG::clr{bg_evidence},
+               rows   => "($nums)($accs)($accn)",
+               vars   => $desc );
+
+  ## Make second histogram
+  PrOut "</td><td>";
+  $nums = $desc = '';
+
+  foreach (sort keys %total_gare_per_month)
+   {
+    $nums.="$total_gare_per_month{$_},";
+    $_=substr($_,4,2);
+    $desc.=substr($IG::months{$_}[0],0,3).",";
+   }
+  chop($nums);chop($desc);
+
+  IG::MkGraph( title  => $lang{stat_1},
+               width  => 280,
+               height => 200,
+               bgcolor=> $IG::clr{bg_evidence},
+               rows   => "($nums)",
+               vars   => $desc );
+
+  ## Make others histograms
+  PrOut "</td></tr><td>";
+  foreach $tipo (sort keys %off_tipo)
+   {
+    next if !$tipo;
+    $nums = $desc = '';
+
+    foreach (sort keys %{$gare_by_categories_months{$tipo}})
+     {
+      $nums.="$gare_by_categories_months{$tipo}{$_},";
+      $_=substr($_,4,2);
+      $desc.=substr($IG::months{$_}[0],0,3).",";
+     }
+
+    chop($nums);chop($desc);
+    $tr = $tr ? '' : '</tr>';
+    PrOut "</td>$tr<td valign=top>";
+
+    IG::MkGraph( title  => "$lang{stat_2} $IG::gare_category{$tipo}",
+                 width  => 280,
+                 height => 200,
+                 rows   => "($nums)",
+                 vars   => $desc );
+   }
+
+  PrOut '</table>';
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub delshow
+ {
+  Header();
+  TaskMsg( $lang{warn_before_delete} . Br(2) .
+  
+	   FormHead( cgiaction => 'delexec',
+		     float     => 'left',
+		     onsubmit  => IG::JsConfirm( $lang{are_you_sure} ) ).
+
+	   Input(    type      => 'select',
+		     name      => 'id',
+                     zerovalue => 'true',
+		     style     => 'width: 350px',
+		     data      => "SELECT id, id, contactname ".
+	                          "FROM gare ".
+			          "WHERE issue>='$tv{start_year}'".
+			          " and issue<='$tv{end_year}'".
+			          ( CheckPrivilege('sys_user_admin')
+			          ? ' '
+			          : " and ( owner='$auth_user' or note='') " ).
+			          "ORDER BY id desc",
+		     show      => $lang{protocol_number}).
+
+	  Input(     type      => 'submit',
+		     show      => $lang{delete} ).
+
+	  FormFoot()
+	  ,2 );
+
+  Footer();
+ }
+
+
+############################################################################
+############################################################################
+sub delexec
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  DbQuery("delete from gare where id='".DbQuote($on{id})."'");
+  IG::TrashDoc($on{id});
+
+  LogD('', 'delete', 'gare', $on{id});
+
+  IG::Redirect('gare');
+ }
+
+############################################################################
+############################################################################
+sub findshow
+ {
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer
+     ( bottom_space => 0,
+       right_layers
+         =>[(
+	     FormHead( name       => 'findnavi',
+	               method     => 'get',
+		       target     => 'mainf',
+		       autofocus  => 'false',
+                       labelstyle => 'border:0px; width:auto;',
+		       cgiaction  => 'findexec',
+		       float      => 'left' ),
+
+	     Input(    type       => 'findable' ),
+
+	     Input(    type       => 'select',
+		       name       => 'method',
+		       data       =>[( ['from',  $lang{with_header}],
+				       ['id',    $lang{with_protocol}],
+				       ['date',  $lang{with_date}],
+				       ['npa',   $lang{with_npa}],
+				       ['notes', $lang{with_notes}] )]),
+
+	     Input(    type       => 'text',
+		       name       => 'keytofind',
+                       focus      => 'true',
+		       value      => $IG::cookie{lastsearch},
+                       style      => 'width:100px; margin-right: -5px;',
+		       onblur     => "document.cookie='lastsearch=' + escape(this.value)"),
+
+	     Input(    type       => 'image',
+		       name       => $lang{find},
+		       src        => "$IG::img_url/${IG::tema}search.gif",
+		       alt        => $lang{find}).
+		       
+	     FormFoot()
+	   )]
+	 );
+   }
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub findexec
+ {
+  my $query;
+  my $counter;
+ 
+  if ($on{ajax_request})
+   {
+    HttpHead( expires => '+30s' );
+
+    TaskMsg( Input( type       => 'button',
+                    float      => 'right',
+                    onclick    => "document.location = '".
+                                   "gare?".
+                                        "action=proto&amp;".
+                                        "contactid=$on{contactid}&amp;".
+                                        "backtoreferer=1';",
+                    show       => $lang{new_item},
+                    fieldstyle => 'margin:0px',
+                    style      => 'margin:0px;font-size:10px; height:15px' ).
+
+	     Img( src   => "$IG::img_url/mime_mini_offer.png",
+                  style => 'margin-right:2px',
+                  align => 'absmiddle').
+
+             "<a href=\"gare\">$lang{gare}</a>"
+            ,7);
+   }
+  else
+   {
+    $IG::set_cookie{lastsearch} = $on{keytofind};
+    HtmlHead(	shortcuts => _short_cuts());
+    TaskHead(	title     => $lang{find_gare},
+		width     => '100%');
+    HLayer (
+		MkButton( text => $lang{new_protocol},
+		          link => "gare?action=proto" ),
+
+                MkButton( text => $lang{back_to_protocol},
+                          link => 'gare' ),
+	   );
+
+    TaskMsg("$lang{find_gare} - ".
+            "$lang{find}: <strong>$on{keytofind}</strong>", 4 );
+   }
+
+  ## Build query
+  QuoteParams();
+
+  if ( $on{ajax_request} )
+   { $query = "gare.contactid = '$on{contactid}'"; }
+  elsif (length($on{keytofind}) < 2 )
+   {
+    $query = '1=0';
+    push @IG::errmsg, $lang{Err_find};
+   }
+  elsif ($on{method} eq 'id' || $on{keytofind} =~ /2\d\d\d\d\d\.\d\d/)
+   { $query = "gare.id ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'from')
+   { $query = "gare.contactname ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'npa')
+   { $query = "gare.npa ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'date')
+   {
+    $in{keytofind} = CkDate($in{keytofind});
+    $query = "gare.issue = '$in{keytofind}'";
+   }
+  elsif ($on{method} eq 'notes')
+   { $query = "gare.note1 ~* '$in{keytofind}'"; }
+
+  TaskListMenu(	[$lang{number}],
+		[$on{ajax_request} ? '' : $lang{receiver}],
+		[''],
+		[$lang{issue}],
+		[$lang{due_date}],
+		[$lang{rif}],
+		[$lang{result}],
+		[$lang{notes}],
+              );
+
+  DbQuery( "SELECT gare.id, gare.issue, gare.contactname,".
+           " gare.owner, gare.note1, gare.note, gare.category,".
+           " gare.expire, gare.flag1, gare.flag2, gare.flag3,".
+           " expire-current_date, users.initial ".
+           "FROM gare ".
+           "LEFT JOIN users ON gare.owner=users.login ".
+           "WHERE $query ".
+           "ORDER BY gare.issue desc, gare.id desc" );
+
+  while ( my @row = FetchRow() )
+   {
+    ++$counter;
+
+    if ( !CkDate($row[7]) )
+     { $row[7] = ''; }
+    else
+     { $row[7] = Blush($row[7]) if $row[11] < 1; }
+
+    TaskListItem( [ ParseLink($row[0]) ],
+                  [ $on{ajax_request} ? '' : $row[2] ],
+                  [ $row[6] ],
+                  [ $row[1], '', 'nowrap' ],
+                  [ $row[7], '', 'nowrap' ],
+                  [ $row[12] ],
+                  [ MkLink($row[5]) ],
+                  [ MkLink($row[4]) ],
+                );
+   }
+
+  if ( $on{ajax_request} )
+   {
+    TaskListFoot(7);
+   }
+  else
+   {
+    push @IG::errmsg, $lang{no_items}
+      if !$counter && length($on{keytofind}) > 1;
+    TaskListFoot();     
+    TaskFoot();
+    HtmlFoot();
+    LogD( $IG::query_string, 'search', 'search_gare', undef);
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub Header 
+ {
+  my ( $page_selector, $alphabet_selector, $title) = @_;
+
+  HtmlHead( shortcuts => _short_cuts(),
+            title     => $title || $lang{gare_protocol});
+  TaskHead( title     => $title || $lang{gare_protocol},
+	    width     => '100%' );
+
+  HLayer(
+         MkButton( text => $lang{back_to_list},
+                   link => 'gare',
+                   privilege => $on{action} eq 'docview'),
+
+         MkButton( text => $lang{new_protocol},
+                   link => 'gare?action=proto' ),
+
+         MkButton( text => $lang{delete},
+                   link => 'gare?action=delshow' ),
+
+         MkButton( text => $lang{reports},
+                   link => 'reports?table=gare',
+                   privilege => CheckPrivilege('gare_report') ),
+
+         MkButton( text => $lang{model_mng},
+                   link => 'docmaker?category=gare',
+                   privilege => CheckPrivilege('gare_template') ),
+
+         MkButton( text => $lang{review},
+                   link => $on{action} eq 'docview'
+                        ?  "javascript:winPopUp('gare?action=showreview&id=$on{id}',500,130,'showreview')"
+                        :  'gare?action=reviewlist',
+                   privilege => CheckPrivilege('contracts_revue') ),
+
+         MkButton( text => $lang{gare_stats},
+                   link => 'gare?action=stats' ),
+
+         $page_selector,
+        ) if !$on{print};
+
+  PrOut $alphabet_selector;
+ }
+
+sub Footer
+ { 
+  TaskFoot();
+  HtmlFoot();
+ }

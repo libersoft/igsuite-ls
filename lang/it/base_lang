@@ -336,6 +336,7 @@ notes			=>'Note',
 number			=>'Numero',
 offer			=>'Offerta',
 offers			=>'Offerte',
+gare  =>'Gare',
 only_protocol		=>'Aggiorna solo il protocollo',
 opened_order		=>'Ordine aperto',
 open_new_window		=>'Apri in una nuova finestra',
@@ -561,6 +562,15 @@ zip_document            =>'Comprimi il documento',
              );
 
 %offers_category = (
+		NC=>'Nuovo Contratto',
+		RC=>'Rinnovo Contratto',
+		AC=>'Addendum a Contratto',
+		SN=>'Contratto Spot nuovi clienti',
+		SV=>'Contratto Spot vecchi clienti',
+		AP=>'Aggiornamento Prezzi'
+	     );
+	     
+%gare_category = (
 		NC=>'Nuovo Contratto',
 		RC=>'Rinnovo Contratto',
 		AC=>'Addendum a Contratto',

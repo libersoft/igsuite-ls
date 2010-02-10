@@ -1,0 +1,20 @@
+## IGSuite 4.0.0
+## Language: offers_lang
+## Last update: 25/05/2009
+
+%lang = (%lang,
+   (
+gara_not_accepted      =>'Gara non accettata',
+new_revision		=>'Nuove rev',
+accepted		=>'Accettate',
+not_accepted		=>'Non Accettate',
+gare_protocol		=>'Protocollo Gare',
+save_offer		=>'Salva nel protocollo Gare',
+offers_stats		=>'Statistiche',
+stat_0			=>'Totale tipologie gare e esito',
+stat_1			=>'Gare effettuate negli ultimi 12 mesi',
+stat_2			=>'Ultimi 12 mesi -',
+find_offers		=>'Ricerca Gare'
+   ));
+
+1;

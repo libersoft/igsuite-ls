@@ -114,6 +114,7 @@ sub MkMenu
     $html .= _mk_menu(	'protocols', 1,
 		[ $lang{contracts},	'contracts',	'mainf'],
 		[ $lang{offers},	'offers',	'mainf'],
+		[ $lang{gare},	'gare',	'mainf'],
 #		[ $lang{nc_int},	'nc_int',	'mainf'],
 #		[ $lang{nc_ext},	'nc_ext',	'mainf'],
 		[ "NC Ph",	'nc_ph',	'mainf'],

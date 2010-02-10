@@ -38,6 +38,7 @@ require Exporter;
 	archive			=> [ 11,'id;issue'],
 	letters			=> [ 9,	'id;issue'],
 	offers			=> [ 16,'id;issue'],
+  gare			=> [ 16,'id;issue'],
 	orders			=> [ 10,'id;issue'],
 	fax_sent		=> [ 10,'id;issue'],
 	fax_received		=> [ 10,'id;issue'],
@@ -575,6 +576,78 @@ offers=>[
 	  itype=>'text',
 	  type=>'int',},
 	],
+
+gare=>[
+	{ name=>'id',
+	  type=>'varchar(15)',},	#numero
+
+	{ name=>'issue',
+	  label=>'issue',
+	  itype=>'date',
+	  type=>'date',},		#data
+
+	{ name=>'contactname',
+	  label=>'contact_name',
+	  itype=>'text',
+	  type=>'varchar(70)',},	#contact
+
+	{ name=>'note',
+	  label=>'result',
+	  itype=>'text',
+	  type=>'text',},		#note
+
+	{ name=>'owner',
+	  label=>'owner',
+	  itype=>'logins',
+	  type=>'varchar(32)',},		#owner
+
+	{ name=>'expire',
+	  label=>'due_date',
+	  itype=>'date',
+	  type=>'date',},		#scadenza
+
+	{ name=>'category',
+	  itype=>'text',
+	  label=>'category',
+	  type=>'varchar(2)',},		#categoria
+
+	{ name=>'days',
+	  type=>'int',},	        #giorni
+
+	{ name=>'flag',
+	  type=>'varchar(2)',},		#flag
+
+	{ name=>'pricesupdate',
+	  type=>'date',},		#revisionep
+
+	{ name=>'note1',
+	  label=>'note',
+	  itype=>'text',
+	  type=>'text',},		#note1
+
+	{ name=>'flag1',
+	  type=>'varchar(1)',},		#flag1
+
+	{ name=>'flag2',
+	  type=>'varchar(1)',},		#flag2
+
+	{ name=>'flag3',
+	  type=>'varchar(1)',},		#flag3
+
+	{ name=>'contactid',
+	  type=>'varchar(15)',},	#unidest
+
+	{ name=>'npa',
+	  label=>'archive_position',
+	  itype=>'text',
+	  type=>'varchar(50)',},
+
+	{ name=>'amount',
+	  label=>'amount',
+	  itype=>'text',
+	  type=>'int',},
+	],
+
 
 orders=>[
 	{ name=>'id',
