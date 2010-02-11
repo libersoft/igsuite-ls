@@ -3345,9 +3345,10 @@ sub delexec
   (push @IG::errmsg, $lang{Err_cant_delete_child}) && protomodi() && return
        if $parent;
 
+  ## TODO serve qualche check aggiuntivo ma che sia compatibile con il
+  ## privilegio calendar master
   DbQuery("SELECT count(*) FROM calendar ".
-          "where eventid = '$in{eventid}'".
-	  " and (fromuser='$auth_user' or touser='$auth_user')");
+          "where eventid = '$in{eventid}'");
   (push @IG::errmsg, $lang{Err_cant_access_event}) && daily() && return
        if FetchRow()==0;
      
@@ -3356,11 +3357,12 @@ sub delexec
   (push @IG::errmsg, $lang{Err_cant_delete_parent}) && protomodi() && return
        if FetchRow()>0;
 
+  ## TODO serve qualche check aggiuntivo ma che sia compatibile con il
+  ## privilegio calendar master
   DbQuery( query =>[( "DELETE FROM bookings where eventid='$in{eventid}'",
 
                       "DELETE FROM calendar ".
-  	              "where eventid = '$in{eventid}'".
-  	              " and (fromuser='$auth_user' or touser='$auth_user')" 
+  	              "where eventid = '$in{eventid}'"
 		    )] );
 
   LogD("deleted this event: $eventtext", "delete", "calendar", $on{eventid});
