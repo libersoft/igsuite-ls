@@ -758,7 +758,7 @@ sub documentupload
 
   die("No ID number specified.\n") if !$idnum;
 
-  my $doc_type = (qw(	undef           contracts       offers
+  my $doc_type = (qw(	undef           contracts       offers       gare
                         nc_int          nc_ext          letters
                         fax_sent        fax_received    archive
                         orders))[$idcode];
@@ -2499,7 +2499,7 @@ sub personal_documents
 		icon  => 2);
   PrOut "<table border=0 cellspacing=0 cellpadding=0><td class=\"link\">\n";
 
-  for (qw(	letters opportunities offers orders
+  for (qw(	letters opportunities offers gare orders
 		archive contracts fax_sent fax_received ))
    {
     CheckPrivilege($_."_view")

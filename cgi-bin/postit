@@ -236,7 +236,7 @@ sub protoagg
   $on{category}    = '' if $on{category} eq $lang{personal_links};
   $on{sharemode}   = 1 if !$on{category} && !CheckPrivilege('sys_user_admin');
   $on{id}	 ||= MkId();
-  $on{link}        =~ s/^.*([EF123456789])(\d{5})\.(\d\d).*$/$1$2.$3/;
+  $on{link}        =~ s/^.*([EFG123456789])(\d{5})\.(\d\d).*$/$1$2.$3/;
   $on{link}  	   = "http://$on{link}"
 		     if $on{link} !~ /^https*\:\/\// && $on{type} eq 'http';
 

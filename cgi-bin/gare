@@ -26,21 +26,23 @@ use IG::Utils;
 
 IG::MkEnv(__PACKAGE__);
 
-IG::DTable(	reviewlist	  => sub { CheckPrivilege('gare_view') },
-                showreview	  => sub { CheckPrivilege('gare_view') },
-		chflag		  => 1,
-           	proto		  => sub { CheckPrivilege('gare_edit') },
-		protoagg	  => sub { CheckPrivilege('gare_edit') },
-		protomodi	  => sub { CheckPrivilege('gare_edit') },
-		stats		  => sub { CheckPrivilege('gare_view') },
-		findshow	  => sub { CheckPrivilege('gare_view') },
-		findexec	  => sub { CheckPrivilege('gare_view') },
-		delshow		  => sub { CheckPrivilege('gare_edit') },
-		delexec		  => sub { CheckPrivilege('gare_edit') },
+IG::DTable(
+    reviewlist	      => sub { CheckPrivilege('gare_view') },
+    showreview	      => sub { CheckPrivilege('gare_view') },
+    chflag		        => 1,
+    proto		          => sub { CheckPrivilege('gare_edit') },
+		protoagg	        => sub { CheckPrivilege('gare_edit') },
+		protomodi	        => sub { CheckPrivilege('gare_edit') },
+		stats		          => sub { CheckPrivilege('gare_view') },
+		findshow      	  => sub { CheckPrivilege('gare_view') },
+		findexec	        => sub { CheckPrivilege('gare_view') },
+		delshow		        => sub { CheckPrivilege('gare_edit') },
+		delexec		        => sub { CheckPrivilege('gare_edit') },
 		markasnotaccepted => sub { CheckPrivilege('gare_edit') },
 		docview           => sub { CheckPrivilege('gare_view') },
-		sign		  => sub { CheckPrivilege('gare_view') },
+		sign		          => sub { CheckPrivilege('gare_view') },
 		default_action	  => sub { CheckPrivilege('gare_view') } );
+		
 
 ##############################################################################
 ##############################################################################
@@ -57,13 +59,13 @@ sub default_action
 
   TaskListMenu
    (
-    [$lang{number},			"order=id$base_link"],
+    [$lang{number},		  	"order=id$base_link"],
     [$lang{receiver},			"order=contactname$base_link"],
     [Img(src=>"$IG::img_url/user.gif"),	"order=owner$base_link"],
-    [$lang{notes},			"order=note1$base_link"],
-    [$lang{result},			"order=note$base_link"],
+    [$lang{notes},		  	"order=note1$base_link"],
+    [$lang{result},		  	"order=note$base_link"],
     ['',				''],
-    [$lang{issue},			"order=issue$base_link"],
+    [$lang{issue},		  	"order=issue$base_link"],
     [$lang{due_date},			"order=expire$base_link"],
     [],
    );
@@ -89,7 +91,8 @@ sub default_action
 	     : "$row[8]$row[9]$row[10]" =~ /R/   ? 'red'
 	     : 'orange';
 
-    TaskListItem( [ ParseLink($row[0]) ],
+#    TaskListItem( [ ParseLink($row[0]) ],
+    TaskListItem( [ "<a href='/cgi-bin/gare?action=docview&id=$row[0]'>$row[0]</a>" ],
                   [ $row[2] ],
                   [ $row[11] ],
                   [ MkLink($row[4]) ],
@@ -135,14 +138,6 @@ sub docview
   else
    { $row[5] = Blush($row[5]) if $row[17] < 1; }
 
-  $row[3]  = $row[3]           # accept status
-           ? MkLink( $row[3] )
-           : "<a href=\"gare?action=markasnotaccepted&amp;".
-                              "id=$row[0]&amp;".
-                              "backtoreferer=1\">[ ".
-             $lang{mark_as_not_accepted}.
-             ' ]</a>';
-
   $row[10] = MkLink($row[10]); # notes
 
   ## Revision status
@@ -165,17 +160,20 @@ sub docview
 			      "action=showrecord&amp;".
 			      "contactid=$row[14]\">".
 			       "$row[14] $row[2]</a>"],
+			       
 		  [ $lang{referring},
 		    IG::UsrInf('name',$row[4]) ],
                   [ $lang{category},
 		    $IG::gare_category{$row[6]} ],
                   [ $lang{issue},
                     $row[1]],
+                    
  	          [ $lang{document_integrity},
 		    IG::CkSign( id    => $row[0],
 			        owner => $row[4])],
                   [ $lang{due_date},
                     $row[5] ],
+                    
 		  [ $lang{result},
                     $row[3] ],
                   [ $lang{days_notice},
@@ -504,11 +502,85 @@ sub proto
             value     => $tv{end_year},
             show      => $lang{due_date});
 
-  Input (   show      => $lang{amount},
+  Input (   show      => 'Importo appalto',
             name      => 'amount',
             size      => 20,
             maxlen    => 30,
             type      => 'currency');
+            
+  Input(    type      => 'text',
+            show      => 'Oggetto appalto',
+            style     => 'width: 350px',
+            name      => 'subject',
+            size      => '50' );
+            
+  Input(    type      => 'text',
+            show      => 'Descrizione attivit&agrave;',
+            style     => 'width: 350px',
+            name      => 'description',
+            size      => '255' );           
+            
+  Input(    type      => 'select',
+            show      => 'Criterio di aggiudicazione',
+            validate  => { mandatory => 'true' },
+            zerovalue => 'true',
+            name      => 'award_type',
+            data      => \%IG::gare_award_type );            
+            
+  Input(    type      => 'select',
+            show      => 'Tipo di procedura',
+            validate  => { mandatory => 'true' },
+            zerovalue => 'true',
+            name      => 'procedure_type',
+            data      => \%IG::gare_procedure_type );      
+            
+         Input(    type      => 'select',
+            show      => 'Stato di avanzamento',
+            validate  => { mandatory => 'true' },
+            zerovalue => 'true',
+            name      => 'progress_status',
+            data      => \%IG::gare_progress_status );
+            
+  Input(    name      => 'duration',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 50,
+            show      => 'Durata appalto');          
+            
+  Input(    name      => 'ranking',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 50,
+            show      => 'Posizione in graduatoria');      
+           
+  Input(    name      => 'price_offered',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 50,
+            show      => 'Prezzo/sconto offerto');
+            
+  Input(    name      => 'price_offered_win',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 50,
+            show      => 'Prezzo/sconto offerto vincitore');
+            
+  Input(    type      => 'textarea',
+            show      => 'Polizza fidejussoria',
+            style     => 'width:350px; height:60px;',
+            name      => 'insurance' );
+            
+  Input(    name      => 'insurance_expiration',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 50,
+            show      => 'Scadenza polizza');  
+            
+  Input(    name      => 'insurance_amount',
+            type      => 'text',
+            style     => 'width:350;',
+            maxlen    => 50,
+            show      => 'Importo polizza');                          
 
   Input(    name      => 'npa',
             type      => 'text',
@@ -560,7 +632,13 @@ sub protoagg
 		     " '$in{contactname}', '$in{note}', '$in{owner}',".
 		     " '$in{expire}', '$in{category}', '$in{days}', 'N',".
 		     " '$in{issue}', '$in{note1}','$in{flag1}','$in{flag2}',".
-		     " '$in{flag3}', $in{contactid}, '$in{npa}', '$in{amount}')",
+		     " '$in{flag3}', $in{contactid}, '$in{npa}', '$in{amount}',".
+		     " '$in{subject}', '$in{description}', '$in{award_type}', '$in{procedure_type}', ".
+		     " '$in{progress_status}', '$in{date_prequalify}', '$in{date_call}', '$in{duration}', ".
+		     " '$in{ranking}', '$in{price_offered}', '$in{price_offered_win}', '$in{insurance}', ".
+		     " '$in{insurance_expiration}', '$in{insurance_amount}'".
+		     
+		     ")",
 
 		     "UPDATE prices SET docnotes = '$in{note}' ".
 		     "where docid = '$in{id}'"

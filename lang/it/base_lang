@@ -578,5 +578,28 @@ zip_document            =>'Comprimi il documento',
 		SV=>'Contratto Spot vecchi clienti',
 		AP=>'Aggiornamento Prezzi'
 	     );
+	     
+# Criterio di aggiudicazione
+%gare_award_type = (
+    PR=>'Prezzo pi&ugrave; basso',
+    EC=>'Offerta economicamente pi&ugrave; vantaggiosa'
+    );
+    
+# Tipo procedura
+%gare_procedure_type = (
+    AP=>'Aperta',
+    RI=>'Ristretta',
+    RA=>'Ristretta accellerata',
+    NE=>'Negoziata'
+    );
+    
+# Stato di avanzamento
+%gare_progress_status = (
+    IC=>'In corso',
+    AR=>'Archiviata',
+    SO=>'Sospesa',
+    VI=>'Vinta',
+    PE=>'Persa'
+    );    
 
 1;

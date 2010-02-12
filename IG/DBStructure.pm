@@ -38,7 +38,7 @@ require Exporter;
 	archive			=> [ 11,'id;issue'],
 	letters			=> [ 9,	'id;issue'],
 	offers			=> [ 16,'id;issue'],
-  gare			=> [ 16,'id;issue'],
+  gare			=> [ 30,'id;issue'],
 	orders			=> [ 10,'id;issue'],
 	fax_sent		=> [ 10,'id;issue'],
 	fax_received		=> [ 10,'id;issue'],
@@ -646,6 +646,76 @@ gare=>[
 	  label=>'amount',
 	  itype=>'text',
 	  type=>'int',},
+	  
+	{ name=>'subject',
+	  label=>'subject',
+	  itype=>'text',
+	  type=>'varchar(100)',},
+	  
+	{ name=>'description',
+	  label=>'description',
+	  itype=>'text',
+	  type=>'text',},
+	  
+	{ name=>'award_type',
+	  label=>'award_type',
+	  itype=>'text',
+	  type=>'varchar(1)',},
+
+	{ name=>'procedure_type',
+	  label=>'award_type',
+	  itype=>'text',
+	  type=>'varchar(1)',},
+	  
+	{ name=>'progress_status',
+	  label=>'progress_status',
+	  itype=>'text',
+	  type=>'varchar(1)',},
+	  
+	{ name=>'date_prequalify',
+	  label=>'date_prequalify',
+	  itype=>'date',
+	  type=>'date',},
+	  
+	{ name=>'date_call',
+	  label=>'date_call',
+	  itype=>'date',
+	  type=>'date',},
+	  
+	{ name=>'duration',
+	  label=>'duration',
+	  itype=>'text',
+	  type=>'varchar(100)',},
+	  
+	{ name=>'ranking',
+	  label=>'ranking',
+	  itype=>'text',
+	  type=>'varchar(5)',},
+	  
+	{ name=>'price_offered',
+	  label=>'price_offered',
+	  itype=>'text',
+	  type=>'varchar(15)',}, 	  
+
+	{ name=>'price_offered_win',
+	  label=>'price_offered_win',
+	  itype=>'text',
+	  type=>'varchar(15)',},
+
+	{ name=>'insurance',
+	  label=>'insurance',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	  
+  { name=>'insurance_expiration',
+	  label=>'insurance_expiration',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	  
+  { name=>'insurance_amount',
+	  label=>'insurance_amount',
+	  itype=>'text',
+	  type=>'varchar(255)',},
 	],
 
 

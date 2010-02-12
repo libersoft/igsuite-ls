@@ -1543,7 +1543,7 @@ sub ParseLink
 		"$2<\/a>$3"/eg;
  
     ## Parse IGSuite documents link
-    $text =~ s/\b([EF123456789])(\d{5})\.(\d\d)\b
+    $text =~ s/\b([EFG123456789])(\d{5})\.(\d\d)\b
 	      /_protocol_to_link($1,$2,$3)
 	      /xeg;
    }
@@ -1556,7 +1556,7 @@ sub ParseLink
 		"$2<\/a>$3"/eg;
    }
 
-  $text =~ s/([EF123456789]\d\d\d\d\d),(\d\d)/$1\.$2/g;
+  $text =~ s/([EFG123456789]\d\d\d\d\d),(\d\d)/$1\.$2/g;
 
   ## Check external plugins
   $text = CkExtPlugins( 'ParseLink', \$text, undef ) if %plugins;
@@ -5113,6 +5113,7 @@ sub Input
                      equipments   => 'equipments_view',
                      contacts     => 'contacts_view',
                      contracts    => 'contracts_view',
+                     gare         => 'gare_view',
                      fax_received => 'fax_received_view',
                      fax_sent     => 'fax_sent_view',
                      letters      => 'letters_view',
@@ -5151,7 +5152,7 @@ sub Input
 		fax		letters		nc_ext		e-mail
 		nc_int		opportunities	orders		offers
 		postit		services	todo		users
-		sms		igmsg           binders         event
+		sms		igmsg           binders         event		gare
 	    ) )
      {
       my $value = "$_?action=proto&amp;contactid=$on{contactid}";
@@ -7883,6 +7884,7 @@ sub MkLastNum
 		   orders	=> [ 9,		'id',	'yes'],
 		   email_msgs	=> [ 'E',	'pid',	''   ],
 		   binders      => [ 'F',       'id',   ''   ],
+		   gare      => [ 'G',       'id',   'yes'   ],
 		 );
 
   my $cid = DbQuery( query => "SELECT $doc_info{$table}[1] ".
@@ -7989,6 +7991,8 @@ sub RelatedTo
          $lang{contract} ],
         ["offers?action=proto&amp;note1=$id&amp;contactid=$contactid",
          $lang{offer} ],
+        ["gare?action=proto&amp;note1=$id&amp;contactid=$contactid",
+         $lang{gare} ],
         ["nc_int?action=proto&amp;docref=$id&amp;contactid=$contactid",
          $lang{nc_int} ],
         ["nc_ext?action=proto&amp;docref=$id&amp;contactid=$contactid",
@@ -8041,6 +8045,10 @@ sub RelatedTo
 	  "SELECT id, contactname, 'offers', issue, '', expire,".
 	  " owner, note1, note, expire-current_date ".
 	  "FROM offers where note1~*'$id' or note~*'$id' ".
+	  "UNION ".
+	  "SELECT id, contactname, 'gare', issue, '', expire,".
+	  " owner, note1, note, expire-current_date ".
+	  "FROM gare where note1~*'$id' or note~*'$id' ".
 	  "UNION ".
 	  "SELECT id, contactname, 'nc_int', issue, '',".
 	  " '$tv{empty_date}', owner, note, '', 0 ".
@@ -8666,6 +8674,7 @@ sub LastDocuments
      nc_ext	  => ['mime_mini_document.png', $lang{ncext}],
      nc_int	  => ['mime_mini_document.png', $lang{ncint}],
      offers	  => ['mime_mini_offer.png',    $lang{offer}],
+     gare	  => ['mime_mini_offer.png',    $lang{gare}],
      orders	  => ['mime_mini_order.png',    $lang{order}],
      binders      => ['mime_mini_folder.png',   $lang{binder}],
      equipments   => ['equipments.png',
@@ -8807,8 +8816,10 @@ sub ProtocolToDocType
   my $doc_type  = $protocol =~ /\d/
                 ? (qw(	undef 		contracts	offers
 			nc_int		nc_ext		letters
-			fax_sent	fax_received	archive
+			fax_sent	fax_received	archive 
 			orders))[$protocol]
+			          : $protocol eq 'G'
+			          ? 'gare'
                 : $protocol eq 'E'
                 ? 'email'
                 : $protocol eq 'F'
