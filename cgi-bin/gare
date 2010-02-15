@@ -475,7 +475,7 @@ sub proto
   Input(    type      => 'contactfinder',
             validate  => { mandatory => 'true' },
             extraselection=>1,
-            show      => $lang{receiver} );
+            show      => 'Stazione appaltante' );
 
   Input(    type      => 'select',
             show      => $lang{category},
@@ -497,9 +497,16 @@ sub proto
                            mandatory => 'true' },
             value     => $tv{today},
             show      => $lang{issue} );
+            
+  Input(    type      => 'date',
+	          name      => 'date_prequalify',
+            validate  => { onerror   => $lang{Err_due_date},
+                           mandatory => 'false' },
+            value     => $tv{end_year},
+            show      => 'Scadenza prequalifica');
 
   Input(    type      => 'date',
-	    name      => 'expire',
+	          name      => 'expire',
             validate  => { onerror   => $lang{Err_due_date},
                            mandatory => 'false' },
             value     => $tv{end_year},
