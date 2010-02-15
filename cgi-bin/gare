@@ -93,8 +93,8 @@ sub default_action
 	     : "$row[8]$row[9]$row[10]" =~ /R/   ? 'red'
 	     : 'orange';
 
-#    TaskListItem( [ ParseLink($row[0]) ],
-    TaskListItem( [ "<a href='/cgi-bin/gare?action=docview&id=$row[0]'>$row[0]</a>" ],
+    TaskListItem(
+                  [ ParseLink($row[0]) ],
                   [ $row[2] ],
                   [ $row[11] ],
                   [ MkLink($row[4]) ],
@@ -446,7 +446,7 @@ sub proto
           );
 
   Input(    type      => 'text',
-            validate  => { pattern   => '^(2\d\d\d\d\d.\d\d)*$',
+            validate  => { pattern   => '^(G\d\d\d\d\d.\d\d)*$',
                            onerror   => $lang{Err_protocol} },
             show      => $lang{protocol_number},
             readonly  => $doc_status == -1 ? 0 : 1,

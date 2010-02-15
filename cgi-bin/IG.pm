@@ -1610,7 +1610,7 @@ sub _protocol_to_link
                                 link   => "$protocol,$pyear" );
      }
    }
-  elsif ( $idcode =~ /[F123456789]/ )
+  elsif ( $idcode =~ /[FG123456789]/ )
    {
     my $doc_type = ProtocolToDocType( $idcode );
 
@@ -1641,7 +1641,7 @@ sub DirectLink
 
   my ( $idcode,
        $protocol,
-       $p_year )    = $protocol_id =~ /(([123456789])\d{5})\.(\d\d)/;
+       $p_year )    = $protocol_id =~ /(([G123456789])\d{5})\.(\d\d)/;
 
   my ( $file_name,
        $file_dir,
@@ -1678,7 +1678,7 @@ sub WebDavLink
 
   my ( $idcode,
        $protocol,
-       $p_year )    = $protocol_id =~ /(([123456789])\d{5})\.(\d\d)/;
+       $p_year )    = $protocol_id =~ /(([G123456789])\d{5})\.(\d\d)/;
 
   my ( $file_name,
        $file_dir,
