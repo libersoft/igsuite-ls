@@ -470,8 +470,6 @@ sub proto
             show      => $lang{rif},
             name      => 'owner' );
 
-  Input(    type      => 'sendmode');
-
   Input(    type      => 'contactfinder',
             validate  => { mandatory => 'true' },
             extraselection=>1,
