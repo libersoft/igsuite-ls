@@ -59,21 +59,23 @@ sub default_action
 
   TaskListMenu
    (
-    [$lang{number},		  	"order=id$base_link"],
-    [$lang{receiver},			"order=contactname$base_link"],
+    [$lang{number},		      	  "order=id$base_link"],
+    ['Stazione appaltante',			"order=contactname$base_link"],
     [Img(src=>"$IG::img_url/user.gif"),	"order=owner$base_link"],
-    [$lang{notes},		  	"order=note1$base_link"],
-    [$lang{result},		  	"order=note$base_link"],
+    ['Oggetto Appalto',		  	  "order=subject$base_link"],
+    ['Importo appalto',		      "order=amount$base_link"],
     ['',				''],
-    [$lang{issue},		  	"order=issue$base_link"],
-    [$lang{due_date},			"order=expire$base_link"],
+    [$lang{issue},		  	      "order=issue$base_link"],
+    [$lang{due_date},			      "order=expire$base_link"],    
+    ['Avanzamento',			        "order=progress_status$base_link"],
     [],
    );
 
   DbQuery( "SELECT gare.id, gare.issue, gare.contactname,".
            " gare.owner, gare.note1, gare.note, gare.category,".
            " gare.expire, gare.flag1, gare.flag2, gare.flag3,".
-           " users.initial ".
+           " users.initial, ".
+           " gare.subject, gare.description, gare.amount, gare.progress_status ".
            "FROM gare ".
            "LEFT JOIN users ON gare.owner=users.login ".
            "WHERE $query" );
@@ -97,11 +99,14 @@ sub default_action
                   [ $row[11] ],
                   [ MkLink($row[4]) ],
                   [ MkLink(lc($row[5])) ],
-                  [ $row[6] ],
-                  [ $row[1],
+                  [ $row[12] ],
+                  [ $row[13],
                     '',
                     'nowrap' ],
                   [ $row[7],
+                    '',
+                    'nowrap'],
+                  [ $row[15],
                     '',
                     'nowrap'],
                   [ Img( src   => "$IG::img_url/${icon}.gif",
@@ -518,7 +523,7 @@ sub proto
             show      => 'Descrizione attivit&agrave;',
             style     => 'width: 350px',
             name      => 'description',
-            size      => '255' );           
+            size      => '255' );
             
   Input(    type      => 'select',
             show      => 'Criterio di aggiudicazione',
