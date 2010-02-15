@@ -596,12 +596,6 @@ sub proto
             maxlen    => 50,
             show      => $lang{archive_position});
 
-  Input(    type      => 'text',
-            show      => $lang{result},
-            style     => 'width: 350px',
-            name      => 'note',
-            size      => '50' );
-
   Input(    type      => 'textarea',
             show      => $lang{notes},
             style     => 'width:350px; height:60px;',
