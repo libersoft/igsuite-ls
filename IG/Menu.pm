@@ -86,7 +86,7 @@ sub MkMenu
       [ 'Agenda',
 	'calendar',
 	'mainf' ],
-      [ 'Commesse',
+      [ 'Attivit&agrave;',
 	'todo',
 	'mainf' ],
       [ 'Fax',
