@@ -709,8 +709,8 @@ gare=>[
 	  
   { name=>'insurance_expiration',
 	  label=>'insurance_expiration',
-	  itype=>'text',
-	  type=>'varchar(255)',},
+	  itype=>'date',
+	  type=>'date',},
 	  
   { name=>'insurance_amount',
 	  label=>'insurance_amount',

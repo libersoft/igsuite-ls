@@ -574,7 +574,7 @@ sub proto
             name      => 'insurance' );
             
   Input(    name      => 'insurance_expiration',
-            type      => 'text',
+            type      => 'date',
             style     => 'width:350;',
             maxlen    => 50,
             show      => 'Scadenza polizza');  
