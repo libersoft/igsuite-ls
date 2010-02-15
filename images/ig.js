@@ -205,7 +205,7 @@ function getSize()
 window.onerror = tellerror;
 function tellerror(msg, url, linenumber)
  {
-  alert('Error message=['+msg+'] URL=['+url+'] Line Number=['+linenumber+']');
+  //alert('Error message=['+msg+'] URL=['+url+'] Line Number=['+linenumber+']');
   return true;
  }
 
