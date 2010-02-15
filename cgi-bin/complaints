@@ -405,7 +405,7 @@ sub findshow
 			data       => [(
 				        			['id',    $lang{with_protocol}],
 							        ['description', $lang{with_description}],
-							        ['quality_system', $lang{with_quality_system}],
+							        ['managementsystem', $lang{with_managementsystem}],
 						        )]
 						 ),
 
@@ -451,8 +451,8 @@ sub findexec
    { $query = "documentation.id ~* '$in{keytofind}'"; }
   elsif ($on{method} eq 'description')
    { $query = "documentation.description ~* '$in{keytofind}'"; }
-  elsif ($on{method} eq 'quality_system')
-   { $query = "documentation.quality_system ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'managementsystem')
+   { $query = "documentation.managementsystem ~* '$in{keytofind}'"; }
  
 
   my $counter = 0;
@@ -465,10 +465,10 @@ sub findexec
     [$lang{function}],
     [$lang{pages}],
     [$lang{date}],
-    [$lang{quality_system}],
+    [$lang{managementsystem}],
    );
 
-  DbQuery( "SELECT id, issueid, revisionid, description, function, pages, issue, quality_system ".
+  DbQuery( "SELECT id, issueid, revisionid, description, function, pages, issue, managementsystem ".
            "FROM documentation ".
            "WHERE publishstatus='S' and approvalstatus ='A' and $query ".
            "ORDER BY issueid desc, id desc" );

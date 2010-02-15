@@ -123,9 +123,9 @@ sub proto
 		name=>'pages',
 		size=>2);
 		
-  Input (	show=>$lang{quality_system},
+  Input (	show=>$lang{managementsystem},
 		type=>'text',
-		name=>'quality_system',
+		name=>'managementsystem',
 		size=>25,
 		maxlen=>25);
 
@@ -167,7 +167,7 @@ sub protoagg
 		     "INSERT INTO documentation ".
 		     "VALUES ('$in{id}', '$in{description}',".
 		     " '$in{function}', $in{pages}, $in{issueid},".
-		     " $in{revisionid}, '$in{issue}', 'N', 'B', '$in{quality_system}','$in{submitter}')"
+		     " $in{revisionid}, '$in{issue}', 'N', 'B', '$in{managementsystem}','$in{submitter}')"
 		   )] );
 
   LogD('', 'documentation', 'insert', "$on{id}_$on{revisionid}_$on{issueid}");
@@ -204,7 +204,7 @@ sub protomodi
 	$on{issue},
 	$on{publishstatus},
 	$on{approvalstatus},
-	$on{quality_system},
+	$on{managementsystem},
   $on{submitter},
 	)	= FetchRow();
 
@@ -288,7 +288,7 @@ sub default_action
 	[$lang{function}],
 	[$lang{pages}],
 	[$lang{date}],
-  [$lang{quality_system}],
+  [$lang{managementsystem}],
 		 );
 
   while (my @row = FetchRow())
@@ -337,7 +337,7 @@ sub publishmng
 	[$lang{function}],
 	[$lang{pages}],
 	[$lang{date}],
-	[$lang{quality_system}],
+	[$lang{managementsystem}],
 	["Pubb."]
 		 );
 
@@ -390,7 +390,7 @@ sub draftsmng
 	[$lang{pages}],
 	[$lang{date}],
 	[$lang{status}],
-	[$lang{quality_system}],
+	[$lang{managementsystem}],
   ["Autore"],
 		);
 
@@ -476,7 +476,7 @@ sub findshow
 			data       => [(
 				        			['id',    $lang{with_protocol}],
 							        ['description', $lang{with_description}],
-							        ['quality_system', $lang{with_quality_system}],
+							        ['managementsystem', $lang{with_managementsystem}],
 						        )]
 						 ),
 
@@ -522,8 +522,8 @@ sub findexec
    { $query = "documentation.id ~* '$in{keytofind}'"; }
   elsif ($on{method} eq 'description')
    { $query = "documentation.description ~* '$in{keytofind}'"; }
-  elsif ($on{method} eq 'quality_system')
-   { $query = "documentation.quality_system ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'managementsystem')
+   { $query = "documentation.managementsystem ~* '$in{keytofind}'"; }
  
 
   my $counter = 0;
@@ -536,10 +536,10 @@ sub findexec
     [$lang{function}],
     [$lang{pages}],
     [$lang{date}],
-    [$lang{quality_system}],
+    [$lang{managementsystem}],
    );
 
-  DbQuery( "SELECT id, issueid, revisionid, description, function, pages, issue, quality_system ".
+  DbQuery( "SELECT id, issueid, revisionid, description, function, pages, issue, managementsystem ".
            "FROM documentation ".
            "WHERE publishstatus='S' and approvalstatus ='A' and $query ".
            "ORDER BY issueid desc, id desc" );
