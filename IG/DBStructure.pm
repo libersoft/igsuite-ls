@@ -660,17 +660,17 @@ gare=>[
 	{ name=>'award_type',
 	  label=>'award_type',
 	  itype=>'text',
-	  type=>'varchar(1)',},
+	  type=>'varchar(2)',},
 
 	{ name=>'procedure_type',
 	  label=>'award_type',
 	  itype=>'text',
-	  type=>'varchar(1)',},
+	  type=>'varchar(2)',},
 	  
 	{ name=>'progress_status',
 	  label=>'progress_status',
 	  itype=>'text',
-	  type=>'varchar(1)',},
+	  type=>'varchar(2)',},
 	  
 	{ name=>'date_prequalify',
 	  label=>'date_prequalify',

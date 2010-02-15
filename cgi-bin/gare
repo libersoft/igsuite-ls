@@ -64,11 +64,10 @@ sub default_action
     [Img(src=>"$IG::img_url/user.gif"),	"order=owner$base_link"],
     ['Oggetto Appalto',		  	  "order=subject$base_link"],
     ['Importo appalto',		      "order=amount$base_link"],
-    ['',				''],
     [$lang{issue},		  	      "order=issue$base_link"],
     [$lang{due_date},			      "order=expire$base_link"],    
     ['Avanzamento',			        "order=progress_status$base_link"],
-    [],
+    ['Rev'],
    );
 
   DbQuery( "SELECT gare.id, gare.issue, gare.contactname,".
@@ -97,16 +96,15 @@ sub default_action
                   [ ParseLink($row[0]) ],
                   [ $row[2] ],
                   [ $row[11] ],
-                  [ MkLink($row[4]) ],
-                  [ MkLink(lc($row[5])) ],
-                  [ $row[12] ],
-                  [ $row[13],
+                  [ $row[12] ], # oggetto
+                  [ $row[13] ], # descrizione
+                  [ $row[1],   # emissione
                     '',
                     'nowrap' ],
-                  [ $row[7],
+                  [ $row[7],    # scadenza
                     '',
                     'nowrap'],
-                  [ $row[15],
+                  [ $IG::gare_progress_status{$row[15]},   # avanzamento
                     '',
                     'nowrap'],
                   [ Img( src   => "$IG::img_url/${icon}.gif",
@@ -676,7 +674,22 @@ sub protomodi
 	$on{flag3},
 	$on{contactid},
 	$on{npa},
-	$on{amount}	) = FetchRow();
+	$on{amount},
+	$on{subject},
+	$on{description},
+	$on{award_type},
+	$on{procedure_type},
+	$on{progress_status},
+	$on{date_prequalify},
+	$on{date_call},
+	$on{duration},
+	$on{ranking},
+  $on{price_offered},
+  $on{price_offered_win},
+  $on{insurance},
+  $on{insurance_expiration},
+  $on{insurance_amount}
+	  ) = FetchRow();
 
   proto();
  }
@@ -1025,7 +1038,7 @@ sub findexec
     $query = '1=0';
     push @IG::errmsg, $lang{Err_find};
    }
-  elsif ($on{method} eq 'id' || $on{keytofind} =~ /2\d\d\d\d\d\.\d\d/)
+  elsif ($on{method} eq 'id' || $on{keytofind} =~ /G\d\d\d\d\d\.\d\d/)
    { $query = "gare.id ~* '$in{keytofind}'"; }
   elsif ($on{method} eq 'from')
    { $query = "gare.contactname ~* '$in{keytofind}'"; }
