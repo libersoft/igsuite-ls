@@ -2927,7 +2927,7 @@ sub default_action
     summary();
     return;
    } 
-  my $title = "$IG::soc_name - IG $IG::VERSION";
+  my $title = "$IG::soc_name - organizza.info $IG::VERSION";
    
   my $noframes = "IGSuite $IG::VERSION<br>".
 		 "Attention! this application need a browser ".
