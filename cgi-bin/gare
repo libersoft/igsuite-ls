@@ -65,6 +65,7 @@ sub default_action
     ['Oggetto Appalto',		  	  "order=subject$base_link"],
     ['Importo appalto',		      "order=amount$base_link"],
     [$lang{issue},		  	      "order=issue$base_link"],
+    ['Prequalifica',			      "order=date_prequalify$base_link"],    
     [$lang{due_date},			      "order=expire$base_link"],    
     ['Avanzamento',			        "order=progress_status$base_link"],
     ['Rev'],
@@ -74,7 +75,8 @@ sub default_action
            " gare.owner, gare.note1, gare.note, gare.category,".
            " gare.expire, gare.flag1, gare.flag2, gare.flag3,".
            " users.initial, ".
-           " gare.subject, gare.description, gare.amount, gare.progress_status ".
+           " gare.subject, gare.description, gare.amount, gare.progress_status, ".
+           " gare.date_prequalify ".
            "FROM gare ".
            "LEFT JOIN users ON gare.owner=users.login ".
            "WHERE $query" );
@@ -97,10 +99,13 @@ sub default_action
                   [ $row[2] ],
                   [ $row[11] ],
                   [ $row[12] ], # oggetto
-                  [ $row[13] ], # descrizione
+                  [ $row[14] ], # importo
                   [ $row[1],   # emissione
                     '',
                     'nowrap' ],
+                  [ $row[16],    # scadenza prequalifica
+                    '',
+                    'nowrap'],
                   [ $row[7],    # scadenza
                     '',
                     'nowrap'],
