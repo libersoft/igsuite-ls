@@ -6,13 +6,13 @@
    (
 completed_todos         =>'Completati',
 in_progress_todos       =>'In corso',
-new_task		=>'Aggiungi commessa',
+new_task		=>'Aggiungi attivit&agrave;',
 duration		=>'Durata',
-backto_project		=>'Torna al progetto',
+backto_project		=>'Torna all\'attivit&agrave;',
 to_start		=>'Da iniziare',
 delete_participant	=>'Cancella partecipante',
-delete_project		=>'Cancella intero progetto',
-todo_list		=>'Lista Commesse',
+delete_project		=>'Cancella completamente attivit&agrave;',
+todo_list		=>'Lista attivit&agrave;',
    ));
 
 1;
