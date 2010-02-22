@@ -62,7 +62,7 @@ sub default_action
     [Img(src=>"$IG::img_url/user.gif"),	"order=owner$base_link"],
     [$lang{notes},			"order=note1$base_link"],
     [$lang{result},			"order=note$base_link"],
-    ['',				''],
+    ['Categoria',				"order=category$base_link"],
     [$lang{issue},			"order=issue$base_link"],
     [$lang{due_date},			"order=expire$base_link"],
     [],
@@ -93,8 +93,8 @@ sub default_action
                   [ $row[2] ],
                   [ $row[11] ],
                   [ MkLink($row[4]) ],
-                  [ MkLink(lc($row[5])) ],
-                  [ $row[6] ],
+                  [ $IG::offers_progress_status{$row[5]} ],
+                  [ $IG::offers_category{$row[6]} ],
                   [ $row[1],
                     '',
                     'nowrap' ],
@@ -165,27 +165,38 @@ sub docview
 			      "action=showrecord&amp;".
 			      "contactid=$row[14]\">".
 			       "$row[14] $row[2]</a>"],
+			       
 		  [ $lang{referring},
 		    IG::UsrInf('name',$row[4]) ],
+		    
                   [ $lang{category},
 		    $IG::offers_category{$row[6]} ],
+		    
                   [ $lang{issue},
                     $row[1]],
+                    
  	          [ $lang{document_integrity},
 		    IG::CkSign( id    => $row[0],
 			        owner => $row[4])],
+			        
                   [ $lang{due_date},
                     $row[5] ],
+                    
 		  [ $lang{result},
-                    $row[3] ],
+                    $IG::offers_progress_status{$row[3]} ],
+                    
                   [ $lang{days_notice},
                     $row[7] ],
+                    
                   [ $lang{archive_position},
                     $row[15] ],
+                    
                   [ $lang{amount},
                     IG::Currency($row[16]) ],
+                    
                   [ $lang{notes},
 		    $row[10] ],
+		    
                 )] );
 
   ## Related Documents
@@ -516,16 +527,17 @@ sub proto
             maxlen    => 50,
             show      => $lang{archive_position});
 
-  Input(    type      => 'text',
-            show      => $lang{result},
-            style     => 'width: 350px',
+  Input(    type      => 'select',
+            show      => 'Avanzamento',
+            validate  => { mandatory => 'true' },
+            zerovalue => 'true',
             name      => 'note',
-            size      => '50' );
+            data      => \%IG::offerte_progress_status );
 
   Input(    type      => 'textarea',
             show      => $lang{notes},
             style     => 'width:350px; height:60px;',
-            name      => 'note1' );
+            name      => 'note1' );     
 
   Input(    type      => 'submit',
             name      => 'submit',
@@ -665,7 +677,7 @@ sub stats
     DbQuery("SELECT owner, count(*) FROM offers ".
 	    "where issue>='$tv{start_year}'".
 	    " and issue<='$tv{end_year}'".
-	    " and (note='non accettata' or note='NON ACCETTATA' or note='')".
+	    " and (note='RF' or note='')".
 	    " and owner='$_' group by owner");
 
     my @row = FetchRow();
