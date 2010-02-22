@@ -474,12 +474,12 @@ sub proto
             size      => 50,
             maxlen    => 255 );
 
-  Input(    type      => 'select',
-            show      => $lang{category},
-            validate  => { mandatory => 'true' },
-            zerovalue => 'true',
-            name      => 'category',
-            data      => \%IG::gare_category );
+#  Input(    type      => 'select',
+#            show      => $lang{category},
+#            validate  => { mandatory => 'true' },
+#            zerovalue => 'true',
+#            name      => 'category',
+#            data      => \%IG::gare_category );
 
   Input(    type      => 'text',
             name      => 'days',
