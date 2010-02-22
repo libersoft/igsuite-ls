@@ -571,4 +571,39 @@ zip_document            =>'Zip the document',
 		AP=>'Prices update'
 	     );
 
+%gare_category = (
+    GA=>'Gara di Appalto',
+    AF=>'Albo Fornitore',
+       );
+       
+# TODO Criterio di aggiudicazione
+%gare_award_type = (
+    PR=>'Prezzo pi&ugrave; basso',
+    EC=>'Offerta economicamente pi&ugrave; vantaggiosa'
+    );
+    
+# TODO Tipo procedura
+%gare_procedure_type = (
+    AP=>'Aperta',
+    RI=>'Ristretta',
+    RA=>'Ristretta accellerata',
+    NE=>'Negoziata'
+    );
+    
+# TODO Stato di avanzamento
+%gare_progress_status = (
+    IC=>'In corso',
+    AR=>'Archiviata',
+    SO=>'Sospesa',
+    VI=>'Vinta',
+    PE=>'Persa'
+    );
+
+# TODO Stato di avanzamento offerte
+%offers_progress_status = (
+    IA=>'In Attesa',
+    AC=>'Accettata',
+    RF=>'Rifiutata'
+);
+
 1;

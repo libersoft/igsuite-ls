@@ -596,6 +596,12 @@ zip_document            =>'Comprimi il documento',
     SO=>'Sospesa',
     VI=>'Vinta',
     PE=>'Persa'
-    );    
+    );
+
+%offers_progress_status = (
+    IA=>'In Attesa',
+    AC=>'Accettata',
+    RF=>'Rifiutata'
+);
 
 1;
