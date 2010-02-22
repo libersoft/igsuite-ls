@@ -1267,7 +1267,7 @@ sub storecontact
                  "$sendfax_obj.cover.checked = true; "
               if $on{subcontactid} ne $on{contactid};
                 
-      $onload .= "$sendfax_obj.sendbyemail.checked = true; " if $email;
+      $onload .= "$sendfax_obj.sendbyemail.checked = false; " if $email;
       $onload .= "$sendfax_obj.sendbyfax.checked = true; " if $fax;
      }
    }
