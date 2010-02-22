@@ -171,13 +171,34 @@ sub docview
 			       
 		  [ $lang{referring},           		  IG::UsrInf('name',$row[4]) ],
       #[ $lang{category},	                  $IG::gare_category{$row[6]} ],
+      
       [ 'Oggetto',                        $row[17]],
       [ $lang{issue},                     $row[1] ],
-      [ $lang{amount},                    IG::Currency($row[16]) ],
+      
+      [ 'Descrizione',                    $row[18]],
       [ 'Scadenza preq.',                 $row[22]],
+      
  		  [ 'Stato avanz.',                   $IG::gare_progress_status{$row[21]}],   
       [ $lang{due_date},                  $row[5] ],
+      
+      [ $lang{amount},                    IG::Currency($row[16]) ],
+      [ 'Criterio agg.',                  $row[19]],
+      
+      ['Durata',                          $row[24]],
+      ['Tipo proc.',                      $row[20]],
+      
+      ['Posizione grad.',                 $row[25]],
+      ['Prezzo/sconto offerto',           $row[26]],
+      
+      ['',''],
+      ['Prezzo/sconto offerto v.',        $row[27]],
+      
+      ['Polizza',                         $row[28]],
+      ['Scad. Polizza',                   $row[29]],
+      
+      ['Importo Polizza',                 $row[30]],
       [ $lang{document_reference},        MkLink($row[31])],
+      
       [ $lang{notes},               		  $row[10]],
 
        )] );
