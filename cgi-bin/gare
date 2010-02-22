@@ -637,7 +637,7 @@ sub protoagg
 		     " '$in{subject}', '$in{description}', '$in{award_type}', '$in{procedure_type}', ".
 		     " '$in{progress_status}', '$in{date_prequalify}', '$in{date_call}', '$in{duration}', ".
 		     " '$in{ranking}', '$in{price_offered}', '$in{price_offered_win}', '$in{insurance}', ".
-		     " '$in{insurance_expiration}', '$in{insurance_amount}', $in{docref} ".
+		     " '$in{insurance_expiration}', '$in{insurance_amount}', '$in{docref}' ".
 		     
 		     ")",
 
