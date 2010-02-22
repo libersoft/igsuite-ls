@@ -38,7 +38,7 @@ require Exporter;
 	archive			=> [ 11,'id;issue'],
 	letters			=> [ 9,	'id;issue'],
 	offers			=> [ 16,'id;issue'],
-  gare			=> [ 30,'id;issue'],
+  gare			=> [ 31,'id;issue'],
 	orders			=> [ 10,'id;issue'],
 	fax_sent		=> [ 10,'id;issue'],
 	fax_received		=> [ 10,'id;issue'],
@@ -603,7 +603,7 @@ gare=>[
 
 	{ name=>'expire',
 	  label=>'due_date',
-	  itype=>'date',
+	  itype=>'date',    # 5
 	  type=>'date',},		#scadenza
 
 	{ name=>'category',
@@ -640,7 +640,7 @@ gare=>[
 	{ name=>'npa',
 	  label=>'archive_position',
 	  itype=>'text',
-	  type=>'varchar(50)',},
+	  type=>'varchar(50)',}, #15
 
 	{ name=>'amount',
 	  label=>'amount',
@@ -650,7 +650,7 @@ gare=>[
 	{ name=>'subject',
 	  label=>'subject',
 	  itype=>'text',
-	  type=>'varchar(100)',},
+	  type=>'varchar(100)',}, #17
 	  
 	{ name=>'description',
 	  label=>'description',
@@ -670,12 +670,12 @@ gare=>[
 	{ name=>'progress_status',
 	  label=>'progress_status',
 	  itype=>'text',
-	  type=>'varchar(2)',},
+	  type=>'varchar(2)',},     #21
 	  
 	{ name=>'date_prequalify',
 	  label=>'date_prequalify',
 	  itype=>'date',
-	  type=>'date',},
+	  type=>'date',},           #22
 	  
 	{ name=>'date_call',
 	  label=>'date_call',
@@ -690,7 +690,7 @@ gare=>[
 	{ name=>'ranking',
 	  label=>'ranking',
 	  itype=>'text',
-	  type=>'varchar(5)',},
+	  type=>'varchar(5)',},     #25
 	  
 	{ name=>'price_offered',
 	  label=>'price_offered',
@@ -716,6 +716,11 @@ gare=>[
 	  label=>'insurance_amount',
 	  itype=>'text',
 	  type=>'varchar(255)',},
+	  
+	{ name=>'docref',
+	  label=>'document_reference',
+	  itype=>'text',
+	  type=>'varchar(255)',},	
 	],
 
 

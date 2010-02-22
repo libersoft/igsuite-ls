@@ -169,30 +169,18 @@ sub docview
 			      "contactid=$row[14]\">".
 			       "$row[14] $row[2]</a>"],
 			       
-		  [ $lang{referring},
-		    IG::UsrInf('name',$row[4]) ],
-                  [ $lang{category},
-		    $IG::gare_category{$row[6]} ],
-                  [ $lang{issue},
-                    $row[1]],
-                    
- 	          [ $lang{document_integrity},
-		    IG::CkSign( id    => $row[0],
-			        owner => $row[4])],
-                  [ $lang{due_date},
-                    $row[5] ],
-                    
-		  [ $lang{result},
-                    $row[3] ],
-                  [ $lang{days_notice},
-                    $row[7] ],
-                  [ $lang{archive_position},
-                    $row[15] ],
-                  [ $lang{amount},
-                    IG::Currency($row[16]) ],
-                  [ $lang{notes},
-		    $row[10] ],
-                )] );
+		  [ $lang{referring},           		  IG::UsrInf('name',$row[4]) ],
+      #[ $lang{category},	                  $IG::gare_category{$row[6]} ],
+      [ 'Oggetto',                        $row[17]],
+      [ $lang{issue},                     $row[1] ],
+      [ $lang{amount},                    IG::Currency($row[16]) ],
+      [ 'Scadenza preq.',                 $row[22]],
+ 		  [ 'Stato avanz.',                   $IG::gare_progress_status{$row[21]}],   
+      [ $lang{due_date},                  $row[5] ],
+      [ $lang{document_reference},        MkLink($row[31])],
+      [ $lang{notes},               		  $row[10]],
+
+       )] );
 
   ## Related Documents
   IG::RelatedTo( $on{id}, $row[14] );
@@ -479,6 +467,12 @@ sub proto
             validate  => { mandatory => 'true' },
             extraselection=>1,
             show      => 'Stazione appaltante' );
+            
+  Input(    show      => $lang{document_reference},
+            name      => 'docref',
+            type      => 'text',
+            size      => 50,
+            maxlen    => 255 );
 
   Input(    type      => 'select',
             show      => $lang{category},
@@ -643,7 +637,7 @@ sub protoagg
 		     " '$in{subject}', '$in{description}', '$in{award_type}', '$in{procedure_type}', ".
 		     " '$in{progress_status}', '$in{date_prequalify}', '$in{date_call}', '$in{duration}', ".
 		     " '$in{ranking}', '$in{price_offered}', '$in{price_offered_win}', '$in{insurance}', ".
-		     " '$in{insurance_expiration}', '$in{insurance_amount}'".
+		     " '$in{insurance_expiration}', '$in{insurance_amount}', $in{docref} ".
 		     
 		     ")",
 
@@ -692,7 +686,8 @@ sub protomodi
   $on{price_offered_win},
   $on{insurance},
   $on{insurance_expiration},
-  $on{insurance_amount}
+  $on{insurance_amount},
+  $on{docref}
 	  ) = FetchRow();
 
   proto();
