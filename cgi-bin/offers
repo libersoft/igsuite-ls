@@ -532,7 +532,7 @@ sub proto
             validate  => { mandatory => 'true' },
             zerovalue => 'true',
             name      => 'note',
-            data      => \%IG::offerte_progress_status );
+            data      => \%IG::offers_progress_status );
 
   Input(    type      => 'textarea',
             show      => $lang{notes},
