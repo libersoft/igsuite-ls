@@ -182,10 +182,10 @@ sub docview
       [ $lang{due_date},                  $row[5] ],
       
       [ $lang{amount},                    IG::Currency($row[16]) ],
-      [ 'Criterio agg.',                  $row[19]],
+      [ 'Criterio agg.',                  $IG::gare_award_type{$row[19]}],
       
       ['Durata',                          $row[24]],
-      ['Tipo proc.',                      $row[20]],
+      ['Tipo proc.',                      $IG::gare_procedure_type{$row[20]}],
       
       ['Posizione grad.',                 $row[25]],
       ['Prezzo/sconto offerto',           $row[26]],
