@@ -1,0 +1,1050 @@
+#! /usr/bin/perl
+# Procedure: albi
+# Last update: 25/05/2009
+#############################################################################
+# IGSuite 4.0.0 - Provides an Office Suite by  simple web interface         #
+# Copyright (C) 2002 Dante Ortolani  [LucaS]                                #
+#                                                                           #
+# This program is free software; you can redistribute it and/or             #
+# modify it under the terms of the GNU General Public License               #
+# as published by the Free Software Foundation; either version 2            #
+# of the License, or (at your option) any later version.                    #
+#                                                                           #
+# This program is distributed in the hope that it will be useful,           #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of            #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             #
+# GNU General Public License for more details.                              #
+#                                                                           #
+# You should have received a copy of the GNU General Public License         #
+# along with this program; if not, write to the Free Software Foundation,   #
+# Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.           #
+#############################################################################
+
+use strict;
+use IG;
+use IG::Utils;
+
+IG::MkEnv(__PACKAGE__);
+
+IG::DTable(
+    reviewlist	      => sub { CheckPrivilege('albi_view') },
+    showreview	      => sub { CheckPrivilege('albi_view') },
+    chflag		        => 1,
+    proto		          => sub { CheckPrivilege('albi_edit') },
+		protoagg	        => sub { CheckPrivilege('albi_edit') },
+		protomodi	        => sub { CheckPrivilege('albi_edit') },
+		stats		          => sub { CheckPrivilege('albi_view') },
+		findshow      	  => sub { CheckPrivilege('albi_view') },
+		findexec	        => sub { CheckPrivilege('albi_view') },
+		delshow		        => sub { CheckPrivilege('albi_edit') },
+		delexec		        => sub { CheckPrivilege('albi_edit') },
+		markasnotaccepted => sub { CheckPrivilege('albi_edit') },
+		docview           => sub { CheckPrivilege('albi_view') },
+		sign		          => sub { CheckPrivilege('albi_view') },
+		default_action	  => sub { CheckPrivilege('albi_view') } );
+		
+
+##############################################################################
+##############################################################################
+sub default_action
+ {
+  my (	$query,
+	$alphabet_selector,
+	$page_selector ) = IG::MkProtocolList(); 
+
+  Header( $page_selector, $alphabet_selector );
+
+  my $base_link = "&amp;alphabet=$on{alphabet}&amp;".
+		  "view=$on{view}";
+
+  TaskListMenu
+   (
+    [$lang{number},		      	  "order=id$base_link"],
+    ['Stazione appaltante',			"order=contactname$base_link"],
+    [Img(src=>"$IG::img_url/user.gif"),	"order=owner$base_link"],
+    ['Settori mer.',		  	    "order=product_sector$base_link"],  
+    [$lang{due_date},			      "order=expire$base_link"],    
+    ['Avanzamento',			        "order=progress_status$base_link"],
+    ['Sett. Merc.',		        "order=vendor_code$base_link"],
+    ['WWW',			                "order=website$base_link"],
+    ['Username',			          "order=web_user$base_link"],
+    ['Rev'],
+   );
+
+  DbQuery( "SELECT albi.id, albi.issue, albi.contactname,".
+           " albi.owner, albi.note,".
+           " albi.expire, albi.flag1, albi.flag2, albi.flag3,".
+           " users.initial,".
+           " albi.progress_status, albi.product_sector, albi.vendor_code,".
+           " albi.website, albi.web_user".
+           " FROM albi ".
+           " LEFT JOIN users ON albi.owner=users.login ".
+           " WHERE $query" );
+
+  while ( my @row = FetchRow() )
+   {
+    ## Due date
+    if ( ! CkDate($row[5]) )
+     { $row[5] = $lang{new_revision}; }
+    else
+     { $row[5] = Blush($row[5]) if IG::CompareDate($row[5]) <= 0; }
+
+    ## Revision status
+    my $icon = "$row[6]$row[7]$row[8]" eq 'VVV' ? 'green'
+	     : "$row[6]$row[7]$row[8]" =~ /R/   ? 'red'
+	     : 'orange';
+
+    TaskListItem(
+                  [ ParseLink($row[0]) ], # protocol
+                  [ $row[2] ],            # contactname
+                  [ $row[3] ],            # owner
+                  [ $row[11] ],           # settori merc.
+                  [ $row[5],              # scadenza
+                    '',
+                    'nowrap'],
+                  [ $IG::albi_progress_status{$row[10]},   # avanzamento
+                    '',
+                    'nowrap'],
+                  [ $row[12] ],     # codice fornitore
+                  [ $row[13] ],     # WWW
+                  [ $row[14] ],     # Username
+                  [ Img( src   => "$IG::img_url/${icon}.gif",
+                         width => 16,
+                         title => $lang{review} ) ]
+                );
+   }
+
+  TaskListFoot();
+  Footer();
+ }
+
+#############################################################################
+#############################################################################
+sub docview
+ {
+  ## Change id if user request next or previous ID
+  $on{id} = IG::SearchProtocolId( direction => $on{change_id_to},
+                                  id        => $on{id} ) if $on{change_id_to};
+
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'r' ) || return;
+  
+  ## Retriew document info
+  DbQuery("SELECT *,expire-current_date ".
+	  "FROM albi WHERE id='".DbQuote($on{id})."'");
+  my @row = FetchRow();
+
+  IG::Warn( $lang{Err_nodocument} ) && return if !$row[0];
+
+  ## adjust some values
+  if ( !(CkDate($row[5])) )
+   { $row[5] = $lang{new_revision}; }
+  else
+   { $row[5] = Blush($row[5]) if $row[17] < 1; }
+
+  $row[10] = MkLink($row[10]); # notes
+
+  ## Revision status
+  my $icon = "$row[8]$row[9]$row[10]" eq 'VVV' ? 'green'
+           : "$row[8]$row[9]$row[10]" =~ /R/   ? 'red'
+           : 'orange';
+
+  ## renders the page
+  Header( undef, undef, $on{id} );
+
+  IG::ShowProtocolInfo
+   ( id     => $row[0],
+     title  => $lang{albi_protocol}.
+               Img( src   => "$IG::img_url/${icon}.gif",
+	            width => 16,
+	            style => 'margin-left:3px; vertical-align:middle',
+	            title => $lang{review} ),
+     fields => [( [ $lang{contact_name},
+		    "<a href=\"contacts?".
+			      "action=showrecord&amp;".
+			      "contactid=$row[11]\">".
+			       "$row[11] $row[2]</a>"],
+			       
+      [ $lang{referring}, IG::UsrInf('name',$row[4]) ],		  
+      [ $lang{issue},             $row[1] ],
+      
+      [ 'Stato avanz.', $IG::albi_progress_status{$row[12]}],   
+      [ $lang{due_date},          $row[5] ],
+      
+      ['Sett. Merc.',             $row[14]],
+      ['WWW',                     $row[15]],
+      
+      ['Username',                $row[16]],
+      ['Password',                $row[17]],
+
+      [ $lang{document_reference}, MkLink($row[13])],
+      
+      [ $lang{notes},             $row[3]],
+
+       )] );
+
+  ## Related Documents
+  IG::RelatedTo( $on{id}, $row[14] );
+
+  TaskFoot(	comments	=> 'yes',
+		commentid	=> $on{id},
+		commentbackurl	=> "action=docview&amp;id=$on{id}" );
+  HtmlFoot();
+  LogD($row[2], 'view', 'albi', $on{id});
+ }
+
+##############################################################################
+##############################################################################
+sub sign
+ {
+  my $sign;
+  ## find owner
+  DbQuery("select owner from albi where id='".DbQuote($on{id})."'");
+  my $owner = FetchRow();
+
+  $sign = IG::Sign(     id     => $on{id},
+                        action => 'update') if $owner eq $auth_user;
+
+  LogD('sign', 'update', 'albi', $on{id}) if $sign;
+  docview();
+ }
+
+############################################################################
+############################################################################
+sub _short_cuts
+ {
+  return IG::QuickCreator().
+         TaskHead( title => $lang{last_documents},
+                   icon  => 2,
+                   width => 180 ).
+         IG::LastDocuments().
+         TaskFoot();
+ }
+ 
+##############################################################################
+##############################################################################
+sub reviewlist
+ {
+  $on{order}	     ||= 'id';
+  $on{sortdirection} ||= $IG::list_order;
+
+  QuoteParams();
+  my $query      = " and owner='$in{flpers}' " if $on{flpers};
+  my $order      = "order by $in{order} $in{sortdirection}" if $on{order};
+
+  ## set a per page view
+  my $base_query = "SELECT COUNT(*) FROM albi ".
+		   "where issue>='$tv{start_year}'".
+		   " and issue <='$tv{end_year}' $query";
+
+  my $base_url   = "albi?".
+		   "action=reviewlist&amp;".
+		   "order=$on{order}&amp;".
+		   "sortdirection=$on{sortdirection}&amp;".
+		   "flpers=$on{flpers}&amp;".
+		   "flacc=$on{flacc}&amp;".
+		   "fltip=$on{fltip}";
+
+  my ( $limit,
+       $offset,
+       $page_selector ) = IG::MkTaskPaging($base_query, $base_url);
+
+  Header( $page_selector );
+  TaskListMenu
+   (
+    [$lang{number},
+     "action=reviewlist&amp;order=id&amp;flpers=$on{flpers}"],
+    [$lang{receiver},
+     "action=reviewlist&amp;order=contatto&amp;flpers=$on{flpers}"],
+    [$lang{issue},
+     "action=reviewlist&amp;order=issue&amp;flpers=$on{flpers}"],
+    [$lang{due_date},
+     "action=reviewlist&amp;order=expire&amp;flpers=$on{flpers}"],
+    [Img(src=>"$IG::img_url/user.gif")],
+    [$lang{commercial_review}],
+    [$lang{technical_review}],
+    [$lang{operating_review}]
+   );
+
+  DbQuery( "SELECT albi.id, albi.issue, albi.contactname,".
+           " albi.note, albi.owner, albi.expire, albi.flag1,".
+           " albi.flag2, albi.flag3, albi.expire-current_date,".
+           " users.initial ".
+           "FROM albi ".
+           "LEFT JOIN users ON albi.owner=users.login ".
+           "WHERE".
+           " albi.issue>='$tv{start_year}'".
+           " and albi.issue<='$tv{end_year}' $query $order ".
+	  "LIMIT $limit OFFSET $offset " );
+
+  while ( my @row = FetchRow() )
+   {
+    ## Due date
+    if ( !CkDate($row[5]) )
+     { $row[5] = $lang{new_revision}; }
+    else
+     { $row[5] = Blush($row[5]) if $row[9] < 1; }
+
+    ## Commercial review
+    my $ima1 = $row[6] eq 'V' ? Img( src=>"$IG::img_url/green.gif")
+             : $row[6] eq 'R' ? Img( src=>"$IG::img_url/red.gif")
+	     :                  Img( src=>"$IG::img_url/orange.gif");
+
+    ## Technical review
+    my $ima2 = $row[7] eq 'V' ? Img( src=>"$IG::img_url/green.gif")
+             : $row[7] eq 'R' ? Img( src=>"$IG::img_url/red.gif")
+	     :                  Img( src=>"$IG::img_url/orange.gif");
+
+    ## Operating review
+    my $ima3 = $row[8] eq 'V' ? Img( src=>"$IG::img_url/green.gif")
+             : $row[8] eq 'R' ? Img( src=>"$IG::img_url/red.gif")
+	     :                  Img( src=>"$IG::img_url/orange.gif");
+
+    TaskListItem(
+	[DirectLink($row[0])],
+	[$row[2]],
+	[$row[1]],
+	[$row[5]],
+	[$row[10],
+	 "albi?action=reviewlist&amp;".
+	        "order=$on{order}&amp;".
+	        "sortdirection=$on{sortdirection}&amp;".
+	        "flpers=$row[4]"],
+	[$ima1,
+	 "albi?action=chflag&amp;".
+	        "id=$row[0]&amp;".
+	        "status=$row[6]&amp;".
+	        "backtoreferer=1&amp;".
+	        "flag=1&amp;".
+	        "pos=$on{pos}",
+	 "align=center"],
+	[$ima2,
+	 "albi?action=chflag&amp;".
+	        "id=$row[0]&amp;".
+	        "status=$row[7]&amp;".
+	        "backtoreferer=1&amp;".
+	        "flag=2&amp;".
+	        "pos=$on{pos}",
+	 "align=center"],
+	[$ima3,
+	 "albi?action=chflag&amp;".
+	        "id=$row[0]&amp;".
+	        "status=$row[8]&amp;".
+	        "backtoreferer=1&amp;".
+	        "flag=3&amp;".
+	        "pos=$on{pos}",
+	 "align=center"]
+		 );
+   }
+
+  TaskListFoot();
+  Footer();
+ }
+
+##############################################################################
+##############################################################################
+sub showreview
+ {
+  HtmlHead();
+
+  DbQuery("SELECT flag1, flag2, flag3 ".
+          "FROM albi where id = '".DbQuote($on{id})."'");
+  my @row = FetchRow();
+
+  ## Commercial review
+  my $ima1 = $row[0] eq 'V' ? "$IG::img_url/green.gif"
+           : $row[0] eq 'R' ? "$IG::img_url/red.gif"
+           :                  "$IG::img_url/orange.gif";
+
+  ## Technical review
+  my $ima2 = $row[1] eq 'V' ? "$IG::img_url/green.gif"
+           : $row[1] eq 'R' ? "$IG::img_url/red.gif"
+           :                  "$IG::img_url/orange.gif";
+
+  ## Operating review
+  my $ima3 = $row[2] eq 'V' ? "$IG::img_url/green.gif"
+           : $row[2] eq 'R' ? "$IG::img_url/red.gif"
+           :                  "$IG::img_url/orange.gif";
+
+  TaskMsg( HTitle( level => 4,
+                   style => 'margin-bottom:20px',
+                   title => "$lang{review}: $on{id}" ).
+          
+           HLayer( intra_space => 15,
+                   layers
+                    => [(
+	              Img( src   => $ima1,
+	                   caption => $lang{commercial_review},
+	                   href  => "albi?action=chflag&amp;".
+	                                  "id=$on{id}&amp;".
+	                                  "status=$row[0]&amp;".
+	                                  "flag=1&amp;".
+	                                  "backtoreferer=1" ),
+
+                      Img( src   => $ima2,
+                           caption => $lang{technical_review},
+                           href  => "albi?action=chflag&amp;".
+                                          "id=$on{id}&amp;".
+                                          "status=$row[1]&amp;".
+                                          "flag=2&amp;".
+                                          "backtoreferer=1" ),
+                                          
+                      Img( src   => $ima3,
+                           caption => $lang{operating_review},
+                           href  => "albi?action=chflag&amp;".
+                                          "id=$on{id}&amp;".
+                                          "status=$row[2]&amp;".
+                                          "flag=3&amp;".
+                                          "backtoreferer=1" ),
+                    )]
+                ),4 );
+
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub proto
+ {
+  ## Check document accessibility
+  my $doc_status = IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' );
+  return if ! $doc_status;
+
+  HtmlHead();
+  TaskHead( title     => $lang{albi_protocol},
+            minwidth  => 500 );
+
+  FormHead( cgiaction => 'protoagg',
+            autofocus => 'false',
+            labelstyle=> 'width:130px',
+            name      => 'proto',
+            onsubmit  => "proto.submit.disabled = 'true';",
+          );
+
+  Input(    type      => 'text',
+            validate  => { pattern   => '^(A\d\d\d\d\d.\d\d)*$',
+                           onerror   => $lang{Err_protocol} },
+            show      => $lang{protocol_number},
+            readonly  => $doc_status == -1 ? 0 : 1,
+            name      => 'id');
+
+  Input(    type      => 'label',
+            show      => 'File',
+            data      => IG::InputDocBox
+                          ( dir => $IG::htdocs_dir . $IG::S .
+                                   $IG::default_lang{albi} . $IG::S .
+                                   $IG::default_lang{templates} . $IG::S)
+       ) if !$on{print};
+
+  ## Only to remember flags status
+  Input(    type      => 'hiddens',
+            data      => { flag  => '',
+			   flag1 => '',
+			   flag2 => '',
+			   flag3 => '' } );
+
+  Input(    type      => 'logins',
+            readonly  => $doc_status == -1 ? 0 : 1,
+            show      => $lang{rif},
+            name      => 'owner' );
+
+  Input(    type      => 'contactfinder',
+            validate  => { mandatory => 'true' },
+            extraselection=>1,
+            show      => 'Stazione appaltante' );
+            
+  Input(    show      => $lang{document_reference},
+            name      => 'docref',
+            type      => 'text',
+            size      => 50,
+            maxlen    => 255 );
+
+  Input(    type      => 'date',
+            name      => 'issue',
+            validate  => { onerror   => $lang{Err_issue},
+                           mandatory => 'true' },
+            value     => $tv{today},
+            show      => $lang{issue} );
+            
+  Input(    type      => 'date',
+	          name      => 'expire',
+            validate  => { onerror   => $lang{Err_due_date},
+                           mandatory => 'false' },
+            value     => $tv{end_year},
+            show      => $lang{due_date});
+
+  Input(    type      => 'text',
+            show      => 'Settori merceologici',
+            style     => 'width: 350px',
+            name      => 'product_sector',
+            size      => '255' );
+            
+  Input(    type      => 'select',
+            show      => 'Stato di avanzamento',
+            validate  => { mandatory => 'true' },
+            zerovalue => 'true',
+            name      => 'progress_status',
+            data      => \%IG::albi_progress_status );
+            
+  Input(    type      => 'text',
+            show      => 'Settori merceologici',
+            style     => 'width: 350px',
+            name      => 'vendor_code',
+            size      => '255' );
+            
+  Input(    type      => 'text',
+            show      => 'Website',
+            style     => 'width: 350px',
+            name      => 'website',
+            size      => '255' );
+            
+  Input(    type      => 'text',
+            show      => 'Username',
+            style     => 'width: 350px',
+            name      => 'web_user',
+            size      => '255' );
+            
+  Input(    type      => 'text',
+            show      => 'Password',
+            style     => 'width: 350px',
+            name      => 'web_pass',
+            size      => '255' );
+            
+  Input(    type      => 'textarea',
+            show      => $lang{notes},
+            style     => 'width:350px; height:60px;',
+            name      => 'note' );
+
+  Input(    type      => 'submit',
+            name      => 'submit',
+            show      => $lang{save_offer} );
+
+  FormFoot();
+  TaskFoot();
+  HtmlFoot();
+  1;
+ }
+
+############################################################################
+############################################################################
+sub protoagg
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  ## Validate Form values
+  push @IG::errmsg, IG::FormValidate();
+  proto() && return if @IG::errmsg;
+
+  ## insert data in db
+  $on{id}     ||= IG::MkLastNum('albi');
+
+  QuoteParams();
+  DbQuery(query =>[( "DELETE FROM albi where id = '$in{id}'",
+
+		     "INSERT INTO albi VALUES ('$in{id}', '$in{issue}',".
+		     " '$in{contactname}', '$in{note}', '$in{owner}',".
+		     " '$in{expire}', '$in{issue}',".
+		     " '$in{flag}', '$in{flag1}','$in{flag2}',".
+		     " '$in{flag3}', '$in{contactid}', '$in{progress_status}',".
+		     " '$in{docref}', '$in{vendor_code}', '$in{website}',".
+		     " '$in{web_user}', '$in{web_pass}'".
+		     ")"
+		   )] );
+
+  LogD('', 'insert', 'albi', $on{id});
+
+  IG::BuildDoc();
+ }
+
+############################################################################
+############################################################################
+sub protomodi
+ {
+  DbQuery("SELECT * FROM albi where id='".DbQuote($on{id})."'");
+    (
+	$on{id},
+	$on{issue},
+	$on{contactname},
+	$on{note},
+	$on{owner},
+	$on{expire},
+	$on{product_sector},
+	$on{flag},
+	$on{flag1},
+	$on{flag2},
+	$on{flag3},
+	$on{contactid},
+	$on{progress_status},
+  $on{docref},
+  $on{vendor_code},
+  $on{website},
+  $on{web_user},
+  $on{web_pass}
+	  ) = FetchRow();
+
+  proto();
+ }
+
+############################################################################
+############################################################################
+sub chflag
+ {
+  if (  ( $on{flag}==1 && CheckPrivilege('contracts_revue_c') )
+      ||
+        ( $on{flag}==2 && CheckPrivilege('contracts_revue_t') )
+      ||
+        ( $on{flag}==3 && CheckPrivilege('contracts_revue_s') ) )
+   {
+    if    ($on{status} eq 'N') { $on{status}='S' }
+    elsif ($on{status} eq 'S') { $on{status}='N' }
+    elsif ($on{status} eq 'V') { $on{status}='R' }
+    elsif ($on{status} eq 'R') { $on{status}=''  }
+    else		       { $on{status}='V' }
+
+    ## insert into db
+    QuoteParams();
+    DbQuery("update albi set flag$in{flag} = '$in{status}' ".
+            "where id='$in{id}'");
+
+    LogD("set flag$on{flag} status to $on{status}",
+         'update',
+         'albi',
+         $on{id} );
+   }
+
+  IG::BackToReferer();
+ }
+
+#############################################################################
+#############################################################################
+sub stats
+ {
+  HtmlHead();
+  TaskHead( title => $lang{albi_stats} );
+
+  $on{month} ||= $tv{month};
+  $on{year}  ||= $tv{year};
+
+  ## stats per user
+  my (%risu, $accper, $nonper, $accett);
+
+  DbQuery("SELECT owner,count(*) FROM albi ".
+	  "where issue>='$tv{start_year}' and issue<='$tv{end_year}' ".
+	  "group by owner");
+  TaskListMenu
+   (
+    [ $lang{referring}    ],
+    [ $lang{total}        ],
+    [ $lang{accepted}     ],
+    [ '%'                 ],
+    [ $lang{not_accepted} ],
+    [ '%'                 ]
+   );
+
+  while ( my @row = FetchRow() )
+   {
+    $risu{$row[0]}[0] = IG::UsrInf('name',$_);
+    $risu{$row[0]}[1] = $row[1];
+   }
+
+  foreach (keys %risu)
+   {
+    DbQuery("SELECT owner, count(*) FROM albi ".
+	    "where issue>='$tv{start_year}'".
+	    " and issue<='$tv{end_year}'".
+	    " and (note='non accettata' or note='NON ACCETTATA' or note='')".
+	    " and owner='$_' group by owner");
+
+    my @row = FetchRow();
+    $accett = $risu{$_}[1] - $row[1];
+    $nonper = int( $row[1] * 100 / $risu{$_}[1] );
+    $accper = 100 - $nonper;
+
+    TaskListItem (
+	[IG::UsrInf('name',$_),	"albi?order=$on{order}&amp;flpers=$row[0]"],
+	[$risu{$_}[1],		'','align=right'],
+	[$accett,		'','align=right'],
+	["$accper %",		'','align=right'],
+	[$row[1],		'','align=right'],
+	["$nonper %",		'','align=right']
+		);
+   }
+  TaskListFoot(3);
+
+
+  ## Draw histograms
+  my ($nums, $desc, $accs, $accn, $tr, $tipo);
+  my (%off_tipo, %off_acc, %albi_by_categories_months, %total_albi_per_month);
+
+  ## Read last 12 months data from database
+  my $start= IG::GetDateByFormat( 1,
+                                  $on{month},
+                                  ($on{year}-1) );
+  my $end  = IG::GetDateByFormat( IG::GetDaysInMonth( $on{month}, $on{year} ),
+                                  $on{month},
+                                  $on{year} );
+
+  my $counter = 0;
+  DbQuery("select category, note, issue from albi ".
+	  "where issue>'$start' and issue<'$end'");
+  while (my @row = FetchRow())
+   {
+    ++$counter;
+    ++$off_tipo{$row[0]};
+    ++$off_acc{$row[0]} if !$row[1] || $row[1]=~ /non accettat/i;
+
+    my ($_day, $_month, $_year ) = IG::GetValuesByDate( $row[2] );
+    ++$albi_by_categories_months{$row[0]}{"$_year$_month"};
+    ++$total_albi_per_month{"$_year$_month"};
+   }
+
+  ## No data to stat
+  if ( $counter < 10 )
+   {
+    push @IG::errmsg, "Error: No data to stat!. You have to protocol some albi";
+    TaskFoot();
+    HtmlFoot();
+    return;
+   }
+
+  ## Make first histogram
+  PrOut "<table><td valign=top>";
+  foreach (sort keys %off_tipo)
+   {
+    $nums .= "$off_tipo{$_},";
+    $accs .= "$off_acc{$_},";
+    $accn .= ($off_tipo{$_}-$off_acc{$_}).",";
+    $desc .= "$_,";
+   }
+
+  chop($nums);chop($desc);chop($accs);
+  IG::MkGraph( title  => $lang{stat_0},
+               width  => 280,
+               height => 200,
+               bgcolor=> $IG::clr{bg_evidence},
+               rows   => "($nums)($accs)($accn)",
+               vars   => $desc );
+
+  ## Make second histogram
+  PrOut "</td><td>";
+  $nums = $desc = '';
+
+  foreach (sort keys %total_albi_per_month)
+   {
+    $nums.="$total_albi_per_month{$_},";
+    $_=substr($_,4,2);
+    $desc.=substr($IG::months{$_}[0],0,3).",";
+   }
+  chop($nums);chop($desc);
+
+  IG::MkGraph( title  => $lang{stat_1},
+               width  => 280,
+               height => 200,
+               bgcolor=> $IG::clr{bg_evidence},
+               rows   => "($nums)",
+               vars   => $desc );
+
+  ## Make others histograms
+  PrOut "</td></tr><td>";
+  foreach $tipo (sort keys %off_tipo)
+   {
+    next if !$tipo;
+    $nums = $desc = '';
+
+    foreach (sort keys %{$albi_by_categories_months{$tipo}})
+     {
+      $nums.="$albi_by_categories_months{$tipo}{$_},";
+      $_=substr($_,4,2);
+      $desc.=substr($IG::months{$_}[0],0,3).",";
+     }
+
+    chop($nums);chop($desc);
+    $tr = $tr ? '' : '</tr>';
+    PrOut "</td>$tr<td valign=top>";
+
+    IG::MkGraph( title  => "$lang{stat_2} $IG::albi_category{$tipo}",
+                 width  => 280,
+                 height => 200,
+                 rows   => "($nums)",
+                 vars   => $desc );
+   }
+
+  PrOut '</table>';
+  TaskFoot();
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub delshow
+ {
+  Header();
+  TaskMsg( $lang{warn_before_delete} . Br(2) .
+  
+	   FormHead( cgiaction => 'delexec',
+		     float     => 'left',
+		     onsubmit  => IG::JsConfirm( $lang{are_you_sure} ) ).
+
+	   Input(    type      => 'select',
+		     name      => 'id',
+                     zerovalue => 'true',
+		     style     => 'width: 350px',
+		     data      => "SELECT id, id, contactname ".
+	                          "FROM albi ".
+			          "WHERE issue>='$tv{start_year}'".
+			          " and issue<='$tv{end_year}'".
+			          ( CheckPrivilege('sys_user_admin')
+			          ? ' '
+			          : " and ( owner='$auth_user' or note='') " ).
+			          "ORDER BY id desc",
+		     show      => $lang{protocol_number}).
+
+	  Input(     type      => 'submit',
+		     show      => $lang{delete} ).
+
+	  FormFoot()
+	  ,2 );
+
+  Footer();
+ }
+
+
+############################################################################
+############################################################################
+sub delexec
+ {
+  ## Check document accessibility
+  IG::CheckResourcePrivileges( id => $on{id}, mode => 'w' ) || return;
+
+  DbQuery("delete from albi where id='".DbQuote($on{id})."'");
+  IG::TrashDoc($on{id});
+
+  LogD('', 'delete', 'albi', $on{id});
+
+  IG::Redirect('albi');
+ }
+
+############################################################################
+############################################################################
+sub findshow
+ {
+  HtmlHead();
+  if ($auth_user ne 'guest')
+   {
+    HLayer
+     ( bottom_space => 0,
+       right_layers
+         =>[(
+	     FormHead( name       => 'findnavi',
+	               method     => 'get',
+		       target     => 'mainf',
+		       autofocus  => 'false',
+                       labelstyle => 'border:0px; width:auto;',
+		       cgiaction  => 'findexec',
+		       float      => 'left' ),
+
+	     Input(    type       => 'findable' ),
+
+	     Input(    type       => 'select',
+		       name       => 'method',
+		       data       =>[( ['from',  $lang{with_header}],
+				       ['id',    $lang{with_protocol}],
+				       ['date',  $lang{with_date}],
+				       ['npa',   $lang{with_npa}],
+				       ['notes', $lang{with_notes}] )]),
+
+	     Input(    type       => 'text',
+		       name       => 'keytofind',
+                       focus      => 'true',
+		       value      => $IG::cookie{lastsearch},
+                       style      => 'width:100px; margin-right: -5px;',
+		       onblur     => "document.cookie='lastsearch=' + escape(this.value)"),
+
+	     Input(    type       => 'image',
+		       name       => $lang{find},
+		       src        => "$IG::img_url/${IG::tema}search.gif",
+		       alt        => $lang{find}).
+		       
+	     FormFoot()
+	   )]
+	 );
+   }
+  HtmlFoot();
+ }
+
+#############################################################################
+#############################################################################
+sub findexec
+ {
+  my $query;
+  my $counter;
+ 
+  if ($on{ajax_request})
+   {
+    HttpHead( expires => '+30s' );
+
+    TaskMsg( Input( type       => 'button',
+                    float      => 'right',
+                    onclick    => "document.location = '".
+                                   "albi?".
+                                        "action=proto&amp;".
+                                        "contactid=$on{contactid}&amp;".
+                                        "backtoreferer=1';",
+                    show       => $lang{new_item},
+                    fieldstyle => 'margin:0px',
+                    style      => 'margin:0px;font-size:10px; height:15px' ).
+
+	     Img( src   => "$IG::img_url/mime_mini_offer.png",
+                  style => 'margin-right:2px',
+                  align => 'absmiddle').
+
+             "<a href=\"albi\">$lang{albi}</a>"
+            ,7);
+   }
+  else
+   {
+    $IG::set_cookie{lastsearch} = $on{keytofind};
+    HtmlHead(	shortcuts => _short_cuts());
+    TaskHead(	title     => $lang{find_albi},
+		width     => '100%');
+    HLayer (
+		MkButton( text => $lang{new_protocol},
+		          link => "albi?action=proto" ),
+
+                MkButton( text => $lang{back_to_protocol},
+                          link => 'albi' ),
+	   );
+
+    TaskMsg("$lang{find_albi} - ".
+            "$lang{find}: <strong>$on{keytofind}</strong>", 4 );
+   }
+
+  ## Build query
+  QuoteParams();
+
+  if ( $on{ajax_request} )
+   { $query = "albi.contactid = '$on{contactid}'"; }
+  elsif (length($on{keytofind}) < 2 )
+   {
+    $query = '1=0';
+    push @IG::errmsg, $lang{Err_find};
+   }
+  elsif ($on{method} eq 'id' || $on{keytofind} =~ /G\d\d\d\d\d\.\d\d/)
+   { $query = "albi.id ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'from')
+   { $query = "albi.contactname ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'npa')
+   { $query = "albi.npa ~* '$in{keytofind}'"; }
+  elsif ($on{method} eq 'date')
+   {
+    $in{keytofind} = CkDate($in{keytofind});
+    $query = "albi.issue = '$in{keytofind}'";
+   }
+  elsif ($on{method} eq 'notes')
+   { $query = "albi.note ~* '$in{keytofind}'"; }
+
+  TaskListMenu(	[$lang{number}],
+		[$on{ajax_request} ? '' : $lang{receiver}],
+		[''],
+		[$lang{issue}],
+		[$lang{due_date}],
+		[$lang{rif}],
+		[$lang{result}],
+		[$lang{notes}],
+              );
+
+  DbQuery( "SELECT albi.id, albi.issue, albi.contactname,".
+           " albi.owner, albi.note, albi.category,".
+           " albi.expire, albi.flag1, albi.flag2, albi.flag3,".
+           " expire-current_date, users.initial ".
+           "FROM albi ".
+           "LEFT JOIN users ON albi.owner=users.login ".
+           "WHERE $query ".
+           "ORDER BY albi.issue desc, albi.id desc" );
+
+  while ( my @row = FetchRow() )
+   {
+    ++$counter;
+
+    if ( !CkDate($row[7]) )
+     { $row[7] = ''; }
+    else
+     { $row[7] = Blush($row[7]) if $row[11] < 1; }
+
+    TaskListItem( [ ParseLink($row[0]) ],
+                  [ $on{ajax_request} ? '' : $row[2] ],
+                  [ $row[6] ],
+                  [ $row[1], '', 'nowrap' ],
+                  [ $row[7], '', 'nowrap' ],
+                  [ $row[12] ],
+                  [ MkLink($row[5]) ],
+                  [ MkLink($row[4]) ],
+                );
+   }
+
+  if ( $on{ajax_request} )
+   {
+    TaskListFoot(7);
+   }
+  else
+   {
+    push @IG::errmsg, $lang{no_items}
+      if !$counter && length($on{keytofind}) > 1;
+    TaskListFoot();     
+    TaskFoot();
+    HtmlFoot();
+    LogD( $IG::query_string, 'search', 'search_albi', undef);
+   }
+ }
+
+#############################################################################
+#############################################################################
+sub Header 
+ {
+  my ( $page_selector, $alphabet_selector, $title) = @_;
+
+  HtmlHead( shortcuts => _short_cuts(),
+            title     => $title || $lang{albi_protocol});
+  TaskHead( title     => $title || $lang{albi_protocol},
+	    width     => '100%' );
+
+  HLayer(
+         MkButton( text => $lang{back_to_list},
+                   link => 'albi',
+                   privilege => $on{action} eq 'docview'),
+
+         MkButton( text => $lang{new_protocol},
+                   link => 'albi?action=proto' ),
+
+         MkButton( text => $lang{delete},
+                   link => 'albi?action=delshow' ),
+
+         MkButton( text => $lang{reports},
+                   link => 'reports?table=albi',
+                   privilege => CheckPrivilege('albi_report') ),
+
+         MkButton( text => $lang{model_mng},
+                   link => 'docmaker?category=albi',
+                   privilege => CheckPrivilege('albi_template') ),
+
+         MkButton( text => $lang{review},
+                   link => $on{action} eq 'docview'
+                        ?  "javascript:winPopUp('albi?action=showreview&id=$on{id}',500,130,'showreview')"
+                        :  'albi?action=reviewlist',
+                   privilege => CheckPrivilege('contracts_revue') ),
+
+         MkButton( text => $lang{albi_stats},
+                   link => 'albi?action=stats' ),
+
+         $page_selector,
+        ) if !$on{print};
+
+  PrOut $alphabet_selector;
+ }
+
+sub Footer
+ { 
+  TaskFoot();
+  HtmlFoot();
+ }

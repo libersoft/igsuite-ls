@@ -337,6 +337,7 @@ number			=>'Numero',
 offer			=>'Offerta',
 offers			=>'Offerte',
 gare  =>'Gare',
+albi  =>'Albi',
 only_protocol		=>'Aggiorna solo il protocollo',
 opened_order		=>'Ordine aperto',
 open_new_window		=>'Apri in una nuova finestra',
@@ -603,5 +604,12 @@ zip_document            =>'Comprimi il documento',
     AC=>'Accettata',
     RF=>'Rifiutata'
 );
+
+%albi_progress_status = (
+    IC=>'In corso',
+    AR=>'Archiviato',
+    SO=>'Sospeso',
+    QU=>'Qualificati',
+    );
 
 1;

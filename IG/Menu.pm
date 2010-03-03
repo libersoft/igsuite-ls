@@ -115,6 +115,7 @@ sub MkMenu
 		[ $lang{contracts},	'contracts',	'mainf'],
 		[ $lang{offers},	'offers',	'mainf'],
 		[ $lang{gare},	'gare',	'mainf'],
+	  [ $lang{albi},	'albi',	'mainf'],
 		[ $lang{nc_int},	'nc_int',	'mainf'],
 		[ $lang{nc_ext},	'nc_ext',	'mainf'],
 		[ "NC Ph",	'nc_ph',	'mainf'],

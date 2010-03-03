@@ -39,6 +39,7 @@ require Exporter;
 	letters			=> [ 9,	'id;issue'],
 	offers			=> [ 16,'id;issue'],
   gare			=> [ 31,'id;issue'],
+  albi			=> [ 18,'id;issue'],
 	orders			=> [ 10,'id;issue'],
 	fax_sent		=> [ 10,'id;issue'],
 	fax_received		=> [ 10,'id;issue'],
@@ -723,6 +724,95 @@ gare=>[
 	  type=>'varchar(255)',},	
 	],
 
+albi=>[
+  ## 0 ID
+	{ name=>'id',
+	  type=>'varchar(15)',},	#numero
+
+	{ name=>'issue',
+	  label=>'issue',
+	  itype=>'date',
+	  type=>'date',},		#data
+
+	{ name=>'contactname',
+	  label=>'contact_name',
+	  itype=>'text',
+	  type=>'varchar(70)',},	#nominativo stazione app.
+
+	{ name=>'note',
+	  label=>'result',
+	  itype=>'text',
+	  type=>'text',},		#note
+
+	{ name=>'owner',
+	  label=>'owner',
+	  itype=>'logins',
+	  type=>'varchar(32)',},		#owner
+
+  ## 5 Scadenza validità
+	{ name=>'expire',
+	  label=>'due_date',
+	  itype=>'date',
+	  type=>'date',},
+
+  ## 6 Settori merceologici
+	{ name=>'product_sector',
+	  itype=>'text',
+	  label=>'product_sector',
+	  type=>'varchar(255)',},
+
+	{ name=>'flag',
+	  type=>'varchar(2)',},		#flag
+
+	{ name=>'flag1',
+	  type=>'varchar(1)',},		#flag1
+
+	{ name=>'flag2',
+	  type=>'varchar(1)',},		#flag2
+
+	{ name=>'flag3',
+	  type=>'varchar(1)',},		#flag3
+
+	{ name=>'contactid',
+	  type=>'varchar(15)',},	#unidest
+	  
+	## 12 Stato di avanzamento
+	{ name=>'progress_status',
+	  label=>'progress_status',
+	  itype=>'text',
+	  type=>'varchar(2)',},     
+	
+	## 13 Rif. documenti  
+	{ name=>'docref',
+	  label=>'document_reference',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	
+	## 14 Codice fornitore  
+	{ name=>'vendor_code',
+	  label=>'vendor_code',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	  
+	## 15 Sito web  
+	{ name=>'website',
+	  label=>'website',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	  
+	## 16 Web nome utente
+	{ name=>'web_user',
+	  label=>'web_user',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	  
+	## 17 Web password  
+	{ name=>'web_pass',
+	  label=>'web_pass',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	  
+	],
 
 orders=>[
 	{ name=>'id',
