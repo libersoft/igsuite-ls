@@ -39,7 +39,7 @@ require Exporter;
 	letters			=> [ 9,	'id;issue'],
 	offers			=> [ 16,'id;issue'],
   gare			=> [ 31,'id;issue'],
-  albi			=> [ 18,'id;issue'],
+  albi			=> [ 19,'id;issue'],
 	orders			=> [ 10,'id;issue'],
 	fax_sent		=> [ 10,'id;issue'],
 	fax_received		=> [ 10,'id;issue'],
@@ -811,6 +811,18 @@ albi=>[
 	  label=>'web_pass',
 	  itype=>'text',
 	  type=>'varchar(255)',},
+	  
+	## 18 Descrizione
+	{ name=>'description',
+	  label=>'description',
+	  itype=>'text',
+	  type=>'varchar(255)',},
+	
+	## 19 Priorità  
+	{ name=>'priority',
+	  label=>'priority',
+	  itype=>'text',
+	  type=>'varchar(3)',},
 	  
 	],
 

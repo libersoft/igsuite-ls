@@ -375,7 +375,7 @@ previous_page		=>'Pagina Precedente',
 price			=>'Prezzo',
 print			=>'Stampa',
 print_version		=>'Visualizza il documento in formato stampabile.',
-priority		=>'Priorita',
+priority		=>'Priorit&agrave;',
 private			=>'Privato',
 privilege_r		=>'Visualizzazione',
 privileges_mng		=>'Gestione permessi',
@@ -610,6 +610,13 @@ zip_document            =>'Comprimi il documento',
     AR=>'Archiviato',
     SO=>'Sospeso',
     QU=>'Qualificati',
+    );
+    
+%priority = (
+    ND=>'Non specificata',
+    LO=>'Bassa',
+    ME=>'Media',
+    HI=>'Alta',
     );
 
 1;
