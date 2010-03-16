@@ -99,7 +99,7 @@ sub default_action
                   [ $row[2] ],
                   [ $row[11] ],
                   [ $row[12] ], # oggetto
-                  [ $row[14] ], # importo
+                  [ IG::Currency($row[14]) ], # importo
                   [ $row[1],   # emissione
                     '',
                     'nowrap' ],
