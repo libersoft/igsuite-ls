@@ -499,7 +499,6 @@ sub proto
             
   Input(    type      => 'select',
             show      => $lang{priority},
-            validate  => { mandatory => 'true' },
             zerovalue => 'true',
             name      => 'priority',
             data      => \%IG::priority );
