@@ -175,6 +175,13 @@ sub proto
             style      => 'width:150px',
             maxlen     => 15 );
 
+  Input(    show       => $lang{id},
+            type       => 'hidden',
+            name       => 'oldid',
+            value       => $on{id},
+            style      => 'width:150px',
+            maxlen     => 15 );
+
   Input(    show       => $lang{type},
 	    validate   => { mandatory => 'true',},
             readonly   => $resource_status == -1 ? 0 : 1,
@@ -603,7 +610,7 @@ sub protoagg
   $on{services} ||= 1; ## not available to services
 
   QuoteParams();
-  DbQuery( query=>[( "DELETE FROM equipments where id = '$on{id}'",
+  DbQuery( query=>[( "DELETE FROM equipments where id = '$in{oldid}'",
 
 		     "INSERT INTO equipments ".
 		     "VALUES ('$in{id}', '$in{description}',".
