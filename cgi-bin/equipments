@@ -603,7 +603,7 @@ sub protoagg
   $on{services} ||= 1; ## not available to services
 
   QuoteParams();
-  DbQuery( query=>[( "DELETE FROM equipments where id = '$in{id}'",
+  DbQuery( query=>[( "DELETE FROM equipments where id = '$on{id}'",
 
 		     "INSERT INTO equipments ".
 		     "VALUES ('$in{id}', '$in{description}',".
